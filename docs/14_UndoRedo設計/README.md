@@ -20,26 +20,26 @@ Undo / Redoは、Frontend編集中の一時操作履歴である。Backendで保
 
 | ファイル | 内容 | 状態 |
 | --- | --- | --- |
-| `14_01_UndoRedo概要.md` | Undo / Redo全体方針 | 詳細化対象 |
-| `14_02_CommandPattern設計.md` | Command Pattern | 詳細化対象 |
-| `14_03_Commandインターフェース設計.md` | Command Interface | 追加予定 |
-| `14_04_UndoStack設計.md` | Undo Stack | 追加予定 |
-| `14_05_RedoStack設計.md` | Redo Stack | 追加予定 |
-| `14_06_Node操作Command設計.md` | Node操作 | 追加予定 |
-| `14_07_Link操作Command設計.md` | Link操作 | 追加予定 |
-| `14_08_LaneStage操作Command設計.md` | Lane / Stage操作 | 追加予定 |
-| `14_09_Comment操作Command設計.md` | Comment操作 | 追加予定 |
-| `14_10_Clipboard操作Command設計.md` | Clipboard操作 | 追加予定 |
-| `14_11_Template適用Command設計.md` | Template適用 | 追加予定 |
-| `14_12_複合Command設計.md` | Composite Command | 追加予定 |
-| `14_13_Drag操作履歴設計.md` | Drag履歴粒度 | 追加予定 |
-| `14_14_履歴容量管理設計.md` | Stack容量管理 | 追加予定 |
-| `14_15_Snapshot責務分離設計.md` | Snapshotとの分離 | 追加予定 |
-| `14_16_キーボードショートカット設計.md` | Shortcut | 追加予定 |
-| `14_17_履歴表示設計.md` | History UI | 追加予定 |
-| `14_18_例外競合設計.md` | 例外・競合 | 追加予定 |
-| `14_19_UndoRedoテスト設計.md` | Test | 追加予定 |
-| `14_20_UndoRedo設計まとめ.md` | 総まとめ | 追加予定 |
+| `14_01_UndoRedo概要.md` | Undo / Redo全体方針 | 詳細化済み |
+| `14_02_CommandPattern設計.md` | Command Pattern | 詳細化済み |
+| `14_03_Commandインターフェース設計.md` | Command Interface | 詳細化済み |
+| `14_04_UndoStack設計.md` | Undo Stack | 詳細化済み |
+| `14_05_RedoStack設計.md` | Redo Stack | 詳細化済み |
+| `14_06_Node操作Command設計.md` | Node操作 | 詳細化済み |
+| `14_07_Link操作Command設計.md` | Link操作 | 詳細化済み |
+| `14_08_LaneStage操作Command設計.md` | Lane / Stage操作 | 詳細化済み |
+| `14_09_Comment操作Command設計.md` | Comment操作 | 詳細化済み |
+| `14_10_Clipboard操作Command設計.md` | Clipboard操作 | 詳細化済み |
+| `14_11_Template適用Command設計.md` | Template適用 | 詳細化済み |
+| `14_12_複合Command設計.md` | Composite Command | 詳細化済み |
+| `14_13_Drag操作履歴設計.md` | Drag履歴粒度 | 詳細化済み |
+| `14_14_履歴容量管理設計.md` | Stack容量管理 | 詳細化済み |
+| `14_15_Snapshot責務分離設計.md` | Snapshotとの分離 | 詳細化済み |
+| `14_16_キーボードショートカット設計.md` | Shortcut | 詳細化済み |
+| `14_17_履歴表示設計.md` | History UI | 詳細化済み |
+| `14_18_例外競合設計.md` | 例外・競合 | 詳細化済み |
+| `14_19_UndoRedoテスト設計.md` | Test | 詳細化済み |
+| `14_20_UndoRedo設計まとめ.md` | 総まとめ | 詳細化済み |
 
 ## 4. 管理方針
 
@@ -49,4 +49,7 @@ Undo / Redoは、Frontend編集中の一時操作履歴である。Backendで保
 
 ## 5. 現在の状態
 
-14章は既存ファイルを回収しつつ、`14_01`〜`14_20` へ再整理する。
+14章は `14_01`〜`14_20` まで詳細化済み。
+
+14_UndoRedo設計は詳細化済みとする。
+次工程は `15_テンプレート設計` の詳細化を想定する。
