@@ -1,263 +1,129 @@
 # 14_02_CommandPattern設計
 
-## 1. 本書の目的
+## 1. 目的
 
-本書は、AI Flow Designer における Command Pattern の実装設計を定義する。
+本書は、AI Flow DesignerにおけるCommand Pattern設計を定義する。
 
-Command Pattern は、ユーザーの編集操作をオブジェクトとして表現し、実行、取消、再実行を統一的に扱うための設計である。
+Command Patternは、ユーザーの編集操作をCommandとして表現し、実行、取消、再実行を統一的に扱うための設計である。
 
 ## 2. 基本方針
 
-- 編集操作はすべてCommandとして表現する
-- Commandは構造化データを更新する
-- CommandはDOMを直接操作しない
-- CommandはAPI通信を行わない
-- CommandはUndo/Redoに必要なbefore/afterを保持する
-- Commandはシリアライズ可能な単純データを中心に持つ
-- Command実行後にEditor Storeを更新する
+- 編集操作はCommandとして表現する。
+- CommandはSSOTの編集状態を更新する。
+- CommandはDOMを直接操作しない。
+- CommandはAPI通信を行わない。
+- CommandはUndo / Redoに必要なbefore / afterを保持する。
+- CommandはStore経由で状態を変更する。
+- Commandは可能な限り純粋なデータで構成する。
 
-## 3. Command Interface
+## 3. Commandの責務
 
-基本Interface例:
+Commandが担当すること:
 
-```ts
-export interface EditorCommand {
-  commandId: string
-  commandType: EditorCommandType
-  label: string
-  execute(context: CommandContext): void
-  undo(context: CommandContext): void
-  redo(context: CommandContext): void
-  canMerge?(next: EditorCommand): boolean
-  merge?(next: EditorCommand): EditorCommand
-}
-```
-
-## 4. CommandContext
-
-CommandはStoreへ直接依存させず、CommandContext経由で状態更新する。
-
-```ts
-export type CommandContext = {
-  flowId: string
-  nodes: NodeRepositoryLike
-  links: LinkRepositoryLike
-  lanes: LaneRepositoryLike
-  stages: StageRepositoryLike
-  comments: CommentRepositoryLike
-  markDirty: (target: DirtyTarget) => void
-  validateLight: (targets: ValidationTarget[]) => void
-}
-```
-
-## 5. CommandType
-
-```ts
-export type EditorCommandType =
-  | 'AddNode'
-  | 'MoveNode'
-  | 'MoveNodes'
-  | 'ResizeNode'
-  | 'UpdateNode'
-  | 'DeleteNode'
-  | 'AddLink'
-  | 'ReconnectLink'
-  | 'UpdateLink'
-  | 'DeleteLink'
-  | 'AddLane'
-  | 'UpdateLane'
-  | 'DeleteLane'
-  | 'AddStage'
-  | 'UpdateStage'
-  | 'DeleteStage'
-  | 'AddComment'
-  | 'MoveComment'
-  | 'UpdateComment'
-  | 'DeleteComment'
-  | 'PasteSelection'
-  | 'ApplyTemplate'
-  | 'Composite'
-```
-
-## 6. before / after
-
-Commandは復元に必要なbefore/afterを保持する。
-
-例: Node移動
-
-```ts
-export type MoveNodeCommandPayload = {
-  nodeId: string
-  before: PositionAndMembership
-  after: PositionAndMembership
-}
-```
-
-## 7. execute / undo / redo
-
-- execute: 初回実行
-- undo: 取り消し
-- redo: 再実行
-
-redoは原則executeと同じ結果になるが、実装上はredoメソッドを明示する。
-
-## 8. Command生成タイミング
-
-Commandはユーザー操作確定時に生成する。
-
-例:
-
-- Nodeドラッグ開始時ではなく、ドラッグ終了時
-- リサイズ中ではなく、リサイズ終了時
-- プロパティ入力中ではなく、入力確定またはdebounce後
-
-## 9. Command Merge
-
-連続する小さな操作を1つにまとめる場合、canMerge / mergeを使用する。
-
-対象例:
-
-- テキスト入力
-- プロパティ変更
-- 連続した微小移動
-
-初期実装では必須ではないが、Interface上は拡張可能にする。
-
-## 10. CompositeCommand
-
-複数Commandを1つのCommandとして扱う。
-
-利用例:
-
-- Node削除 + Link削除
-- Lane削除 + Node移動
-- Stage削除 + Node削除 + Link削除
-- Template適用
-- 貼付
-
-## 11. CompositeCommand実行順
-
-execute:
-
-```text
-command1.execute
-command2.execute
-command3.execute
-```
-
-undo:
-
-```text
-command3.undo
-command2.undo
-command1.undo
-```
-
-redo:
-
-```text
-command1.redo
-command2.redo
-command3.redo
-```
-
-## 12. Command内の禁止処理
-
-Command内では以下を禁止する。
-
-- API通信
-- DB保存
-- DOM操作
-- Toast表示
-- Dialog表示
-- Router遷移
-- GitHub連携
-- 非同期処理の乱用
-
-## 13. 非同期Command
-
-初期実装ではCommandは同期処理とする。
-
-理由:
-
-- Undo/Redoの順序保証が容易
-- API保存はAutoSave/手動保存側で扱う
-- UI操作の再現性が高い
-
-将来的に画像アップロードなど非同期が必要な場合は、Command作成前にアップロードを完了させ、CommandにはimageFileIdのみ持たせる。
-
-## 14. CommandとValidation
-
-Command実行後、対象に応じて軽量Validationを呼び出す。
-
-例:
-
-- Node更新後: Node必須項目Validation
-- Link再接続後: Link endpoint Validation
-- Lane削除後: Node所属Validation
-
-## 15. CommandとDirty
-
-Command実行後、dirty対象を更新する。
-
-例:
-
-- AddNodeCommand: dirtyNodesに追加
-- DeleteLinkCommand: deletedLinksに追加
-- UpdateLaneCommand: dirtyLanesに追加
-
-## 16. CommandとSelection
-
-Commandは原則Selectionを変更しない。
-
-ただし、Command実行後のUI補助としてCommandHandlerがSelectionを更新してよい。
-
-例:
-
-- AddNode後に追加Nodeを選択
-- Paste後に貼付対象を選択
-- Delete後に選択解除
-
-## 17. CommandFactory
-
-ユーザー操作からCommandを生成する専用Factoryを用意する。
-
-```ts
-export class EditorCommandFactory {
-  createMoveNodeCommand(...): MoveNodeCommand
-  createDeleteNodeCommand(...): CompositeCommand
-  createPasteSelectionCommand(...): PasteSelectionCommand
-}
-```
-
-## 18. CommandHandler
-
-CommandHandlerはCommandの実行と履歴登録を担当する。
-
-責務:
-
-- executeCommand
+- 実行前後の差分保持
+- execute
 - undo
 - redo
-- undoStack管理
-- redoStack管理
-- dirty更新
-- selection補助更新
+- 表示名保持
+- 対象要素ID保持
 
-## 19. エラー処理
+Commandが担当しないこと:
 
-Command実行中にエラーが発生した場合:
+- Backend保存
+- API通信
+- Dialog表示
+- Toast表示
+- 権限判定の最終決定
 
-- Stackへ積まない
-- Editor状態を可能な限り変更前に戻す
-- エラーをvalidationStoreまたは通知へ渡す
+## 4. Command Interface
 
-Commandは事前Validation済みであることを前提にする。
+```ts
+export interface FlowCommand {
+  commandId: string;
+  commandType: string;
+  label: string;
+  targetIds: string[];
+  executedAt?: string;
+  execute(context: CommandContext): void;
+  undo(context: CommandContext): void;
+  redo(context: CommandContext): void;
+}
+```
 
-## 20. 完了条件
+## 5. CommandContext
 
-- Command Interfaceが定義されている
-- CompositeCommandが定義されている
-- CommandContextでStore更新できる
-- Command内の責務外処理が排除されている
-- CommandHandlerで履歴管理できる
+```ts
+export interface CommandContext {
+  flowStore: FlowStore;
+  selectionStore: SelectionStore;
+  editorStore: EditorStore;
+}
+```
+
+CommandはContext経由でStoreへアクセスする。
+
+## 6. Command分類
+
+- NodeCommand
+- LinkCommand
+- LaneStageCommand
+- CommentCommand
+- ClipboardCommand
+- TemplateCommand
+- LayoutCommand
+- CompositeCommand
+
+## 7. before / after保持
+
+更新系Commandは変更前後を保持する。
+
+例:
+
+```ts
+interface MoveNodeCommandPayload {
+  nodeId: string;
+  before: { x: number; y: number; laneId?: string; stageId?: string };
+  after: { x: number; y: number; laneId?: string; stageId?: string };
+}
+```
+
+## 8. execute / undo / redo
+
+- execute: afterを適用する。
+- undo: beforeへ戻す。
+- redo: afterを再適用する。
+
+Add系:
+
+- execute: 追加
+- undo: 削除
+- redo: 再追加
+
+Delete系:
+
+- execute: 削除
+- undo: 復元
+- redo: 再削除
+
+## 9. 禁止事項
+
+- Command内でfetch / axiosを呼ぶ。
+- Command内でDOMを直接操作する。
+- Command内でDialogを開く。
+- Command内でBackend保存する。
+- CommandがSelection変更だけを履歴化する。
+
+## 10. テスト観点
+
+- Command.executeで状態が更新される。
+- Command.undoでbeforeに戻る。
+- Command.redoでafterに戻る。
+- CommandがAPI通信をしない。
+- CommandがDOM操作をしない。
+
+## 11. 完了条件
+
+- Command Patternの責務が定義されている。
+- Command InterfaceとContextが定義されている。
+- before / after保持方針が明確である。
+- 実装者がCommand基盤を実装できる。
