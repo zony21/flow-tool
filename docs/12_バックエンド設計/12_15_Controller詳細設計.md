@@ -1,22 +1,23 @@
 # 12_15_Controller詳細設計
 
-## 1. 本書の目的
+## 1. 目的
 
-本書は、AI Flow Designer のController層の詳細設計を定義する。
+本書は、AI Flow Designer BackendのController層の詳細設計を定義する。
 
 ControllerはHTTPリクエストを受け取り、認証・基本入力・Service呼び出し・HTTPレスポンス返却を行う層である。業務ロジックは持たない。
 
 ## 2. 基本方針
 
-- Controllerは薄くする
-- 業務ロジックを書かない
-- Repositoryを直接呼ばない
-- Entityを返さない
-- DTOを返す
-- 共通レスポンス形式を利用する
-- 例外は共通Middlewareへ委譲する
-- 認証必須APIにはAuthorizeを付与する
-- Project単位認可はServiceへ委譲する
+- Controllerは薄くする。
+- 業務ロジックを書かない。
+- Repositoryを直接呼ばない。
+- DbContextを直接呼ばない。
+- Entityを返さない。
+- DTOを返す。
+- 共通レスポンス形式を利用する。
+- 例外は共通Middlewareへ委譲する。
+- 認証必須APIにはAuthorizeを付与する。
+- Project単位認可はServiceへ委譲する。
 
 ## 3. Controller一覧
 
@@ -73,6 +74,12 @@ POST /api/auth/logout
 GET  /api/auth/me
 ```
 
+方針:
+
+- GitHub OAuthの詳細処理はAuthServiceへ委譲する。
+- Callbackで受け取ったcode検証はServiceへ委譲する。
+- JWT発行もControllerでは行わない。
+
 ## 6. ProjectController
 
 API:
@@ -91,6 +98,12 @@ DELETE /api/projects/{projectId}/members/{userId}
 
 ProjectControllerはProjectServiceを呼ぶ。
 
+注意点:
+
+- Member管理はProjectAdmin以上が必要。
+- Project削除は論理削除とする。
+- Project一覧ではFlow詳細を取得しない。
+
 ## 7. FlowController
 
 API:
@@ -107,7 +120,15 @@ POST   /api/flows/{flowId}/autosave
 
 Flow構造保存は `/save` を使用する。
 
+方針:
+
+- Flow基本情報更新とFlow構造保存を分ける。
+- Flow構造保存はFlowSaveServiceへ委譲する。
+- Autosaveも通常保存と同じValidationを通す。
+
 ## 8. EditorController
+
+編集ロック専用Controllerとして分離する。
 
 API:
 
@@ -118,7 +139,11 @@ DELETE /api/flows/{flowId}/lock
 DELETE /api/flows/{flowId}/lock/admin-release
 ```
 
-編集ロック専用Controllerとして分離する。
+方針:
+
+- Lock取得・延長・解除をEditorLockServiceへ委譲する。
+- 管理者解除はProjectAdmin以上に限定する。
+- Viewerはロック取得不可。
 
 ## 9. VersionController
 
@@ -134,6 +159,12 @@ GET  /api/flows/{flowId}/versions/compare
 
 Version比較では `fromVersionId` と `toVersionId` をQueryで受け取る。
 
+方針:
+
+- Snapshot作成は保存済みFlowを対象とする。
+- 未保存Frontend状態は受け取らない。
+- 復元はFlowVersionServiceへ委譲する。
+
 ## 10. TemplateController
 
 API:
@@ -148,6 +179,12 @@ DELETE /api/templates/{templateId}
 POST   /api/templates/{templateId}/apply
 POST   /api/projects/{projectId}/duplicate
 ```
+
+方針:
+
+- Template適用時はID再採番をServiceで行う。
+- Template削除は論理削除とする。
+- Project複製はTemplateServiceまたはProjectServiceへ委譲する。
 
 ## 11. ExportController
 
@@ -171,6 +208,12 @@ POST /api/flows/{flowId}/exports/communication-list
 POST /api/flows/{flowId}/exports/design-draft
 ```
 
+方針:
+
+- Exportは保存済みFlowまたはSnapshotを対象とする。
+- Canvas DOMやFrontend一時状態は受け取らない。
+- ExportTypeごとの処理はExportServiceへ委譲する。
+
 ## 12. ImageController
 
 API:
@@ -178,183 +221,83 @@ API:
 ```text
 POST   /api/projects/{projectId}/images
 GET    /api/images/{imageFileId}
-GET    /api/projects/{projectId}/images
 DELETE /api/images/{imageFileId}
 ```
 
-画像取得も認証必須とする。
+方針:
+
+- Uploadはmultipart/form-dataで受け取る。
+- 画像検証はImageFileServiceへ委譲する。
+- 物理パスは返さない。
+- 権限確認なしで画像を返さない。
 
 ## 13. SettingController
 
 API:
 
 ```text
-GET /api/settings/me
-PUT /api/settings/me
+GET /api/settings
+PUT /api/settings
 GET /api/projects/{projectId}/settings
 PUT /api/projects/{projectId}/settings
 ```
 
-個人設定とProject設定を分ける。
+方針:
 
-## 14. Controller実装例
+- 初期は最低限の設定のみ扱う。
+- Project別設定とUser別設定は分ける。
+- 将来Node拡張設定へ対応する。
 
-```csharp
-[ApiController]
-[Route("api/flows")]
-[Authorize]
-public sealed class FlowController : ControllerBase
-{
-    private readonly IFlowService _flowService;
-    private readonly IFlowSaveService _flowSaveService;
-    private readonly ICurrentUserProvider _currentUserProvider;
+## 14. DTO方針
 
-    public FlowController(
-        IFlowService flowService,
-        IFlowSaveService flowSaveService,
-        ICurrentUserProvider currentUserProvider)
-    {
-        _flowService = flowService;
-        _flowSaveService = flowSaveService;
-        _currentUserProvider = currentUserProvider;
-    }
-
-    [HttpPost("{flowId:guid}/save")]
-    public async Task<ActionResult<ApiResponse<SaveFlowResultDto>>> Save(
-        Guid flowId,
-        SaveFlowRequest request,
-        CancellationToken cancellationToken)
-    {
-        var user = _currentUserProvider.GetCurrentUser();
-
-        var result = await _flowSaveService.SaveAsync(
-            flowId,
-            request,
-            user,
-            cancellationToken);
-
-        return Ok(ApiResponse.Success(result));
-    }
-}
-```
-
-## 15. CurrentUserProvider
-
-ControllerはJWT Claimを直接解析しない。
-
-`ICurrentUserProvider` を利用する。
-
-```csharp
-public interface ICurrentUserProvider
-{
-    CurrentUser GetCurrentUser();
-}
-```
-
-CurrentUser:
-
-```csharp
-public sealed class CurrentUser
-{
-    public Guid UserId { get; init; }
-    public string LoginName { get; init; }
-    public bool IsSystemAdmin { get; init; }
-}
-```
-
-## 16. 入力DTO
-
-ControllerはRequest DTOを受け取る。
-
-DTOにはEntityを利用しない。
+ControllerはRequest DTOとResponse DTOのみ扱う。
 
 例:
 
-```csharp
-public sealed class SaveFlowRequest
-{
-    public long Revision { get; init; }
-    public bool IsAutoSave { get; init; }
-    public IReadOnlyList<SaveLaneRequest> Lanes { get; init; }
-    public IReadOnlyList<SaveStageRequest> Stages { get; init; }
-    public IReadOnlyList<SaveNodeRequest> Nodes { get; init; }
-    public IReadOnlyList<SaveLinkRequest> Links { get; init; }
-    public IReadOnlyList<SaveCommentRequest> Comments { get; init; }
-}
-```
+- CreateProjectRequest
+- ProjectDto
+- SaveFlowRequest
+- SaveFlowResponse
+- ExportRequest
+- ExportResultDto
+- UploadImageResponse
 
-## 17. CancellationToken
+Entityを直接返してはならない。
 
-Controller Actionでは必ずCancellationTokenを受け取り、Serviceへ渡す。
+## 15. 認証・認可属性
 
-```csharp
-public async Task<ActionResult<ApiResponse<ProjectDto>>> Get(
-    Guid projectId,
-    CancellationToken cancellationToken)
-```
+認証必須APIには `[Authorize]` を付与する。
 
-## 18. ModelState
+Project単位のRole判定はServiceへ委譲する。
 
-ASP.NET CoreのModelState不正は共通エラー形式へ変換する。
+理由:
 
-自動400レスポンスの形式が共通形式とズレる場合、InvalidModelStateResponseFactoryを設定する。
+- ProjectIdがRoute / Body / FlowId経由など複数経路になるため。
+- Service層で再確認することで認可漏れを防ぐため。
 
-## 19. Route制約
+## 16. 例外処理
 
-GUIDパラメータには `{id:guid}` を付ける。
+Controllerでは原則try-catchしない。
 
-例:
+例外は共通ExceptionMiddlewareで処理する。
 
-```text
-/api/flows/{flowId:guid}
-```
+Controllerでcatchする例外は、ファイルアップロードのRequest形式不正など、HTTP境界特有の例外に限定する。
 
-## 20. ファイルアップロードController
+## 17. テスト観点
 
-ImageControllerではIFormFileを受け取る。
+- ControllerがServiceを呼ぶだけになっている。
+- ControllerがRepositoryを直接呼ばない。
+- EntityをResponseに返さない。
+- 未認証APIが401になる。
+- Viewerが編集APIを呼ぶと403になる。
+- Flow保存APIがFlowSaveServiceを呼ぶ。
+- Export APIがFrontend一時状態を受け取らない。
+- Image取得APIで権限確認が行われる。
 
-```csharp
-[HttpPost("/api/projects/{projectId:guid}/images")]
-public async Task<ActionResult<ApiResponse<ImageFileDto>>> Upload(
-    Guid projectId,
-    IFormFile file,
-    [FromForm] Guid? flowId,
-    CancellationToken cancellationToken)
-```
+## 18. 完了条件
 
-ファイル検証はControllerではなくServiceで行う。
-
-## 21. 禁止事項
-
-- ControllerでDbContextを注入する
-- ControllerでRepositoryを注入する
-- Controllerで業務ルールを書く
-- ControllerでTransactionを開始する
-- Controllerでtry-catchを多用する
-- ControllerでEntityを返す
-- Controllerで物理ファイルパスを返す
-
-## 22. テスト観点
-
-Controller単体:
-
-- 正しいServiceを呼ぶ
-- CurrentUserを渡す
-- CancellationTokenを渡す
-- ApiResponseで返す
-
-結合:
-
-- 未認証で401
-- 不正GUIDで404または400
-- Validation不正で400
-- Service例外が共通形式へ変換される
-
-## 23. 完了条件
-
-- Controllerが薄く保たれている
-- 全APIがDTOを返す
-- Entity返却がない
-- 認証必須APIにAuthorizeがある
-- Project権限はServiceで確認される
-- 共通レスポンス形式で統一されている
+- Controller一覧とAPIが定義されている。
+- Controllerの責務がHTTP境界に限定されている。
+- Service委譲方針が明確である。
+- DTO方針、認証、例外処理方針が定義されている。
+- AIが本書を読んでController実装に着手できる。
