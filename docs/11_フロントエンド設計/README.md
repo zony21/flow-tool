@@ -35,14 +35,14 @@ Frontendは、ユーザーがProject / Flow / Lane / Stage / Node / Link / Comme
 | `11_03_レイアウト設計.md` | Header / Toolbar / Canvas / Palette / PropertyPanel | 追加済み |
 | `11_04_画面遷移設計.md` | Project / Flow / Editor導線 | 追加済み |
 | `11_05_Component設計.md` | Component分割・責務 | 追加済み |
+| `11_06_Pinia設計.md` | Store分割・状態管理 | 追加済み |
+| `11_07_VueFlow連携設計.md` | Vue Flow / SSOT Adapter | 追加済み |
+| `11_08_API通信設計.md` | API Client / DTO / Error | 追加済み |
+| `11_09_PropertyPanel設計.md` | Property Panel編集UI | 追加済み |
+| `11_10_NodePalette設計.md` | Node Palette / Drag & Drop | 追加済み |
 
 ## 5. 今後追加する設計書
 
-- `11_06_Pinia設計.md`
-- `11_07_VueFlow連携設計.md`
-- `11_08_API通信設計.md`
-- `11_09_PropertyPanel設計.md`
-- `11_10_NodePalette設計.md`
 - `11_11_Dialog設計.md`
 - `11_12_テーマUI設計.md`
 - `11_13_エラー表示設計.md`
@@ -62,6 +62,6 @@ Frontendは、ユーザーがProject / Flow / Lane / Stage / Node / Link / Comme
 
 ## 7. 現在の状態
 
-11章は、精度を担保できる範囲として `11_01`〜`11_05` を追加済み。
+11章は、精度を担保できる範囲として `11_01`〜`11_10` を追加済み。
 
-11章全体は未完了であり、次工程では `11_06_Pinia設計` 以降を詳細化する。
+11章全体は未完了であり、次工程では `11_11_Dialog設計` 以降を詳細化する。
