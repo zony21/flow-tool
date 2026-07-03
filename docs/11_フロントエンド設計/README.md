@@ -40,14 +40,14 @@ Frontendは、ユーザーがProject / Flow / Lane / Stage / Node / Link / Comme
 | `11_08_API通信設計.md` | API Client / DTO / Error | 追加済み |
 | `11_09_PropertyPanel設計.md` | Property Panel編集UI | 追加済み |
 | `11_10_NodePalette設計.md` | Node Palette / Drag & Drop | 追加済み |
+| `11_11_Dialog設計.md` | Dialog分類・状態管理 | 追加済み |
+| `11_12_テーマUI設計.md` | Design Token / Theme / UI | 追加済み |
+| `11_13_エラー表示設計.md` | Validation / API Error表示 | 追加済み |
+| `11_14_パフォーマンス設計.md` | 大規模Flow・描画最適化 | 追加済み |
+| `11_15_テスト設計.md` | Frontend Test方針 | 追加済み |
 
 ## 5. 今後追加する設計書
 
-- `11_11_Dialog設計.md`
-- `11_12_テーマUI設計.md`
-- `11_13_エラー表示設計.md`
-- `11_14_パフォーマンス設計.md`
-- `11_15_テスト設計.md`
 - `11_16_AIレビューUI設計.md`
 - `11_17_ExportUI設計.md`
 - `11_18_アクセシビリティ設計.md`
@@ -62,6 +62,6 @@ Frontendは、ユーザーがProject / Flow / Lane / Stage / Node / Link / Comme
 
 ## 7. 現在の状態
 
-11章は、精度を担保できる範囲として `11_01`〜`11_10` を追加済み。
+11章は、精度を担保できる範囲として `11_01`〜`11_15` を追加済み。
 
-11章全体は未完了であり、次工程では `11_11_Dialog設計` 以降を詳細化する。
+11章全体は未完了であり、次工程では `11_16_AIレビューUI設計` 以降を詳細化する。
