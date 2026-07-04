@@ -3,12 +3,14 @@
 ## 1. 概要
 
 AI Flow Designerは、構造化データを中心にフロー設計を行うWebアプリである。
-人が見やすく、設計書として利用できる成果物を生成する。
+人が見やすく、AIが正確に解析でき、設計書として利用できる成果物を生成する。
 
 ## 2. 設計思想
 
 Single Source of Truth（SSOT）を採用する。
-図そのものではなく、Project / Flow / Lane / Stage / Node / Link / Comment の構造化データを正とする。
+図そのものではなく、Project / Flow / Lane / Stage / Node / Link / Comment / Image / Version / Metadata の構造化データを正とする。
+
+図形は結果であり、保存・解析・出力の正は構造化データである。
 
 ## 3. 技術スタック
 
@@ -40,7 +42,7 @@ Single Source of Truth（SSOT）を採用する。
 | `14_UndoRedo設計` | Undo/Redo | 詳細化済み |
 | `15_テンプレート設計` | Template | 詳細化済み |
 | `16_画像管理設計` | 画像管理 | 主要設計詳細化済み |
-| `17_権限管理設計` | 権限管理 | 今後詳細化 |
+| `17_権限管理設計` | 権限管理 | 再詳細化済み |
 | `18_設定設計` | 設定 | 今後詳細化 |
 | `19_テスト仕様` | テスト仕様 | 今後詳細化 |
 | `20_実装タスク` | 実装タスク | 今後詳細化 |
@@ -50,8 +52,24 @@ Single Source of Truth（SSOT）を採用する。
 - 開発対象ブランチはmainのみ。
 - docs配下には正式設計書のみ残す。
 - READMEは正式索引として管理する。
+- feature / chatgpt / cleanup 等の過去ブランチは正としない。
 
 ## 6. 現在の詳細化状況
 
-`16_画像管理設計` は主要設計まで詳細化済み。
-次工程は `17_権限管理設計` の詳細化を想定する。
+`17_権限管理設計` は再詳細化済み。
+
+補強済み内容:
+
+- Owner / Editor / Viewer の3Role設計
+- Role Matrix
+- USER / PROJECT_MEMBER / ROLE / PERMISSION / ROLE_PERMISSION / PROJECT_INVITE / AUDIT_LOG
+- Permission Code一覧
+- Role別Permission
+- Backend PermissionService / RequirePermissionAttribute
+- API別Permission対応
+- Frontend Auth Store / Project Permission Store / Route Guard
+- Button / Menu / Dialog制御
+- 401 / 403 の使い分け
+- 最後のOwner保護
+
+次工程は `18_設定設計` の詳細化を想定する。
