@@ -45,7 +45,7 @@ Single Source of Truth（SSOT）を採用する。
 | `17_権限管理設計` | 権限管理 | 再詳細化済み |
 | `18_設定設計` | 設定 | 詳細化済み |
 | `19_テスト仕様` | テスト仕様 | 詳細化済み |
-| `20_実装タスク` | 実装タスク | 今後詳細化 |
+| `20_実装タスク` | 実装タスク | 詳細化済み |
 
 ## 5. 運用ルール
 
@@ -56,19 +56,22 @@ Single Source of Truth（SSOT）を採用する。
 
 ## 6. 現在の詳細化状況
 
-`19_テスト仕様` は詳細化済み。
+`20_実装タスク` は詳細化済み。
 
 補強済み内容:
 
-- テスト全体方針
-- Unit Test
-- API Test
-- Frontend Test
-- E2E Test
-- Role別権限テスト
-- Export Test
-- AI DSL Test
-- テストデータ設計
-- テスト完了条件
+- 実装方針
+- Phase0 開発基盤
+- Phase1 Backend / DB
+- Phase2 Auth / Permission
+- Phase3 Project / Flow API
+- Phase4 Frontend基盤
+- Phase5 Flow Editor
+- Phase6 Version / UndoRedo
+- Phase7 Template / Image
+- Phase8 Export / AI DSL
+- Phase9 Settings
+- Phase10 Test / QA
+- 実装完了条件
 
-次工程は `20_実装タスク` の詳細化を想定する。
+次工程は全体監査を想定する。
