@@ -46,6 +46,9 @@ Single Source of Truth（SSOT）を採用する。
 | `18_設定設計` | 設定 | 詳細化済み |
 | `19_テスト仕様` | テスト仕様 | 詳細化済み |
 | `20_実装タスク` | 実装タスク | 詳細化済み |
+| `21_Import設計` | Import | 追加詳細化済み |
+| `22_AIレビュー設計` | AI Review | 追加詳細化済み |
+| `23_Performance設計` | Performance | 追加詳細化済み |
 
 ## 5. 運用ルール
 
@@ -56,22 +59,15 @@ Single Source of Truth（SSOT）を採用する。
 
 ## 6. 現在の詳細化状況
 
-`20_実装タスク` は詳細化済み。
+全体監査で見つかった不足候補を追加補強済み。
 
-補強済み内容:
+追加補強内容:
 
-- 実装方針
-- Phase0 開発基盤
-- Phase1 Backend / DB
-- Phase2 Auth / Permission
-- Phase3 Project / Flow API
-- Phase4 Frontend基盤
-- Phase5 Flow Editor
-- Phase6 Version / UndoRedo
-- Phase7 Template / Image
-- Phase8 Export / AI DSL
-- Phase9 Settings
-- Phase10 Test / QA
-- 実装完了条件
+- AI DSL Schema仕様
+- Node拡張仕様
+- Import設計
+- AI Review設計
+- ErrorResponse共通仕様
+- Performance設計
 
-次工程は全体監査を想定する。
+次工程は再監査、または実装開始前のRepository構成確認を想定する。
