@@ -43,7 +43,7 @@ Single Source of Truth（SSOT）を採用する。
 | `15_テンプレート設計` | Template | 詳細化済み |
 | `16_画像管理設計` | 画像管理 | 主要設計詳細化済み |
 | `17_権限管理設計` | 権限管理 | 再詳細化済み |
-| `18_設定設計` | 設定 | 今後詳細化 |
+| `18_設定設計` | 設定 | 詳細化済み |
 | `19_テスト仕様` | テスト仕様 | 今後詳細化 |
 | `20_実装タスク` | 実装タスク | 今後詳細化 |
 
@@ -56,20 +56,18 @@ Single Source of Truth（SSOT）を採用する。
 
 ## 6. 現在の詳細化状況
 
-`17_権限管理設計` は再詳細化済み。
+`18_設定設計` は詳細化済み。
 
 補強済み内容:
 
-- Owner / Editor / Viewer の3Role設計
-- Role Matrix
-- USER / PROJECT_MEMBER / ROLE / PERMISSION / ROLE_PERMISSION / PROJECT_INVITE / AUDIT_LOG
-- Permission Code一覧
-- Role別Permission
-- Backend PermissionService / RequirePermissionAttribute
-- API別Permission対応
-- Frontend Auth Store / Project Permission Store / Route Guard
-- Button / Menu / Dialog制御
-- 401 / 403 の使い分け
-- 最後のOwner保護
+- User Setting / Project Setting / Editor Setting / AI Setting / Export Setting
+- 設定DB設計
+- 設定API設計
+- Frontend Store / 設定Panel設計
+- Backend SettingService / DefaultService / ValidationService
+- Permission連携
+- Default値返却
+- Upsert方針
+- Validation / Error方針
 
-次工程は `18_設定設計` の詳細化を想定する。
+次工程は `19_テスト仕様` の詳細化を想定する。
