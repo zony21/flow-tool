@@ -5,6 +5,7 @@ import Button from 'primevue/button'
 import MainLayout from '../layouts/MainLayout.vue'
 import EditorLayout from '../layouts/EditorLayout.vue'
 import FlowCanvas from '../components/flow/FlowCanvas.vue'
+import LaneStagePanel from '../components/flow/LaneStagePanel.vue'
 import LinkPropertyPanel from '../components/flow/LinkPropertyPanel.vue'
 import NodePropertyPanel from '../components/flow/NodePropertyPanel.vue'
 import { useEditorStore } from '../stores/editorStore'
@@ -236,6 +237,16 @@ function handleKeydown(event: KeyboardEvent): void {
             @canvas-cleared="editorStore.clearSelection"
           />
           <div class="property-panels">
+            <LaneStagePanel
+              :flow="flow"
+              :readonly="!canEdit"
+              @add-lane="editorStore.addLane"
+              @update-lane="editorStore.updateLane"
+              @delete-lane="editorStore.deleteLane"
+              @add-stage="editorStore.addStage"
+              @update-stage="editorStore.updateStage"
+              @delete-stage="editorStore.deleteStage"
+            />
             <NodePropertyPanel
               :flow="flow"
               :node-id="editorStore.selectedNodeId"
@@ -289,8 +300,11 @@ function handleKeydown(event: KeyboardEvent): void {
 
 .property-panels {
   display: flex;
+  flex: 0 0 320px;
   flex-direction: column;
   gap: 16px;
+  max-height: calc(100vh - 160px);
+  overflow: auto;
 }
 
 .viewer-badge {
