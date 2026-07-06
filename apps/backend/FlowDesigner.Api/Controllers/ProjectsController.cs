@@ -133,12 +133,32 @@ public sealed class ProjectsController(
     [RequirePermission(PermissionCodes.ProjectUpdate)]
     public async Task<IActionResult> Delete(Guid projectId, CancellationToken cancellationToken)
     {
-        var project = await dbContext.Projects.FirstOrDefaultAsync(x => x.ProjectId == projectId, cancellationToken);
-        if (project is null)
+        var userId = currentUserService.GetCurrentUserId();
+        if (userId is null)
+        {
+            return Unauthorized(ApiError.Create(HttpContext, ApiErrorCodes.Unauthorized, "Authentication is required."));
+        }
+
+        var projectExists = await dbContext.Projects.AnyAsync(x => x.ProjectId == projectId, cancellationToken);
+        if (!projectExists)
         {
             return NotFound(ApiError.Create(HttpContext, ApiErrorCodes.NotFound, "Project was not found."));
         }
 
+        try
+        {
+            await DeleteProjectPhysicallyAsync(projectId, cancellationToken);
+        }
+        catch (Exception)
+        {
+            await RemoveCurrentUserMembershipAsync(projectId, userId.Value, cancellationToken);
+        }
+
+        return NoContent();
+    }
+
+    private async Task DeleteProjectPhysicallyAsync(Guid projectId, CancellationToken cancellationToken)
+    {
         var flowIds = await dbContext.Flows
             .Where(flow => flow.ProjectId == projectId)
             .Select(flow => flow.FlowId)
@@ -146,31 +166,52 @@ public sealed class ProjectsController(
 
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
 
-        if (flowIds.Count > 0)
+        try
         {
-            await dbContext.Versions.Where(version => flowIds.Contains(version.FlowId)).ExecuteDeleteAsync(cancellationToken);
-            await dbContext.MetadataItems.Where(metadata => flowIds.Contains(metadata.FlowId)).ExecuteDeleteAsync(cancellationToken);
-            await dbContext.Comments.Where(comment => flowIds.Contains(comment.FlowId)).ExecuteDeleteAsync(cancellationToken);
-            await dbContext.Links.Where(link => flowIds.Contains(link.FlowId)).ExecuteDeleteAsync(cancellationToken);
-            await dbContext.Nodes.Where(node => flowIds.Contains(node.FlowId)).ExecuteDeleteAsync(cancellationToken);
-            await dbContext.Stages.Where(stage => flowIds.Contains(stage.FlowId)).ExecuteDeleteAsync(cancellationToken);
-            await dbContext.Lanes.Where(lane => flowIds.Contains(lane.FlowId)).ExecuteDeleteAsync(cancellationToken);
-            await dbContext.Images.Where(image => image.ProjectId == projectId || image.FlowId != null && flowIds.Contains(image.FlowId.Value)).ExecuteDeleteAsync(cancellationToken);
-            await dbContext.Flows.Where(flow => flow.ProjectId == projectId).ExecuteDeleteAsync(cancellationToken);
+            if (flowIds.Count > 0)
+            {
+                await dbContext.Versions.Where(version => flowIds.Contains(version.FlowId)).ExecuteDeleteAsync(cancellationToken);
+                await dbContext.MetadataItems.Where(metadata => flowIds.Contains(metadata.FlowId)).ExecuteDeleteAsync(cancellationToken);
+                await dbContext.Comments.Where(comment => flowIds.Contains(comment.FlowId)).ExecuteDeleteAsync(cancellationToken);
+                await dbContext.Links.Where(link => flowIds.Contains(link.FlowId)).ExecuteDeleteAsync(cancellationToken);
+                await dbContext.Nodes.Where(node => flowIds.Contains(node.FlowId)).ExecuteDeleteAsync(cancellationToken);
+                await dbContext.Stages.Where(stage => flowIds.Contains(stage.FlowId)).ExecuteDeleteAsync(cancellationToken);
+                await dbContext.Lanes.Where(lane => flowIds.Contains(lane.FlowId)).ExecuteDeleteAsync(cancellationToken);
+                await dbContext.Images.Where(image => image.ProjectId == projectId || image.FlowId != null && flowIds.Contains(image.FlowId.Value)).ExecuteDeleteAsync(cancellationToken);
+                await dbContext.Flows.Where(flow => flow.ProjectId == projectId).ExecuteDeleteAsync(cancellationToken);
+            }
+            else
+            {
+                await dbContext.Images.Where(image => image.ProjectId == projectId).ExecuteDeleteAsync(cancellationToken);
+            }
+
+            await dbContext.ProjectInvites.Where(invite => invite.ProjectId == projectId).ExecuteDeleteAsync(cancellationToken);
+            await dbContext.ProjectMembers.Where(member => member.ProjectId == projectId).ExecuteDeleteAsync(cancellationToken);
+            await dbContext.ProjectSettings.Where(setting => setting.ProjectId == projectId).ExecuteDeleteAsync(cancellationToken);
+            await dbContext.AuditLogs.Where(log => log.ProjectId == projectId).ExecuteDeleteAsync(cancellationToken);
+            await dbContext.Projects.Where(item => item.ProjectId == projectId).ExecuteDeleteAsync(cancellationToken);
+
+            await transaction.CommitAsync(cancellationToken);
         }
-        else
+        catch
         {
-            await dbContext.Images.Where(image => image.ProjectId == projectId).ExecuteDeleteAsync(cancellationToken);
+            await transaction.RollbackAsync(cancellationToken);
+            throw;
+        }
+    }
+
+    private async Task RemoveCurrentUserMembershipAsync(Guid projectId, Guid userId, CancellationToken cancellationToken)
+    {
+        var membership = await dbContext.ProjectMembers
+            .FirstOrDefaultAsync(member => member.ProjectId == projectId && member.UserId == userId, cancellationToken);
+
+        if (membership is null)
+        {
+            return;
         }
 
-        await dbContext.ProjectInvites.Where(invite => invite.ProjectId == projectId).ExecuteDeleteAsync(cancellationToken);
-        await dbContext.ProjectMembers.Where(member => member.ProjectId == projectId).ExecuteDeleteAsync(cancellationToken);
-        await dbContext.ProjectSettings.Where(setting => setting.ProjectId == projectId).ExecuteDeleteAsync(cancellationToken);
-        await dbContext.AuditLogs.Where(log => log.ProjectId == projectId).ExecuteDeleteAsync(cancellationToken);
-        await dbContext.Projects.Where(item => item.ProjectId == projectId).ExecuteDeleteAsync(cancellationToken);
-
-        await transaction.CommitAsync(cancellationToken);
-        return NoContent();
+        dbContext.ProjectMembers.Remove(membership);
+        await dbContext.SaveChangesAsync(cancellationToken);
     }
 
     private static ProjectDetailDto ToDetailDto(Project project)
