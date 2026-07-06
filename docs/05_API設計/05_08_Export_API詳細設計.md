@@ -1,4 +1,4 @@
-# 05_08_Export API詳細設計
+﻿# 05_08_Export API詳細設計
 
 ## 概要
 
@@ -24,10 +24,10 @@
 
 | メソッド | URL | 用途 |
 |---|---|---|
-| POST | /api/flows/{flowId}/export/mermaid | Mermaid出力 |
-| POST | /api/flows/{flowId}/export/pdf | PDF出力 |
-| POST | /api/flows/{flowId}/export/json | JSON出力 |
-| POST | /api/flows/{flowId}/export/ai-dsl | AI DSL出力 |
+| POST | /api/projects/{projectId}/flows/{flowId}/export/mermaid | Mermaid出力 |
+| POST | /api/projects/{projectId}/flows/{flowId}/export/pdf | PDF出力 |
+| POST | /api/projects/{projectId}/flows/{flowId}/export/json | JSON出力 |
+| POST | /api/projects/{projectId}/flows/{flowId}/export/ai-dsl | AI DSL出力 |
 
 ## Mermaid Request
 

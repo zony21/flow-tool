@@ -1,9 +1,29 @@
 import { httpClient } from './httpClient'
 
-export async function exportJson(flowId: string): Promise<Blob> {
-  const response = await httpClient.get(`/api/flows/${flowId}/export/json`, {
+export type MermaidExportRequest = {
+  type?: 'flowchart'
+  direction?: 'TD' | 'TB' | 'BT' | 'LR' | 'RL'
+  includeComments?: boolean
+}
+
+export type TextExportResponse = {
+  fileName: string
+  content: string
+}
+
+export async function exportJson(projectId: string, flowId: string): Promise<Blob> {
+  const response = await httpClient.post(`/api/projects/${projectId}/flows/${flowId}/export/json`, undefined, {
     responseType: 'blob',
   })
 
+  return response.data
+}
+
+export async function exportMermaid(
+  projectId: string,
+  flowId: string,
+  request: MermaidExportRequest = { type: 'flowchart', direction: 'TD', includeComments: true },
+): Promise<TextExportResponse> {
+  const response = await httpClient.post<TextExportResponse>(`/api/projects/${projectId}/flows/${flowId}/export/mermaid`, request)
   return response.data
 }

@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import Button from 'primevue/button'
+import Dialog from 'primevue/dialog'
 import MainLayout from '../layouts/MainLayout.vue'
 import { normalizeApiError } from '../api/apiError'
 import { useFlowStore } from '../stores/flowStore'
@@ -18,7 +19,11 @@ const permissionStore = useProjectPermissionStore()
 const projectEditName = ref('')
 const projectEditDescription = ref('')
 const editingProject = ref(false)
+const createFlowDialogVisible = ref(false)
 const savingFlowId = ref<string | null>(null)
+const creatingFlow = ref(false)
+const deletingFlowId = ref<string | null>(null)
+const flowDeleteTarget = ref<{ flowId: string; name: string } | null>(null)
 const editingFlowId = ref<string | null>(null)
 const editingFlowName = ref('')
 const editingFlowDescription = ref('')
@@ -30,8 +35,14 @@ const projectId = computed(() => String(route.params.projectId ?? ''))
 const canUpdateProject = computed(() => permissionStore.can(PermissionCodes.ProjectUpdate))
 const canCreateFlow = computed(() => permissionStore.can(PermissionCodes.FlowUpdate))
 const canSubmitProject = computed(() => projectEditName.value.trim().length > 0 && !projectStore.saving && canUpdateProject.value)
-const canSubmitFlow = computed(() => flowName.value.trim().length > 0 && !flowStore.loading && canCreateFlow.value)
+const canSubmitFlow = computed(() => flowName.value.trim().length > 0 && !creatingFlow.value && canCreateFlow.value)
 const canSubmitFlowEdit = computed(() => editingFlowName.value.trim().length > 0 && savingFlowId.value === null && canCreateFlow.value)
+const deleteFlowDialogVisible = computed({
+  get: () => flowDeleteTarget.value !== null,
+  set: (visible: boolean) => {
+    if (!visible) cancelDeleteFlow()
+  },
+})
 
 onMounted(async () => {
   await loadPage()
@@ -93,17 +104,32 @@ async function createFlow(): Promise<void> {
   if (!name || !canCreateFlow.value) return
 
   flowErrorMessage.value = null
+  creatingFlow.value = true
   try {
     const flow = await flowStore.create(projectId.value, {
       name,
       description: flowDescription.value.trim() || null,
     })
-    flowName.value = ''
-    flowDescription.value = ''
+    closeCreateFlowDialog()
     await router.push({ name: 'flow-editor', params: { projectId: projectId.value, flowId: flow.flowId } })
   } catch (error) {
     flowErrorMessage.value = normalizeApiError(error).message
+  } finally {
+    creatingFlow.value = false
   }
+}
+
+function openCreateFlowDialog(): void {
+  if (!canCreateFlow.value) return
+  flowName.value = ''
+  flowDescription.value = ''
+  createFlowDialogVisible.value = true
+}
+
+function closeCreateFlowDialog(): void {
+  createFlowDialogVisible.value = false
+  flowName.value = ''
+  flowDescription.value = ''
 }
 
 function startFlowEdit(flowId: string, name: string, description?: string | null): void {
@@ -140,6 +166,30 @@ async function saveFlow(flowId: string): Promise<void> {
 
 async function openFlow(flowId: string): Promise<void> {
   await router.push({ name: 'flow-editor', params: { projectId: projectId.value, flowId } })
+}
+
+function requestDeleteFlow(flowId: string, name: string): void {
+  if (!canCreateFlow.value) return
+  flowDeleteTarget.value = { flowId, name }
+}
+
+function cancelDeleteFlow(): void {
+  flowDeleteTarget.value = null
+}
+
+async function deleteFlow(): Promise<void> {
+  if (!flowDeleteTarget.value || !canCreateFlow.value) return
+
+  deletingFlowId.value = flowDeleteTarget.value.flowId
+  flowErrorMessage.value = null
+  try {
+    await flowStore.remove(projectId.value, flowDeleteTarget.value.flowId)
+    flowDeleteTarget.value = null
+  } catch (error) {
+    flowErrorMessage.value = normalizeApiError(error).message
+  } finally {
+    deletingFlowId.value = null
+  }
 }
 
 async function backToProjects(): Promise<void> {
@@ -185,29 +235,15 @@ function formatDate(value: string): string {
       <p v-if="projectStore.errorMessage" class="error-message">{{ projectStore.errorMessage }}</p>
       <p v-if="flowErrorMessage" class="error-message">{{ flowErrorMessage }}</p>
 
-      <div class="card create-card">
-        <h2>Flow作成</h2>
-        <p v-if="!canCreateFlow" class="viewer-message">Viewer権限ではFlow作成・編集はできません。</p>
-        <div class="form-grid">
-          <label>
-            Flow名
-            <input v-model="flowName" type="text" placeholder="例: 入庫搬送フロー" :disabled="!canCreateFlow || flowStore.loading" />
-          </label>
-          <label>
-            説明
-            <textarea v-model="flowDescription" rows="3" placeholder="Flowの対象工程や目的を入力" :disabled="!canCreateFlow || flowStore.loading" />
-          </label>
-        </div>
-        <div class="actions">
-          <Button label="Flow作成してEditorを開く" :disabled="!canSubmitFlow" @click="createFlow()" />
-        </div>
-      </div>
-
       <div class="card">
         <div class="section-header">
           <h2>Flow一覧</h2>
-          <span>{{ flowStore.flows.length }}件</span>
+          <div class="section-actions">
+            <span>{{ flowStore.flows.length }}件</span>
+            <Button v-if="canCreateFlow" label="新規Flow" icon="pi pi-plus" size="small" @click="openCreateFlowDialog()" />
+          </div>
         </div>
+        <p v-if="!canCreateFlow" class="viewer-message">Viewer権限ではFlow作成・編集はできません。</p>
         <p v-if="flowStore.loading">読み込み中...</p>
         <p v-else-if="flowStore.flows.length === 0">Flowはまだありません。</p>
         <table v-else class="flow-table">
@@ -244,6 +280,14 @@ function formatDate(value: string): string {
                   <div class="row-actions">
                     <Button label="Editor" size="small" @click="openFlow(flow.flowId)" />
                     <Button v-if="canCreateFlow" label="編集" size="small" severity="secondary" @click="startFlowEdit(flow.flowId, flow.name, flow.description)" />
+                    <Button
+                      v-if="canCreateFlow"
+                      label="削除"
+                      size="small"
+                      severity="danger"
+                      :disabled="deletingFlowId === flow.flowId"
+                      @click="requestDeleteFlow(flow.flowId, flow.name)"
+                    />
                   </div>
                 </td>
               </template>
@@ -251,6 +295,31 @@ function formatDate(value: string): string {
           </tbody>
         </table>
       </div>
+
+      <Dialog v-model:visible="createFlowDialogVisible" modal header="Flow作成" :style="{ width: 'min(520px, 92vw)' }">
+        <div class="dialog-body">
+          <label>
+            Flow名
+            <input v-model="flowName" type="text" placeholder="例: 入庫搬送フロー" :disabled="creatingFlow" />
+          </label>
+          <label>
+            説明
+            <textarea v-model="flowDescription" rows="4" placeholder="Flowの対象工程や目的を入力" :disabled="creatingFlow" />
+          </label>
+        </div>
+        <template #footer>
+          <Button label="キャンセル" severity="secondary" :disabled="creatingFlow" @click="closeCreateFlowDialog()" />
+          <Button label="作成してEditorを開く" icon="pi pi-arrow-right" :disabled="!canSubmitFlow" @click="createFlow()" />
+        </template>
+      </Dialog>
+
+      <Dialog v-model:visible="deleteFlowDialogVisible" modal header="Flow削除" :style="{ width: 'min(440px, 92vw)' }">
+        <p class="confirm-message">{{ flowDeleteTarget?.name }} を削除します。</p>
+        <template #footer>
+          <Button label="キャンセル" severity="secondary" :disabled="deletingFlowId !== null" @click="cancelDeleteFlow()" />
+          <Button label="削除" severity="danger" :disabled="deletingFlowId !== null" @click="deleteFlow()" />
+        </template>
+      </Dialog>
     </section>
   </MainLayout>
 </template>
@@ -271,9 +340,11 @@ function formatDate(value: string): string {
 }
 
 .header-actions,
+.section-actions,
 .actions,
 .row-actions {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
   gap: 8px;
   flex-wrap: wrap;
@@ -291,12 +362,6 @@ function formatDate(value: string): string {
 
 .edit-panel {
   flex: 1 1 auto;
-}
-
-.create-card {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
 }
 
 .form-grid {
@@ -327,6 +392,16 @@ textarea {
 
 textarea {
   resize: vertical;
+}
+
+.dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.confirm-message {
+  margin: 0;
 }
 
 .flow-table {

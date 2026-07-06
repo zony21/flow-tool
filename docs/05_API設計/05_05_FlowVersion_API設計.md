@@ -7,14 +7,14 @@ FlowVersionはLane、Stage、Node、Link、Commentを含むSnapshotである。
 
 ## 2. Version一覧取得
 
-GET /api/flows/{flowId}/versions
+GET /api/projects/{projectId}/flows/{flowId}/versions
 
 対象FlowのVersion一覧を返す。
 最新版フラグ、変更概要、作成者、作成日時を含める。
 
 ## 3. 最新Version取得
 
-GET /api/flows/{flowId}/versions/latest
+GET /api/projects/{projectId}/flows/{flowId}/versions/latest
 
 対象Flowの最新版FlowVersionを取得する。
 フローエディタ初期表示で使用する。
@@ -28,7 +28,7 @@ Lane、Stage、Node、Link、Commentを一括取得する。
 
 ## 5. Version作成
 
-POST /api/flows/{flowId}/versions
+POST /api/projects/{projectId}/flows/{flowId}/versions
 
 既存最新版からSnapshotを複製し、新しいVersionを作成する。
 versionNo、changeSummary、changeReasonを受け取る。

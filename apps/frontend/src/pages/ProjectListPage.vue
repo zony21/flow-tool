@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import Button from 'primevue/button'
+import Dialog from 'primevue/dialog'
 import MainLayout from '../layouts/MainLayout.vue'
 import { useProjectStore } from '../stores/projectStore'
 
@@ -9,8 +10,16 @@ const router = useRouter()
 const projectStore = useProjectStore()
 const projectName = ref('')
 const projectDescription = ref('')
+const createProjectDialogVisible = ref(false)
+const projectDeleteTarget = ref<{ projectId: string; name: string } | null>(null)
 
 const canCreate = computed(() => projectName.value.trim().length > 0 && !projectStore.saving)
+const deleteProjectDialogVisible = computed({
+  get: () => projectDeleteTarget.value !== null,
+  set: (visible: boolean) => {
+    if (!visible) cancelDeleteProject()
+  },
+})
 
 onMounted(async () => {
   await projectStore.loadProjects()
@@ -27,13 +36,41 @@ async function createProject(): Promise<void> {
 
   if (!project) return
 
+  closeCreateProjectDialog()
+  await router.push({ name: 'project-detail', params: { projectId: project.projectId } })
+}
+
+function openCreateProjectDialog(): void {
   projectName.value = ''
   projectDescription.value = ''
-  await router.push({ name: 'project-detail', params: { projectId: project.projectId } })
+  createProjectDialogVisible.value = true
+}
+
+function closeCreateProjectDialog(): void {
+  createProjectDialogVisible.value = false
+  projectName.value = ''
+  projectDescription.value = ''
 }
 
 async function openProject(projectId: string): Promise<void> {
   await router.push({ name: 'project-detail', params: { projectId } })
+}
+
+function requestDeleteProject(projectId: string, name: string): void {
+  projectDeleteTarget.value = { projectId, name }
+}
+
+function cancelDeleteProject(): void {
+  projectDeleteTarget.value = null
+}
+
+async function deleteProject(): Promise<void> {
+  if (!projectDeleteTarget.value) return
+
+  const deleted = await projectStore.remove(projectDeleteTarget.value.projectId)
+  if (deleted) {
+    projectDeleteTarget.value = null
+  }
 }
 
 function formatDate(value: string): string {
@@ -49,23 +86,9 @@ function formatDate(value: string): string {
           <h1>プロジェクト一覧</h1>
           <p>参照権限を持つProjectを表示します。</p>
         </div>
-        <Button label="再読み込み" severity="secondary" :disabled="projectStore.loading" @click="projectStore.loadProjects()" />
-      </div>
-
-      <div class="card create-card">
-        <h2>Project作成</h2>
-        <div class="form-grid">
-          <label>
-            Project名
-            <input v-model="projectName" type="text" placeholder="例: WCS搬送フロー" :disabled="projectStore.saving" />
-          </label>
-          <label>
-            説明
-            <textarea v-model="projectDescription" rows="3" placeholder="Projectの目的や対象範囲を入力" :disabled="projectStore.saving" />
-          </label>
-        </div>
-        <div class="actions">
-          <Button label="Project作成" :disabled="!canCreate" @click="createProject()" />
+        <div class="header-actions">
+          <Button label="新規Project" icon="pi pi-plus" :disabled="projectStore.saving" @click="openCreateProjectDialog()" />
+          <Button label="再読み込み" severity="secondary" :disabled="projectStore.loading" @click="projectStore.loadProjects()" />
         </div>
       </div>
 
@@ -86,9 +109,35 @@ function formatDate(value: string): string {
           </div>
           <div class="actions">
             <Button label="詳細" @click="openProject(project.projectId)" />
+            <Button label="削除" severity="danger" :disabled="projectStore.saving" @click="requestDeleteProject(project.projectId, project.name)" />
           </div>
         </article>
       </div>
+
+      <Dialog v-model:visible="createProjectDialogVisible" modal header="Project作成" :style="{ width: 'min(520px, 92vw)' }">
+        <div class="dialog-body">
+          <label>
+            Project名
+            <input v-model="projectName" type="text" placeholder="例: WCS搬送フロー" :disabled="projectStore.saving" />
+          </label>
+          <label>
+            説明
+            <textarea v-model="projectDescription" rows="4" placeholder="Projectの目的や対象範囲を入力" :disabled="projectStore.saving" />
+          </label>
+        </div>
+        <template #footer>
+          <Button label="キャンセル" severity="secondary" :disabled="projectStore.saving" @click="closeCreateProjectDialog()" />
+          <Button label="作成して開く" icon="pi pi-arrow-right" :disabled="!canCreate" @click="createProject()" />
+        </template>
+      </Dialog>
+
+      <Dialog v-model:visible="deleteProjectDialogVisible" modal header="Project削除" :style="{ width: 'min(440px, 92vw)' }">
+        <p class="confirm-message">{{ projectDeleteTarget?.name }} を削除します。</p>
+        <template #footer>
+          <Button label="キャンセル" severity="secondary" :disabled="projectStore.saving" @click="cancelDeleteProject()" />
+          <Button label="削除" severity="danger" :disabled="projectStore.saving" @click="deleteProject()" />
+        </template>
+      </Dialog>
     </section>
   </MainLayout>
 </template>
@@ -108,16 +157,9 @@ function formatDate(value: string): string {
 }
 
 .page-header h1,
-.create-card h2,
 .project-card h2,
 .empty-card h2 {
   margin: 0 0 8px;
-}
-
-.create-card {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
 }
 
 .form-grid {
@@ -146,10 +188,23 @@ textarea {
   resize: vertical;
 }
 
+.header-actions,
 .actions {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
   gap: 8px;
+  flex-wrap: wrap;
+}
+
+.dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.confirm-message {
+  margin: 0;
 }
 
 .project-grid {

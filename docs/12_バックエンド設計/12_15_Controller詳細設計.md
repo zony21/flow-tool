@@ -1,4 +1,4 @@
-# 12_15_Controller詳細設計
+﻿# 12_15_Controller詳細設計
 
 ## 1. 目的
 
@@ -111,11 +111,11 @@ API:
 ```text
 GET    /api/projects/{projectId}/flows
 POST   /api/projects/{projectId}/flows
-GET    /api/flows/{flowId}
-PUT    /api/flows/{flowId}
-DELETE /api/flows/{flowId}
-POST   /api/flows/{flowId}/save
-POST   /api/flows/{flowId}/autosave
+GET    /api/projects/{projectId}/flows/{flowId}
+PUT    /api/projects/{projectId}/flows/{flowId}
+DELETE /api/projects/{projectId}/flows/{flowId}
+POST   /api/projects/{projectId}/flows/{flowId}/save
+POST   /api/projects/{projectId}/flows/{flowId}/autosave
 ```
 
 Flow構造保存は `/save` を使用する。
@@ -133,10 +133,10 @@ Flow構造保存は `/save` を使用する。
 API:
 
 ```text
-POST   /api/flows/{flowId}/lock
-PUT    /api/flows/{flowId}/lock/extend
-DELETE /api/flows/{flowId}/lock
-DELETE /api/flows/{flowId}/lock/admin-release
+POST   /api/projects/{projectId}/flows/{flowId}/lock
+PUT    /api/projects/{projectId}/flows/{flowId}/lock/extend
+DELETE /api/projects/{projectId}/flows/{flowId}/lock
+DELETE /api/projects/{projectId}/flows/{flowId}/lock/admin-release
 ```
 
 方針:
@@ -150,11 +150,11 @@ DELETE /api/flows/{flowId}/lock/admin-release
 API:
 
 ```text
-GET  /api/flows/{flowId}/versions
-POST /api/flows/{flowId}/versions
-GET  /api/flows/{flowId}/versions/{versionId}
-POST /api/flows/{flowId}/versions/{versionId}/restore
-GET  /api/flows/{flowId}/versions/compare
+GET  /api/projects/{projectId}/flows/{flowId}/versions
+POST /api/projects/{projectId}/flows/{flowId}/versions
+GET  /api/projects/{projectId}/flows/{flowId}/versions/{versionId}
+POST /api/projects/{projectId}/flows/{flowId}/versions/{versionId}/restore
+GET  /api/projects/{projectId}/flows/{flowId}/versions/compare
 ```
 
 Version比較では `fromVersionId` と `toVersionId` をQueryで受け取る。
@@ -191,21 +191,21 @@ POST   /api/projects/{projectId}/duplicate
 API:
 
 ```text
-POST /api/flows/{flowId}/exports/mermaid-flowchart
-POST /api/flows/{flowId}/exports/mermaid-sequence
-POST /api/flows/{flowId}/exports/pdf
-POST /api/flows/{flowId}/exports/json
-POST /api/flows/{flowId}/exports/ai-dsl
+POST /api/projects/{projectId}/flows/{flowId}/exports/mermaid-flowchart
+POST /api/projects/{projectId}/flows/{flowId}/exports/mermaid-sequence
+POST /api/projects/{projectId}/flows/{flowId}/exports/pdf
+POST /api/projects/{projectId}/flows/{flowId}/exports/json
+POST /api/projects/{projectId}/flows/{flowId}/exports/ai-dsl
 ```
 
 将来:
 
 ```text
-POST /api/flows/{flowId}/exports/api-spec
-POST /api/flows/{flowId}/exports/db-update-list
-POST /api/flows/{flowId}/exports/plc-list
-POST /api/flows/{flowId}/exports/communication-list
-POST /api/flows/{flowId}/exports/design-draft
+POST /api/projects/{projectId}/flows/{flowId}/exports/api-spec
+POST /api/projects/{projectId}/flows/{flowId}/exports/db-update-list
+POST /api/projects/{projectId}/flows/{flowId}/exports/plc-list
+POST /api/projects/{projectId}/flows/{flowId}/exports/communication-list
+POST /api/projects/{projectId}/flows/{flowId}/exports/design-draft
 ```
 
 方針:

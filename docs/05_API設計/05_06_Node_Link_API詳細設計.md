@@ -1,4 +1,4 @@
-# 05_06_Node Link API詳細設計
+﻿# 05_06_Node Link API詳細設計
 
 ## 概要
 
@@ -10,7 +10,7 @@
 
 | メソッド | URL | 用途 |
 |---|---|---|
-| POST | /api/flows/{flowId}/nodes | Node作成 |
+| POST | /api/projects/{projectId}/flows/{flowId}/nodes | Node作成 |
 | PUT | /api/nodes/{nodeId} | Node更新 |
 | DELETE | /api/nodes/{nodeId} | Node削除 |
 
@@ -45,7 +45,7 @@ Node削除時は接続しているLinkも論理削除する。
 
 | メソッド | URL | 用途 |
 |---|---|---|
-| POST | /api/flows/{flowId}/links | Link作成 |
+| POST | /api/projects/{projectId}/flows/{flowId}/links | Link作成 |
 | PUT | /api/links/{linkId} | Link更新 |
 | DELETE | /api/links/{linkId} | Link削除 |
 

@@ -13,6 +13,7 @@ import { useFlowStore } from '../stores/flowStore'
 import { useProjectPermissionStore } from '../stores/projectPermissionStore'
 import { useUndoRedoStore } from '../stores/undoRedoStore'
 import { PermissionCodes } from '../types/permission'
+import { exportJson, exportMermaid } from '../api/exportApi'
 
 const route = useRoute()
 const router = useRouter()
@@ -33,6 +34,7 @@ const canSaveStructure = computed(
 )
 const canEdit = computed(() => canUpdateFlow.value)
 const canCreateVersion = computed(() => permissionStore.can(PermissionCodes.VersionCreate))
+const canExport = computed(() => permissionStore.can(PermissionCodes.ExportExecute))
 
 onMounted(async () => {
   editorStore.reset()
@@ -158,6 +160,36 @@ async function createVersionFromCurrentFlow(): Promise<void> {
   editorStore.markSaved()
 }
 
+async function downloadJsonExport(): Promise<void> {
+  if (!flow.value || !canExport.value || editorStore.isDirty) return
+
+  const blob = await exportJson(projectId.value, flow.value.flowId)
+  downloadBlob(blob, `${safeFilePart(flow.value.name)}.json`)
+}
+
+async function downloadMermaidExport(): Promise<void> {
+  if (!flow.value || !canExport.value || editorStore.isDirty) return
+
+  const result = await exportMermaid(projectId.value, flow.value.flowId)
+  downloadBlob(new Blob([result.content], { type: 'text/plain;charset=utf-8' }), result.fileName)
+}
+
+function downloadBlob(blob: Blob, fileName: string): void {
+  const url = window.URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = fileName
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  window.URL.revokeObjectURL(url)
+}
+
+function safeFilePart(value: string): string {
+  const filePart = value.trim().replace(/[^\p{L}\p{N}]+/gu, '_').replace(/^_+|_+$/g, '')
+  return filePart || 'flow'
+}
+
 function handleKeydown(event: KeyboardEvent): void {
   if (!canEdit.value) return
 
@@ -216,6 +248,8 @@ function handleKeydown(event: KeyboardEvent): void {
           <div class="header-actions">
             <Button label="Version管理" severity="secondary" @click="router.push({ name: 'flow-versions', params: { projectId, flowId } })" />
             <Button label="Version作成" severity="secondary" :disabled="!flow || flowStore.loading || !canSaveStructure || !canCreateVersion" @click="createVersionFromCurrentFlow" />
+            <Button label="Mermaid" icon="pi pi-download" severity="secondary" :disabled="!flow || flowStore.loading || !canExport || editorStore.isDirty" @click="downloadMermaidExport" />
+            <Button label="JSON" icon="pi pi-download" severity="secondary" :disabled="!flow || flowStore.loading || !canExport || editorStore.isDirty" @click="downloadJsonExport" />
             <Button label="Undo" severity="secondary" :disabled="!canEdit || !undoRedoStore.canUndo" @click="editorStore.undo" />
             <Button label="Redo" severity="secondary" :disabled="!canEdit || !undoRedoStore.canRedo" @click="editorStore.redo" />
             <Button label="保存" :disabled="!flow || flowStore.loading || !canSaveStructure || !editorStore.isDirty" @click="saveCurrentStructure" />

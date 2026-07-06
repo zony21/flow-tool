@@ -1,15 +1,15 @@
-# 05_07_Version Template API詳細設計
+﻿# 05_07_Version Template API詳細設計
 
 ## Version API
 
 | メソッド | URL | 用途 |
 |---|---|---|
-| GET | /api/flows/{flowId}/versions | バージョン一覧 |
-| POST | /api/flows/{flowId}/versions | バージョン作成 |
+| GET | /api/projects/{projectId}/flows/{flowId}/versions | バージョン一覧 |
+| POST | /api/projects/{projectId}/flows/{flowId}/versions | バージョン作成 |
 | GET | /api/flow-versions/{versionId} | バージョン詳細 |
 | POST | /api/flow-versions/{versionId}/restore | 復元 |
 
-## POST /api/flows/{flowId}/versions
+## POST /api/projects/{projectId}/flows/{flowId}/versions
 
 ### Request
 

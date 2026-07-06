@@ -19,6 +19,12 @@ public sealed class FlowVersionsController(
     AppDbContext dbContext,
     ICurrentUserService currentUserService) : ControllerBase
 {
+    private static readonly JsonSerializerOptions SnapshotJsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        PropertyNameCaseInsensitive = true,
+    };
+
     [HttpGet]
     [RequirePermission(PermissionCodes.VersionRead)]
     public async Task<ActionResult<IReadOnlyList<FlowVersionSummaryDto>>> List(Guid projectId, Guid flowId, CancellationToken cancellationToken)
@@ -161,7 +167,7 @@ public sealed class FlowVersionsController(
             links,
             comments,
             metadata,
-        }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+        }, SnapshotJsonOptions);
 
         var version = new FlowVersion
         {
@@ -219,13 +225,13 @@ public sealed class FlowVersionsController(
         using var document = JsonDocument.Parse(version.SnapshotJson);
         var root = document.RootElement;
 
-        var restoredLanes = root.GetProperty("lanes").Deserialize<List<Lane>>() ?? [];
-        var restoredStages = root.GetProperty("stages").Deserialize<List<Stage>>() ?? [];
-        var restoredNodes = root.GetProperty("nodes").Deserialize<List<FlowNode>>() ?? [];
-        var restoredLinks = root.GetProperty("links").Deserialize<List<FlowLink>>() ?? [];
-        var restoredComments = root.GetProperty("comments").Deserialize<List<FlowComment>>() ?? [];
+        var restoredLanes = root.GetProperty("lanes").Deserialize<List<Lane>>(SnapshotJsonOptions) ?? [];
+        var restoredStages = root.GetProperty("stages").Deserialize<List<Stage>>(SnapshotJsonOptions) ?? [];
+        var restoredNodes = root.GetProperty("nodes").Deserialize<List<FlowNode>>(SnapshotJsonOptions) ?? [];
+        var restoredLinks = root.GetProperty("links").Deserialize<List<FlowLink>>(SnapshotJsonOptions) ?? [];
+        var restoredComments = root.GetProperty("comments").Deserialize<List<FlowComment>>(SnapshotJsonOptions) ?? [];
         var restoredMetadata = root.TryGetProperty("metadata", out var metadataElement)
-            ? metadataElement.Deserialize<List<FlowMetadata>>() ?? []
+            ? metadataElement.Deserialize<List<FlowMetadata>>(SnapshotJsonOptions) ?? []
             : [];
 
         var existingLanes = await dbContext.Lanes.Where(x => x.FlowId == flowId).ToListAsync(cancellationToken);
@@ -320,7 +326,7 @@ public sealed class FlowVersionsController(
             links,
             comments,
             metadata,
-        }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+        }, SnapshotJsonOptions);
 
         var version = new FlowVersion
         {
@@ -348,7 +354,7 @@ public sealed class FlowVersionsController(
     private static List<T> DeserializeList<T>(JsonElement root, string propertyName)
     {
         return root.TryGetProperty(propertyName, out var element)
-            ? element.Deserialize<List<T>>() ?? []
+            ? element.Deserialize<List<T>>(SnapshotJsonOptions) ?? []
             : [];
     }
 

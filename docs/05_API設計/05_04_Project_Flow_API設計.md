@@ -1,4 +1,4 @@
-# 05_04_Project_Flow_API設計
+﻿# 05_04_Project_Flow_API設計
 
 ## 1. 目的
 
@@ -58,21 +58,21 @@ FLOWを作成し、初期FLOW_VERSIONを作成する。
 
 ## 8. Flow更新
 
-PUT /api/flows/{flowId}
+PUT /api/projects/{projectId}/flows/{flowId}
 
 Flow名、カテゴリ、説明、表示順を更新する。
 Version配下の構造は更新しない。
 
 ## 9. Flow削除
 
-DELETE /api/flows/{flowId}
+DELETE /api/projects/{projectId}/flows/{flowId}
 
 FLOWを論理削除する。
 FLOW_VERSIONは履歴として保持する。
 
 ## 10. Flow複製
 
-POST /api/flows/{flowId}/duplicate
+POST /api/projects/{projectId}/flows/{flowId}/duplicate
 
 既存Flowの最新Versionを複製し、新しいFlowと初期Versionを作成する。
 Lane、Stage、Node、Link、CommentはIDを再採番する。
