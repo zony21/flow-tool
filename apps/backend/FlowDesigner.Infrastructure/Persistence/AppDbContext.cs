@@ -59,16 +59,16 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasKey(x => x.LaneId);
             entity.HasIndex(x => new { x.FlowId, x.SortOrder }).IsUnique();
             entity.Property(x => x.Name).HasMaxLength(120).IsRequired();
-            entity.HasOne(x => x.Flow).WithMany(x => x.Lanes).HasForeignKey(x => x.FlowId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<Flow>().WithMany(x => x.Lanes).HasForeignKey(x => x.FlowId).OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<Stage>(entity =>
         {
             entity.ToTable("STAGE");
             entity.HasKey(x => x.StageId);
-            entity.HasIndex(x => new { x.LaneId, x.SortOrder }).IsUnique();
+            entity.HasIndex(x => new { x.FlowId, x.SortOrder }).IsUnique();
             entity.Property(x => x.Name).HasMaxLength(120).IsRequired();
-            entity.HasOne(x => x.Lane).WithMany(x => x.Stages).HasForeignKey(x => x.LaneId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<Flow>().WithMany(x => x.Stages).HasForeignKey(x => x.FlowId).OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<FlowNode>(entity =>
@@ -78,8 +78,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.Property(x => x.NodeType).HasMaxLength(80).IsRequired();
             entity.Property(x => x.Name).HasMaxLength(200).IsRequired();
             entity.HasOne(x => x.Flow).WithMany(x => x.Nodes).HasForeignKey(x => x.FlowId).OnDelete(DeleteBehavior.Cascade);
-            entity.HasOne(x => x.Lane).WithMany(x => x.Nodes).HasForeignKey(x => x.LaneId).OnDelete(DeleteBehavior.SetNull);
-            entity.HasOne(x => x.Stage).WithMany(x => x.Nodes).HasForeignKey(x => x.StageId).OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(x => x.Lane).WithMany().HasForeignKey(x => x.LaneId).OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(x => x.Stage).WithMany().HasForeignKey(x => x.StageId).OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<FlowLink>(entity =>
