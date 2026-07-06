@@ -5,6 +5,7 @@ import Button from 'primevue/button'
 import MainLayout from '../layouts/MainLayout.vue'
 import EditorLayout from '../layouts/EditorLayout.vue'
 import FlowCanvas from '../components/flow/FlowCanvas.vue'
+import FlowOperationPanel from '../components/flow/FlowOperationPanel.vue'
 import LaneStagePanel from '../components/flow/LaneStagePanel.vue'
 import LinkPropertyPanel from '../components/flow/LinkPropertyPanel.vue'
 import NodePropertyPanel from '../components/flow/NodePropertyPanel.vue'
@@ -160,34 +161,28 @@ async function createVersionFromCurrentFlow(): Promise<void> {
   editorStore.markSaved()
 }
 
-async function downloadJsonExport(): Promise<void> {
-  if (!flow.value || !canExport.value || editorStore.isDirty) return
-
-  const blob = await exportJson(projectId.value, flow.value.flowId)
-  downloadBlob(blob, `${safeFilePart(flow.value.name)}.json`)
-}
-
 async function downloadMermaidExport(): Promise<void> {
-  if (!flow.value || !canExport.value || editorStore.isDirty) return
+  if (!flow.value || editorStore.isDirty) return
 
   const result = await exportMermaid(projectId.value, flow.value.flowId)
-  downloadBlob(new Blob([result.content], { type: 'text/plain;charset=utf-8' }), result.fileName)
+  downloadTextFile(`${flow.value.name || 'flow'}.mmd`, result.content, result.contentType)
 }
 
-function downloadBlob(blob: Blob, fileName: string): void {
-  const url = window.URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = fileName
-  document.body.appendChild(link)
-  link.click()
-  link.remove()
-  window.URL.revokeObjectURL(url)
+async function downloadJsonExport(): Promise<void> {
+  if (!flow.value || editorStore.isDirty) return
+
+  const result = await exportJson(projectId.value, flow.value.flowId)
+  downloadTextFile(`${flow.value.name || 'flow'}.json`, result.content, result.contentType)
 }
 
-function safeFilePart(value: string): string {
-  const filePart = value.trim().replace(/[^\p{L}\p{N}]+/gu, '_').replace(/^_+|_+$/g, '')
-  return filePart || 'flow'
+function downloadTextFile(fileName: string, content: string, contentType: string): void {
+  const blob = new Blob([content], { type: contentType })
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = fileName
+  anchor.click()
+  URL.revokeObjectURL(url)
 }
 
 function handleKeydown(event: KeyboardEvent): void {
@@ -195,7 +190,7 @@ function handleKeydown(event: KeyboardEvent): void {
 
   const target = event.target as HTMLElement | null
   const tag = target?.tagName?.toLowerCase()
-  const isTextEditing = tag === 'input' || tag === 'textarea' || target?.isContentEditable
+  const isTextEditing = tag === 'input' || tag === 'textarea' || tag === 'select' || target?.isContentEditable
   if (isTextEditing) {
     return
   }
@@ -243,15 +238,15 @@ function handleKeydown(event: KeyboardEvent): void {
               <span v-if="editorStore.isDirty" class="dirty-badge">未保存</span>
             </p>
             <p v-else>projectId: {{ projectId }} / flowId: {{ flowId }}</p>
-            <p v-if="!canEdit" class="viewer-badge">Viewerモード: 編集は無効です</p>
+            <p v-if="!canEdit" class="viewer-badge">閲覧モード：編集は無効です</p>
           </div>
           <div class="header-actions">
-            <Button label="Version管理" severity="secondary" @click="router.push({ name: 'flow-versions', params: { projectId, flowId } })" />
-            <Button label="Version作成" severity="secondary" :disabled="!flow || flowStore.loading || !canSaveStructure || !canCreateVersion" @click="createVersionFromCurrentFlow" />
-            <Button label="Mermaid" icon="pi pi-download" severity="secondary" :disabled="!flow || flowStore.loading || !canExport || editorStore.isDirty" @click="downloadMermaidExport" />
-            <Button label="JSON" icon="pi pi-download" severity="secondary" :disabled="!flow || flowStore.loading || !canExport || editorStore.isDirty" @click="downloadJsonExport" />
-            <Button label="Undo" severity="secondary" :disabled="!canEdit || !undoRedoStore.canUndo" @click="editorStore.undo" />
-            <Button label="Redo" severity="secondary" :disabled="!canEdit || !undoRedoStore.canRedo" @click="editorStore.redo" />
+            <Button label="バージョン管理" severity="secondary" @click="router.push({ name: 'flow-versions', params: { projectId, flowId } })" />
+            <Button label="バージョン作成" severity="secondary" :disabled="!flow || flowStore.loading || !canSaveStructure || !canCreateVersion" @click="createVersionFromCurrentFlow" />
+            <Button label="Mermaid出力" icon="pi pi-download" severity="secondary" :disabled="!flow || flowStore.loading || !canExport || editorStore.isDirty" @click="downloadMermaidExport" />
+            <Button label="JSON出力" icon="pi pi-download" severity="secondary" :disabled="!flow || flowStore.loading || !canExport || editorStore.isDirty" @click="downloadJsonExport" />
+            <Button label="元に戻す" severity="secondary" :disabled="!canEdit || !undoRedoStore.canUndo" @click="editorStore.undo" />
+            <Button label="やり直す" severity="secondary" :disabled="!canEdit || !undoRedoStore.canRedo" @click="editorStore.redo" />
             <Button label="保存" :disabled="!flow || flowStore.loading || !canSaveStructure || !editorStore.isDirty" @click="saveCurrentStructure" />
           </div>
         </div>
@@ -263,14 +258,18 @@ function handleKeydown(event: KeyboardEvent): void {
             :readonly="!canEdit"
             :selected-node-id="editorStore.selectedNodeId"
             :selected-link-id="editorStore.selectedLinkId"
-            @add-node="editorStore.addNode"
-            @add-link="editorStore.addLink"
             @node-moved="editorStore.moveNode"
             @node-selected="editorStore.selectNode($event.nodeId)"
             @link-selected="editorStore.selectLink($event.linkId)"
             @canvas-cleared="editorStore.clearSelection"
           />
           <div class="property-panels">
+            <FlowOperationPanel
+              :flow="flow"
+              :readonly="!canEdit"
+              @add-node="editorStore.addNode"
+              @add-link="editorStore.addLink"
+            />
             <LaneStagePanel
               :flow="flow"
               :readonly="!canEdit"
@@ -297,7 +296,7 @@ function handleKeydown(event: KeyboardEvent): void {
             />
           </div>
         </div>
-        <p v-else>Flowを取得できませんでした。</p>
+        <p v-else>フローを取得できませんでした。</p>
       </section>
     </EditorLayout>
   </MainLayout>
@@ -352,6 +351,8 @@ function handleKeydown(event: KeyboardEvent): void {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .dirty-badge {
