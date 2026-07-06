@@ -65,6 +65,7 @@ public sealed class FlowsController(AppDbContext dbContext) : ControllerBase
             Name = request.Name.Trim(),
             Description = request.Description,
             SortOrder = sortOrder + 1,
+            Revision = 0,
             CreatedAtUtc = now,
             UpdatedAtUtc = now,
         };
@@ -72,7 +73,7 @@ public sealed class FlowsController(AppDbContext dbContext) : ControllerBase
         dbContext.Flows.Add(flow);
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        var detail = await BuildDetailDtoAsync(flow.FlowId, cancellationToken);
+        var detail = await BuildDetailDtoAsync(projectId, flow.FlowId, cancellationToken);
         return CreatedAtAction(nameof(Get), new { projectId, flowId = flow.FlowId }, detail);
     }
 
@@ -89,7 +90,7 @@ public sealed class FlowsController(AppDbContext dbContext) : ControllerBase
             return NotFound();
         }
 
-        return Ok(await BuildDetailDtoAsync(flowId, cancellationToken));
+        return Ok(await BuildDetailDtoAsync(projectId, flowId, cancellationToken));
     }
 
     [HttpPut("{flowId:guid}")]
@@ -112,19 +113,19 @@ public sealed class FlowsController(AppDbContext dbContext) : ControllerBase
         flow.UpdatedAtUtc = DateTime.UtcNow;
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        return Ok(await BuildDetailDtoAsync(flowId, cancellationToken));
+        return Ok(await BuildDetailDtoAsync(projectId, flowId, cancellationToken));
     }
 
-    [HttpPut("/api/flows/{flowId:guid}/structure")]
+    [HttpPut("{flowId:guid}/structure")]
     [RequirePermission(PermissionCodes.FlowUpdate)]
-    public async Task<ActionResult<SaveFlowStructureResponse>> SaveStructure(Guid flowId, [FromBody] SaveFlowStructureRequest request, CancellationToken cancellationToken)
+    public async Task<ActionResult<SaveFlowStructureResponse>> SaveStructure(Guid projectId, Guid flowId, [FromBody] SaveFlowStructureRequest request, CancellationToken cancellationToken)
     {
         if (request.FlowId != flowId)
         {
             return BadRequest(new { message = "FlowId in path and body must match." });
         }
 
-        var flow = await dbContext.Flows.FirstOrDefaultAsync(x => x.FlowId == flowId, cancellationToken);
+        var flow = await dbContext.Flows.FirstOrDefaultAsync(x => x.ProjectId == projectId && x.FlowId == flowId, cancellationToken);
         if (flow is null)
         {
             return NotFound();
@@ -264,9 +265,9 @@ public sealed class FlowsController(AppDbContext dbContext) : ControllerBase
         return NoContent();
     }
 
-    private async Task<FlowDetailDto> BuildDetailDtoAsync(Guid flowId, CancellationToken cancellationToken)
+    private async Task<FlowDetailDto> BuildDetailDtoAsync(Guid projectId, Guid flowId, CancellationToken cancellationToken)
     {
-        var flow = await dbContext.Flows.AsNoTracking().FirstAsync(x => x.FlowId == flowId, cancellationToken);
+        var flow = await dbContext.Flows.AsNoTracking().FirstAsync(x => x.ProjectId == projectId && x.FlowId == flowId, cancellationToken);
         var lanes = await dbContext.Lanes.AsNoTracking()
             .Where(x => x.FlowId == flowId)
             .OrderBy(x => x.SortOrder)
