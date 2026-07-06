@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import type { FlowDetail, FlowLink, FlowNode } from '../types/flow'
+import type { FlowDetail, FlowLink, FlowNode, Lane, Stage } from '../types/flow'
 import { useFlowStore } from './flowStore'
 import { useUndoRedoStore } from './undoRedoStore'
 
@@ -87,6 +87,90 @@ export const useEditorStore = defineStore('editor', {
       undoRedoStore.record(before, options)
       flowStore.setCurrentFlow(mutator(before))
       this.markDirty()
+    },
+    addLane(): void {
+      const flowStore = useFlowStore()
+      const flow = flowStore.currentFlow
+      if (!flow) return
+
+      const nextSortOrder = Math.max(0, ...flow.lanes.map((lane) => lane.sortOrder)) + 1
+      const lane: Lane = {
+        laneId: crypto.randomUUID(),
+        flowId: flow.flowId,
+        name: `Lane ${nextSortOrder}`,
+        sortOrder: nextSortOrder,
+      }
+
+      this.applyFlowChange(
+        (currentFlow) => ({
+          ...currentFlow,
+          lanes: [...currentFlow.lanes, lane],
+        }),
+        { actionKey: 'lane:add', coalesceWindowMs: 0 },
+      )
+    },
+    updateLane(updatedLane: Lane): void {
+      if (!updatedLane.name.trim()) return
+
+      this.applyFlowChange(
+        (flow) => ({
+          ...flow,
+          lanes: flow.lanes.map((lane) => (lane.laneId === updatedLane.laneId ? { ...updatedLane, name: updatedLane.name.trim() } : lane)),
+        }),
+        { actionKey: `lane:update:${updatedLane.laneId}` },
+      )
+    },
+    deleteLane(payload: { laneId: string }): void {
+      this.applyFlowChange(
+        (flow) => ({
+          ...flow,
+          lanes: flow.lanes.filter((lane) => lane.laneId !== payload.laneId),
+          nodes: flow.nodes.map((node) => (node.laneId === payload.laneId ? { ...node, laneId: null } : node)),
+        }),
+        { actionKey: `lane:delete:${payload.laneId}`, coalesceWindowMs: 0 },
+      )
+    },
+    addStage(): void {
+      const flowStore = useFlowStore()
+      const flow = flowStore.currentFlow
+      if (!flow) return
+
+      const nextSortOrder = Math.max(0, ...flow.stages.map((stage) => stage.sortOrder)) + 1
+      const stage: Stage = {
+        stageId: crypto.randomUUID(),
+        flowId: flow.flowId,
+        name: `Stage ${nextSortOrder}`,
+        sortOrder: nextSortOrder,
+      }
+
+      this.applyFlowChange(
+        (currentFlow) => ({
+          ...currentFlow,
+          stages: [...currentFlow.stages, stage],
+        }),
+        { actionKey: 'stage:add', coalesceWindowMs: 0 },
+      )
+    },
+    updateStage(updatedStage: Stage): void {
+      if (!updatedStage.name.trim()) return
+
+      this.applyFlowChange(
+        (flow) => ({
+          ...flow,
+          stages: flow.stages.map((stage) => (stage.stageId === updatedStage.stageId ? { ...updatedStage, name: updatedStage.name.trim() } : stage)),
+        }),
+        { actionKey: `stage:update:${updatedStage.stageId}` },
+      )
+    },
+    deleteStage(payload: { stageId: string }): void {
+      this.applyFlowChange(
+        (flow) => ({
+          ...flow,
+          stages: flow.stages.filter((stage) => stage.stageId !== payload.stageId),
+          nodes: flow.nodes.map((node) => (node.stageId === payload.stageId ? { ...node, stageId: null } : node)),
+        }),
+        { actionKey: `stage:delete:${payload.stageId}`, coalesceWindowMs: 0 },
+      )
     },
     addNode(): void {
       const flowStore = useFlowStore()
