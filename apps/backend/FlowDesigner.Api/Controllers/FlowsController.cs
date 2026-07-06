@@ -1,5 +1,8 @@
 using FlowDesigner.Api.Attributes;
+using FlowDesigner.Api.Common;
 using FlowDesigner.Application.DTOs.Flows;
+using FlowDesigner.Application.Interfaces.Authorization;
+using FlowDesigner.Application.Interfaces.Services;
 using FlowDesigner.Application.Security;
 using FlowDesigner.Domain.Entities.Core;
 using FlowDesigner.Infrastructure.Persistence;
@@ -13,7 +16,10 @@ namespace FlowDesigner.Api.Controllers;
 [ApiController]
 [Route("api/projects/{projectId:guid}/flows")]
 [Authorize]
-public sealed class FlowsController(AppDbContext dbContext) : ControllerBase
+public sealed class FlowsController(
+    AppDbContext dbContext,
+    ICurrentUserService currentUserService,
+    IPermissionService permissionService) : ControllerBase
 {
     [HttpGet]
     [RequirePermission(PermissionCodes.FlowRead)]
@@ -43,13 +49,13 @@ public sealed class FlowsController(AppDbContext dbContext) : ControllerBase
     {
         if (string.IsNullOrWhiteSpace(request.Name))
         {
-            return BadRequest(new { message = "Flow name is required." });
+            return ApiError.BadRequest<FlowDetailDto>(this, "Flow name is required.", "name");
         }
 
         var projectExists = await dbContext.Projects.AnyAsync(project => project.ProjectId == projectId, cancellationToken);
         if (!projectExists)
         {
-            return NotFound();
+            return ApiError.NotFound<FlowDetailDto>(this, "Project was not found.");
         }
 
         var sortOrder = await dbContext.Flows
@@ -87,7 +93,7 @@ public sealed class FlowsController(AppDbContext dbContext) : ControllerBase
 
         if (flow is null)
         {
-            return NotFound();
+            return ApiError.NotFound<FlowDetailDto>(this, "Flow was not found.");
         }
 
         return Ok(await BuildDetailDtoAsync(projectId, flowId, cancellationToken));
@@ -99,13 +105,13 @@ public sealed class FlowsController(AppDbContext dbContext) : ControllerBase
     {
         if (string.IsNullOrWhiteSpace(request.Name))
         {
-            return BadRequest(new { message = "Flow name is required." });
+            return ApiError.BadRequest<FlowDetailDto>(this, "Flow name is required.", "name");
         }
 
         var flow = await dbContext.Flows.FirstOrDefaultAsync(x => x.ProjectId == projectId && x.FlowId == flowId, cancellationToken);
         if (flow is null)
         {
-            return NotFound();
+            return ApiError.NotFound<FlowDetailDto>(this, "Flow was not found.");
         }
 
         flow.Name = request.Name.Trim();
@@ -122,18 +128,41 @@ public sealed class FlowsController(AppDbContext dbContext) : ControllerBase
     {
         if (request.FlowId != flowId)
         {
-            return BadRequest(new { message = "FlowId in path and body must match." });
+            return ApiError.BadRequest<SaveFlowStructureResponse>(this, "FlowId in path and body must match.", "flowId");
         }
 
         var flow = await dbContext.Flows.FirstOrDefaultAsync(x => x.ProjectId == projectId && x.FlowId == flowId, cancellationToken);
         if (flow is null)
         {
-            return NotFound();
+            return ApiError.NotFound<SaveFlowStructureResponse>(this, "Flow was not found.");
+        }
+
+        var currentUserId = currentUserService.GetCurrentUserId();
+        if (currentUserId is null)
+        {
+            return Unauthorized(ApiError.Create(HttpContext, ApiErrorCodes.Unauthorized, "Authentication is required."));
+        }
+
+        var requiredPermissions = new[]
+        {
+            PermissionCodes.FlowUpdate,
+            PermissionCodes.NodeUpdate,
+            PermissionCodes.LinkUpdate,
+            PermissionCodes.CommentUpdate,
+        };
+
+        foreach (var permission in requiredPermissions)
+        {
+            var allowed = await permissionService.CanAsync(currentUserId.Value, projectId, permission, cancellationToken);
+            if (!allowed)
+            {
+                return StatusCode(403, ApiError.Create(HttpContext, ApiErrorCodes.Forbidden, $"{permission} permission is required."));
+            }
         }
 
         if (request.ClientRevision != flow.Revision)
         {
-            return Conflict(new { code = "REVISION_CONFLICT", message = "Flow structure has changed." });
+            return ApiError.Conflict<SaveFlowStructureResponse>(this, ApiErrorCodes.RevisionConflict, "Flow structure has changed.");
         }
 
         var lanes = (request.Lanes ?? Array.Empty<SaveLaneRequest>()).ToList();
@@ -145,7 +174,11 @@ public sealed class FlowsController(AppDbContext dbContext) : ControllerBase
         var validationError = ValidateStructure(lanes, stages, nodes, links, comments);
         if (validationError is not null)
         {
-            return UnprocessableEntity(new { code = "VALIDATION_ERROR", message = validationError });
+            return UnprocessableEntity(ApiError.Create(
+                HttpContext,
+                ApiErrorCodes.ValidationError,
+                validationError,
+                ApiError.ValidationDetails("structure", validationError)));
         }
 
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
@@ -257,7 +290,7 @@ public sealed class FlowsController(AppDbContext dbContext) : ControllerBase
         var flow = await dbContext.Flows.FirstOrDefaultAsync(x => x.ProjectId == projectId && x.FlowId == flowId, cancellationToken);
         if (flow is null)
         {
-            return NotFound();
+            return NotFound(ApiError.Create(HttpContext, ApiErrorCodes.NotFound, "Flow was not found."));
         }
 
         dbContext.Flows.Remove(flow);

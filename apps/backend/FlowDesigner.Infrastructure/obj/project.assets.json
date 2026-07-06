@@ -2641,11 +2641,11 @@
         "net8.0": {
           "targetAlias": "net8.0",
           "projectReferences": {
-            "C:\\Users\\user\\Desktop\\久野\\04_実装\\mygit\\flow-tool\\apps\\backend\\FlowDesigner.Application\\FlowDesigner.Application.csproj": {
-              "projectPath": "C:\\Users\\user\\Desktop\\久野\\04_実装\\mygit\\flow-tool\\apps\\backend\\FlowDesigner.Application\\FlowDesigner.Application.csproj"
+            "c:\\Users\\user\\Desktop\\久野\\04_実装\\mygit\\flow-tool\\apps\\backend\\FlowDesigner.Application\\FlowDesigner.Application.csproj": {
+              "projectPath": "c:\\Users\\user\\Desktop\\久野\\04_実装\\mygit\\flow-tool\\apps\\backend\\FlowDesigner.Application\\FlowDesigner.Application.csproj"
             },
-            "C:\\Users\\user\\Desktop\\久野\\04_実装\\mygit\\flow-tool\\apps\\backend\\FlowDesigner.Domain\\FlowDesigner.Domain.csproj": {
-              "projectPath": "C:\\Users\\user\\Desktop\\久野\\04_実装\\mygit\\flow-tool\\apps\\backend\\FlowDesigner.Domain\\FlowDesigner.Domain.csproj"
+            "c:\\Users\\user\\Desktop\\久野\\04_実装\\mygit\\flow-tool\\apps\\backend\\FlowDesigner.Domain\\FlowDesigner.Domain.csproj": {
+              "projectPath": "c:\\Users\\user\\Desktop\\久野\\04_実装\\mygit\\flow-tool\\apps\\backend\\FlowDesigner.Domain\\FlowDesigner.Domain.csproj"
             }
           }
         }

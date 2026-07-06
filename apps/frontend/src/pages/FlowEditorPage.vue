@@ -21,7 +21,14 @@ const flowId = computed(() => String(route.params.flowId ?? ''))
 const flow = computed(() => flowStore.currentFlow)
 const selectedNodeId = ref<string | null>(null)
 const selectedLinkId = ref<string | null>(null)
-const canEdit = computed(() => permissionStore.can(PermissionCodes.FlowUpdate))
+const canUpdateFlow = computed(() => permissionStore.can(PermissionCodes.FlowUpdate))
+const canUpdateNode = computed(() => permissionStore.can(PermissionCodes.NodeUpdate))
+const canUpdateLink = computed(() => permissionStore.can(PermissionCodes.LinkUpdate))
+const canUpdateComment = computed(() => permissionStore.can(PermissionCodes.CommentUpdate))
+const canSaveStructure = computed(
+  () => canUpdateFlow.value && canUpdateNode.value && canUpdateLink.value && canUpdateComment.value,
+)
+const canEdit = computed(() => canUpdateFlow.value)
 
 onMounted(async () => {
   if (projectId.value && flowId.value) {
@@ -45,7 +52,7 @@ watch(flow, (currentFlow) => {
 })
 
 async function saveCurrentStructure(): Promise<void> {
-  if (!flow.value || !canEdit.value) return
+  if (!flow.value || !canSaveStructure.value) return
 
   await flowStore.saveStructure(projectId.value, {
     flowId: flow.value.flowId,
@@ -224,7 +231,7 @@ function handleCanvasCleared(): void {
             <p v-else>projectId: {{ projectId }} / flowId: {{ flowId }}</p>
             <p v-if="!canEdit" class="viewer-badge">Viewerモード: 編集は無効です</p>
           </div>
-          <Button label="保存" :disabled="!flow || flowStore.loading || !canEdit" @click="saveCurrentStructure" />
+          <Button label="保存" :disabled="!flow || flowStore.loading || !canSaveStructure" @click="saveCurrentStructure" />
         </div>
 
         <p v-if="flowStore.loading">読み込み中...</p>

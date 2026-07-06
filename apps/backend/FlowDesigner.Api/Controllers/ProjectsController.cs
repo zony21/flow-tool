@@ -1,4 +1,5 @@
 using FlowDesigner.Api.Attributes;
+using FlowDesigner.Api.Common;
 using FlowDesigner.Application.DTOs.Projects;
 using FlowDesigner.Application.Security;
 using FlowDesigner.Application.Interfaces.Services;
@@ -25,7 +26,7 @@ public sealed class ProjectsController(
         var userId = currentUserService.GetCurrentUserId();
         if (userId is null)
         {
-            return Unauthorized();
+            return Unauthorized(ApiError.Create(HttpContext, ApiErrorCodes.Unauthorized, "Authentication is required."));
         }
 
         var projects = await dbContext.Projects
@@ -48,18 +49,18 @@ public sealed class ProjectsController(
         var userId = currentUserService.GetCurrentUserId();
         if (userId is null)
         {
-            return Unauthorized();
+            return Unauthorized(ApiError.Create(HttpContext, ApiErrorCodes.Unauthorized, "Authentication is required."));
         }
 
         if (string.IsNullOrWhiteSpace(request.Name))
         {
-            return BadRequest(new { message = "Project name is required." });
+            return ApiError.BadRequest<ProjectDetailDto>(this, "Project name is required.", "name");
         }
 
         var ownerRole = await dbContext.Roles.FirstOrDefaultAsync(role => role.RoleCode == "OWNER", cancellationToken);
         if (ownerRole is null)
         {
-            return Problem("OWNER role is not seeded.");
+            return ApiError.Internal(this, "OWNER role is not seeded.");
         }
 
         var now = DateTime.UtcNow;
@@ -101,7 +102,9 @@ public sealed class ProjectsController(
             .AsNoTracking()
             .FirstOrDefaultAsync(x => x.ProjectId == projectId, cancellationToken);
 
-        return project is null ? NotFound() : Ok(ToDetailDto(project));
+        return project is null
+            ? ApiError.NotFound<ProjectDetailDto>(this, "Project was not found.")
+            : Ok(ToDetailDto(project));
     }
 
     [HttpPut("{projectId:guid}")]
@@ -110,13 +113,13 @@ public sealed class ProjectsController(
     {
         if (string.IsNullOrWhiteSpace(request.Name))
         {
-            return BadRequest(new { message = "Project name is required." });
+            return ApiError.BadRequest<ProjectDetailDto>(this, "Project name is required.", "name");
         }
 
         var project = await dbContext.Projects.FirstOrDefaultAsync(x => x.ProjectId == projectId, cancellationToken);
         if (project is null)
         {
-            return NotFound();
+            return ApiError.NotFound<ProjectDetailDto>(this, "Project was not found.");
         }
 
         project.Name = request.Name.Trim();
@@ -133,7 +136,7 @@ public sealed class ProjectsController(
         var project = await dbContext.Projects.FirstOrDefaultAsync(x => x.ProjectId == projectId, cancellationToken);
         if (project is null)
         {
-            return NotFound();
+            return NotFound(ApiError.Create(HttpContext, ApiErrorCodes.NotFound, "Project was not found."));
         }
 
         dbContext.Projects.Remove(project);

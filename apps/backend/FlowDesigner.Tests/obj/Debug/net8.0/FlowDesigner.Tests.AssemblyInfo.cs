@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("FlowDesigner.Tests")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+a3200cc44d2c9bced76108bb40fa5248e651e299")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+5cca4f964434a73d7be01d77b9842c9419086379")]
 [assembly: System.Reflection.AssemblyProductAttribute("FlowDesigner.Tests")]
 [assembly: System.Reflection.AssemblyTitleAttribute("FlowDesigner.Tests")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

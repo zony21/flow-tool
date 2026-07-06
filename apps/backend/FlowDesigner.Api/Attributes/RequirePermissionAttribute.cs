@@ -1,3 +1,4 @@
+using FlowDesigner.Api.Common;
 using FlowDesigner.Application.Interfaces.Authorization;
 using FlowDesigner.Application.Interfaces.Services;
 using Microsoft.AspNetCore.Mvc;
@@ -19,27 +20,38 @@ public sealed class RequirePermissionAttribute(string permissionCode) : TypeFilt
         {
             if (!currentUserService.IsAuthenticated())
             {
-                context.Result = new UnauthorizedResult();
+                context.Result = new UnauthorizedObjectResult(
+                    ApiError.Create(context.HttpContext, ApiErrorCodes.Unauthorized, "Authentication is required."));
                 return;
             }
 
             if (!TryGetProjectId(context, out var projectId))
             {
-                context.Result = new BadRequestObjectResult(new { message = "projectId is required." });
+                context.Result = new BadRequestObjectResult(
+                    ApiError.Create(
+                        context.HttpContext,
+                        ApiErrorCodes.ValidationError,
+                        "projectId is required.",
+                        ApiError.ValidationDetails("projectId", "projectId is required.")));
                 return;
             }
 
             var userId = currentUserService.GetCurrentUserId();
             if (userId is null)
             {
-                context.Result = new UnauthorizedResult();
+                context.Result = new UnauthorizedObjectResult(
+                    ApiError.Create(context.HttpContext, ApiErrorCodes.Unauthorized, "Authentication is required."));
                 return;
             }
 
             var can = await permissionService.CanAsync(userId.Value, projectId, permissionCode);
             if (!can)
             {
-                context.Result = new ForbidResult();
+                context.Result = new ObjectResult(
+                    ApiError.Create(context.HttpContext, ApiErrorCodes.Forbidden, $"{permissionCode} permission is required."))
+                {
+                    StatusCode = StatusCodes.Status403Forbidden,
+                };
             }
         }
 
