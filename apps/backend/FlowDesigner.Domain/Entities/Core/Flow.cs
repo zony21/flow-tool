@@ -12,6 +12,7 @@ public class Flow
 
     public Project Project { get; set; } = null!;
     public ICollection<Lane> Lanes { get; set; } = new List<Lane>();
+    public ICollection<Stage> Stages { get; set; } = new List<Stage>();
     public ICollection<FlowNode> Nodes { get; set; } = new List<FlowNode>();
     public ICollection<FlowLink> Links { get; set; } = new List<FlowLink>();
     public ICollection<FlowComment> Comments { get; set; } = new List<FlowComment>();
