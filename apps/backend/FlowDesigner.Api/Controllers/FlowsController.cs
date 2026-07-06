@@ -77,6 +77,20 @@ public sealed class FlowsController(
         };
 
         dbContext.Flows.Add(flow);
+        dbContext.Lanes.Add(new Lane
+        {
+            LaneId = Guid.NewGuid(),
+            FlowId = flow.FlowId,
+            Name = "担当レーン",
+            SortOrder = 1,
+        });
+        dbContext.Stages.Add(new Stage
+        {
+            StageId = Guid.NewGuid(),
+            FlowId = flow.FlowId,
+            Name = "工程",
+            SortOrder = 1,
+        });
         await dbContext.SaveChangesAsync(cancellationToken);
 
         var detail = await BuildDetailDtoAsync(projectId, flow.FlowId, cancellationToken);
