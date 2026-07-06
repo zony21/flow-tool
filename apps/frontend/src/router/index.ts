@@ -16,6 +16,7 @@ const router = createRouter({
     { path: '/', redirect: { name: 'project-list' } },
     { path: '/projects', name: 'project-list', component: ProjectListPage, meta: { requiresAuth: true } },
     { path: '/projects/:projectId', name: 'project-detail', component: ProjectDetailPage, meta: { requiresAuth: true, permission: PermissionCodes.ProjectRead } },
+    { path: '/projects/:projectId/flows', name: 'flow-list', component: ProjectDetailPage, meta: { requiresAuth: true, permission: PermissionCodes.FlowRead } },
     { path: '/projects/:projectId/flows/:flowId/editor', name: 'flow-editor', component: FlowEditorPage, meta: { requiresAuth: true, permission: PermissionCodes.FlowRead } },
     { path: '/projects/:projectId/flows/:flowId/versions', name: 'flow-versions', component: VersionManagementPage, meta: { requiresAuth: true, permission: PermissionCodes.VersionRead } },
     { path: '/settings', name: 'settings', component: SettingsPage, meta: { requiresAuth: true } },
