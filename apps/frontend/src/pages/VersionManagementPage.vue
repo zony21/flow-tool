@@ -3,7 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import Button from 'primevue/button'
 import MainLayout from '../layouts/MainLayout.vue'
-import { createFlowVersion, fetchFlowVersions } from '../api/versionApi'
+import { createFlowVersion, fetchFlowVersions, restoreFlowVersion } from '../api/versionApi'
 import { useProjectPermissionStore } from '../stores/projectPermissionStore'
 import { PermissionCodes } from '../types/permission'
 import type { FlowVersionSummary } from '../types/version'
@@ -18,6 +18,7 @@ const versions = ref<FlowVersionSummary[]>([])
 const loading = ref(false)
 const comment = ref('')
 const canCreateVersion = computed(() => permissionStore.can(PermissionCodes.VersionCreate))
+const canRestoreVersion = computed(() => permissionStore.can(PermissionCodes.VersionCreate))
 
 async function loadVersions(): Promise<void> {
   if (!projectId.value || !flowId.value) return
@@ -36,6 +37,23 @@ async function createVersion(): Promise<void> {
     await createFlowVersion(projectId.value, flowId.value, { comment: comment.value || null })
     comment.value = ''
     await loadVersions()
+  } finally {
+    loading.value = false
+  }
+}
+
+async function restoreVersion(versionId: string): Promise<void> {
+  if (!projectId.value || !flowId.value || !canRestoreVersion.value) return
+
+  const confirmed = window.confirm('現在状態を復元前Versionとして保存し、選択Versionを復元します。続行しますか？')
+  if (!confirmed) {
+    return
+  }
+
+  loading.value = true
+  try {
+    await restoreFlowVersion(projectId.value, flowId.value, versionId)
+    await router.push({ name: 'flow-editor', params: { projectId: projectId.value, flowId: flowId.value } })
   } finally {
     loading.value = false
   }
@@ -86,6 +104,9 @@ onMounted(loadVersions)
               <td>{{ version.nodeCount }}</td>
               <td>{{ version.linkCount }}</td>
               <td>{{ version.commentCount }}</td>
+              <td>
+                <Button label="復元" size="small" :disabled="loading || !canRestoreVersion" @click="restoreVersion(version.versionId)" />
+              </td>
             </tr>
           </tbody>
         </table>

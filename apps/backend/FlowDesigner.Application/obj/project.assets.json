@@ -81,11 +81,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "c:\\Users\\user\\Desktop\\久野\\04_実装\\mygit\\flow-tool\\apps\\backend\\FlowDesigner.Application\\FlowDesigner.Application.csproj",
+      "projectUniqueName": "C:\\Users\\user\\Desktop\\久野\\04_実装\\mygit\\flow-tool\\apps\\backend\\FlowDesigner.Application\\FlowDesigner.Application.csproj",
       "projectName": "FlowDesigner.Application",
-      "projectPath": "c:\\Users\\user\\Desktop\\久野\\04_実装\\mygit\\flow-tool\\apps\\backend\\FlowDesigner.Application\\FlowDesigner.Application.csproj",
+      "projectPath": "C:\\Users\\user\\Desktop\\久野\\04_実装\\mygit\\flow-tool\\apps\\backend\\FlowDesigner.Application\\FlowDesigner.Application.csproj",
       "packagesPath": "C:\\Users\\user\\.nuget\\packages\\",
-      "outputPath": "c:\\Users\\user\\Desktop\\久野\\04_実装\\mygit\\flow-tool\\apps\\backend\\FlowDesigner.Application\\obj\\",
+      "outputPath": "C:\\Users\\user\\Desktop\\久野\\04_実装\\mygit\\flow-tool\\apps\\backend\\FlowDesigner.Application\\obj\\",
       "projectStyle": "PackageReference",
       "configFilePaths": [
         "C:\\Users\\user\\AppData\\Roaming\\NuGet\\NuGet.Config",
@@ -102,8 +102,8 @@
         "net8.0": {
           "targetAlias": "net8.0",
           "projectReferences": {
-            "c:\\Users\\user\\Desktop\\久野\\04_実装\\mygit\\flow-tool\\apps\\backend\\FlowDesigner.Domain\\FlowDesigner.Domain.csproj": {
-              "projectPath": "c:\\Users\\user\\Desktop\\久野\\04_実装\\mygit\\flow-tool\\apps\\backend\\FlowDesigner.Domain\\FlowDesigner.Domain.csproj"
+            "C:\\Users\\user\\Desktop\\久野\\04_実装\\mygit\\flow-tool\\apps\\backend\\FlowDesigner.Domain\\FlowDesigner.Domain.csproj": {
+              "projectPath": "C:\\Users\\user\\Desktop\\久野\\04_実装\\mygit\\flow-tool\\apps\\backend\\FlowDesigner.Domain\\FlowDesigner.Domain.csproj"
             }
           }
         }

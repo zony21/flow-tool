@@ -13,3 +13,8 @@ public sealed record FlowVersionSummaryDto(
 
 public sealed record CreateFlowVersionRequest(
     string? Comment);
+
+public sealed record RestoreFlowVersionResponse(
+    Guid FlowId,
+    Guid RestoredVersionId,
+    int CurrentRevision);

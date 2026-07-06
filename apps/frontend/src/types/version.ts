@@ -13,3 +13,9 @@ export type FlowVersionSummary = {
 export type CreateFlowVersionRequest = {
   comment?: string | null
 }
+
+export type RestoreFlowVersionResponse = {
+  flowId: string
+  restoredVersionId: string
+  currentRevision: number
+}
