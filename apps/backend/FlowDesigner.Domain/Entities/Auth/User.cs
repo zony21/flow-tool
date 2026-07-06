@@ -12,4 +12,5 @@ public class User
     public ICollection<ProjectMember> ProjectMembers { get; set; } = new List<ProjectMember>();
     public ICollection<ProjectInvite> ProjectInvites { get; set; } = new List<ProjectInvite>();
     public ICollection<AuditLog> AuditLogs { get; set; } = new List<AuditLog>();
+    public ICollection<FlowDesigner.Domain.Entities.Core.FlowVersion> CreatedFlowVersions { get; set; } = new List<FlowDesigner.Domain.Entities.Core.FlowVersion>();
 }

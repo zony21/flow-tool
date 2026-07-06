@@ -31,6 +31,7 @@ public sealed class FlowVersionsController(
 
         var versions = await dbContext.Versions
             .AsNoTracking()
+            .Include(x => x.CreatedByUser)
             .Where(x => x.FlowId == flowId)
             .OrderByDescending(x => x.VersionNumber)
             .ToListAsync(cancellationToken);
@@ -49,6 +50,7 @@ public sealed class FlowVersionsController(
                 version.VersionNumber,
                 $"v{version.VersionNumber}",
                 version.Note,
+                version.CreatedByUser?.DisplayName,
                 version.CreatedAtUtc,
                 nodeCount,
                 linkCount,
@@ -121,6 +123,14 @@ public sealed class FlowVersionsController(
             return ApiError.NotFound<FlowVersionSummaryDto>(this, "Flow was not found.");
         }
 
+        var currentUserId = currentUserService.GetCurrentUserId();
+        if (currentUserId is null)
+        {
+            return Unauthorized(ApiError.Create(HttpContext, ApiErrorCodes.Unauthorized, "Authentication is required."));
+        }
+
+        var currentUser = await dbContext.Users.AsNoTracking().FirstOrDefaultAsync(x => x.UserId == currentUserId.Value, cancellationToken);
+
         var lanes = await dbContext.Lanes.AsNoTracking().Where(x => x.FlowId == flowId).OrderBy(x => x.SortOrder).ToListAsync(cancellationToken);
         var stages = await dbContext.Stages.AsNoTracking().Where(x => x.FlowId == flowId).OrderBy(x => x.SortOrder).ToListAsync(cancellationToken);
         var nodes = await dbContext.Nodes.AsNoTracking().Where(x => x.FlowId == flowId).OrderBy(x => x.Name).ToListAsync(cancellationToken);
@@ -158,6 +168,7 @@ public sealed class FlowVersionsController(
             VersionId = Guid.NewGuid(),
             FlowId = flowId,
             VersionNumber = nextVersionNumber + 1,
+            CreatedByUserId = currentUserId,
             SnapshotJson = snapshot,
             Note = string.IsNullOrWhiteSpace(request.Comment) ? null : request.Comment.Trim(),
             CreatedAtUtc = DateTime.UtcNow,
@@ -172,6 +183,7 @@ public sealed class FlowVersionsController(
             version.VersionNumber,
             $"v{version.VersionNumber}",
             version.Note,
+            currentUser?.DisplayName,
             version.CreatedAtUtc,
             nodes.Count,
             links.Count,
@@ -202,7 +214,7 @@ public sealed class FlowVersionsController(
 
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
 
-        var backupVersion = await CreateSnapshotVersionAsync(flow, "Auto backup before restore", cancellationToken);
+        var backupVersion = await CreateSnapshotVersionAsync(flow, currentUserId, "Auto backup before restore", cancellationToken);
 
         using var document = JsonDocument.Parse(version.SnapshotJson);
         var root = document.RootElement;
@@ -276,7 +288,7 @@ public sealed class FlowVersionsController(
         return Ok(new RestoreFlowVersionResponse(flow.FlowId, backupVersion.VersionId, flow.Revision));
     }
 
-    private async Task<FlowVersion> CreateSnapshotVersionAsync(Flow flow, string? comment, CancellationToken cancellationToken)
+    private async Task<FlowVersion> CreateSnapshotVersionAsync(Flow flow, Guid? createdByUserId, string? comment, CancellationToken cancellationToken)
     {
         var lanes = await dbContext.Lanes.AsNoTracking().Where(x => x.FlowId == flow.FlowId).OrderBy(x => x.SortOrder).ToListAsync(cancellationToken);
         var stages = await dbContext.Stages.AsNoTracking().Where(x => x.FlowId == flow.FlowId).OrderBy(x => x.SortOrder).ToListAsync(cancellationToken);
@@ -315,6 +327,7 @@ public sealed class FlowVersionsController(
             VersionId = Guid.NewGuid(),
             FlowId = flow.FlowId,
             VersionNumber = nextVersionNumber + 1,
+            CreatedByUserId = createdByUserId,
             SnapshotJson = snapshot,
             Note = comment,
             CreatedAtUtc = DateTime.UtcNow,

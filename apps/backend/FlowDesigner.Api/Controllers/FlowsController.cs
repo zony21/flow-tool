@@ -268,6 +268,7 @@ public sealed class FlowsController(
                 VersionId = Guid.NewGuid(),
                 FlowId = flowId,
                 VersionNumber = nextVersionNumber + 1,
+                CreatedByUserId = currentUserId,
                 SnapshotJson = snapshot,
                 Note = request.ChangeSummary,
                 CreatedAtUtc = DateTime.UtcNow,

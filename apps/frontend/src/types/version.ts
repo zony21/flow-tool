@@ -4,6 +4,7 @@ export type FlowVersionSummary = {
   versionNumber: number
   displayVersion: string
   comment?: string | null
+  createdByDisplayName?: string | null
   createdAtUtc: string
   nodeCount: number
   linkCount: number

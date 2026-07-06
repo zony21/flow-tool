@@ -111,6 +111,7 @@ onMounted(loadVersions)
             <tr>
               <th>Version</th>
               <th>コメント</th>
+              <th>作成者</th>
               <th>作成日時</th>
               <th>Node</th>
               <th>Link</th>
@@ -122,6 +123,7 @@ onMounted(loadVersions)
             <tr v-for="version in versions" :key="version.versionId">
               <td>{{ version.displayVersion }}</td>
               <td>{{ version.comment || 'コメントなし' }}</td>
+              <td>{{ version.createdByDisplayName || '不明' }}</td>
               <td>{{ new Date(version.createdAtUtc).toLocaleString() }}</td>
               <td>{{ version.nodeCount }}</td>
               <td>{{ version.linkCount }}</td>

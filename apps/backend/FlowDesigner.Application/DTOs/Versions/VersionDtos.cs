@@ -6,6 +6,7 @@ public sealed record FlowVersionSummaryDto(
     int VersionNumber,
     string DisplayVersion,
     string? Comment,
+    string? CreatedByDisplayName,
     DateTime CreatedAtUtc,
     int NodeCount,
     int LinkCount,

@@ -118,6 +118,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasIndex(x => new { x.FlowId, x.VersionNumber }).IsUnique();
             entity.Property(x => x.SnapshotJson).IsRequired();
             entity.HasOne(x => x.Flow).WithMany(x => x.Versions).HasForeignKey(x => x.FlowId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(x => x.CreatedByUser).WithMany(x => x.CreatedFlowVersions).HasForeignKey(x => x.CreatedByUserId).OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<FlowMetadata>(entity =>
