@@ -19,3 +19,20 @@ export type RestoreFlowVersionResponse = {
   restoredVersionId: string
   currentRevision: number
 }
+
+export type VersionDiffItem = {
+  entityType: string
+  entityId: string
+  changeType: string
+  label: string
+}
+
+export type FlowVersionCompareResponse = {
+  leftVersionId: string
+  rightVersionId: string
+  laneDiffs: VersionDiffItem[]
+  stageDiffs: VersionDiffItem[]
+  nodeDiffs: VersionDiffItem[]
+  linkDiffs: VersionDiffItem[]
+  commentDiffs: VersionDiffItem[]
+}

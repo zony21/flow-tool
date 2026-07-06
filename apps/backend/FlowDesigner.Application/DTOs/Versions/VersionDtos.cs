@@ -18,3 +18,18 @@ public sealed record RestoreFlowVersionResponse(
     Guid FlowId,
     Guid RestoredVersionId,
     int CurrentRevision);
+
+public sealed record FlowVersionCompareResponse(
+    Guid LeftVersionId,
+    Guid RightVersionId,
+    IReadOnlyList<VersionDiffItemDto> LaneDiffs,
+    IReadOnlyList<VersionDiffItemDto> StageDiffs,
+    IReadOnlyList<VersionDiffItemDto> NodeDiffs,
+    IReadOnlyList<VersionDiffItemDto> LinkDiffs,
+    IReadOnlyList<VersionDiffItemDto> CommentDiffs);
+
+public sealed record VersionDiffItemDto(
+    string EntityType,
+    string EntityId,
+    string ChangeType,
+    string Label);

@@ -3,10 +3,10 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import Button from 'primevue/button'
 import MainLayout from '../layouts/MainLayout.vue'
-import { createFlowVersion, fetchFlowVersions, restoreFlowVersion } from '../api/versionApi'
+import { compareFlowVersions, createFlowVersion, fetchFlowVersions, restoreFlowVersion } from '../api/versionApi'
 import { useProjectPermissionStore } from '../stores/projectPermissionStore'
 import { PermissionCodes } from '../types/permission'
-import type { FlowVersionSummary } from '../types/version'
+import type { FlowVersionCompareResponse, FlowVersionSummary } from '../types/version'
 
 const route = useRoute()
 const router = useRouter()
@@ -17,14 +17,25 @@ const flowId = computed(() => String(route.params.flowId ?? ''))
 const versions = ref<FlowVersionSummary[]>([])
 const loading = ref(false)
 const comment = ref('')
+const leftVersionId = ref('')
+const rightVersionId = ref('')
+const compareResult = ref<FlowVersionCompareResponse | null>(null)
+
 const canCreateVersion = computed(() => permissionStore.can(PermissionCodes.VersionCreate))
 const canRestoreVersion = computed(() => permissionStore.can(PermissionCodes.VersionCreate))
+const canCompareVersion = computed(() => permissionStore.can(PermissionCodes.VersionRead))
 
 async function loadVersions(): Promise<void> {
   if (!projectId.value || !flowId.value) return
   loading.value = true
   try {
     versions.value = await fetchFlowVersions(projectId.value, flowId.value)
+    if (!leftVersionId.value) {
+      leftVersionId.value = versions.value[0]?.versionId ?? ''
+    }
+    if (!rightVersionId.value) {
+      rightVersionId.value = versions.value[1]?.versionId ?? versions.value[0]?.versionId ?? ''
+    }
   } finally {
     loading.value = false
   }
@@ -54,6 +65,16 @@ async function restoreVersion(versionId: string): Promise<void> {
   try {
     await restoreFlowVersion(projectId.value, flowId.value, versionId)
     await router.push({ name: 'flow-editor', params: { projectId: projectId.value, flowId: flowId.value } })
+  } finally {
+    loading.value = false
+  }
+}
+
+async function compareVersions(): Promise<void> {
+  if (!projectId.value || !flowId.value || !canCompareVersion.value || !leftVersionId.value || !rightVersionId.value) return
+  loading.value = true
+  try {
+    compareResult.value = await compareFlowVersions(projectId.value, flowId.value, leftVersionId.value, rightVersionId.value)
   } finally {
     loading.value = false
   }
@@ -94,6 +115,7 @@ onMounted(loadVersions)
               <th>Node</th>
               <th>Link</th>
               <th>Comment</th>
+              <th>操作</th>
             </tr>
           </thead>
           <tbody>
@@ -110,6 +132,62 @@ onMounted(loadVersions)
             </tr>
           </tbody>
         </table>
+      </div>
+
+      <div class="card create-card">
+        <h2>Version比較</h2>
+        <div class="compare-controls">
+          <select v-model="leftVersionId" :disabled="loading || !canCompareVersion">
+            <option v-for="version in versions" :key="`left-${version.versionId}`" :value="version.versionId">
+              {{ version.displayVersion }}
+            </option>
+          </select>
+          <span>vs</span>
+          <select v-model="rightVersionId" :disabled="loading || !canCompareVersion">
+            <option v-for="version in versions" :key="`right-${version.versionId}`" :value="version.versionId">
+              {{ version.displayVersion }}
+            </option>
+          </select>
+          <Button label="比較" :disabled="loading || !canCompareVersion || !leftVersionId || !rightVersionId" @click="compareVersions" />
+        </div>
+
+        <div v-if="compareResult" class="compare-grid">
+          <div class="compare-card">
+            <h3>Lane</h3>
+            <ul>
+              <li v-for="diff in compareResult.laneDiffs" :key="`lane-${diff.entityId}-${diff.changeType}`">{{ diff.changeType }}: {{ diff.label }}</li>
+              <li v-if="compareResult.laneDiffs.length === 0">差分なし</li>
+            </ul>
+          </div>
+          <div class="compare-card">
+            <h3>Stage</h3>
+            <ul>
+              <li v-for="diff in compareResult.stageDiffs" :key="`stage-${diff.entityId}-${diff.changeType}`">{{ diff.changeType }}: {{ diff.label }}</li>
+              <li v-if="compareResult.stageDiffs.length === 0">差分なし</li>
+            </ul>
+          </div>
+          <div class="compare-card">
+            <h3>Node</h3>
+            <ul>
+              <li v-for="diff in compareResult.nodeDiffs" :key="`node-${diff.entityId}-${diff.changeType}`">{{ diff.changeType }}: {{ diff.label }}</li>
+              <li v-if="compareResult.nodeDiffs.length === 0">差分なし</li>
+            </ul>
+          </div>
+          <div class="compare-card">
+            <h3>Link</h3>
+            <ul>
+              <li v-for="diff in compareResult.linkDiffs" :key="`link-${diff.entityId}-${diff.changeType}`">{{ diff.changeType }}: {{ diff.label }}</li>
+              <li v-if="compareResult.linkDiffs.length === 0">差分なし</li>
+            </ul>
+          </div>
+          <div class="compare-card">
+            <h3>Comment</h3>
+            <ul>
+              <li v-for="diff in compareResult.commentDiffs" :key="`comment-${diff.entityId}-${diff.changeType}`">{{ diff.changeType }}: {{ diff.label }}</li>
+              <li v-if="compareResult.commentDiffs.length === 0">差分なし</li>
+            </ul>
+          </div>
+        </div>
       </div>
     </section>
   </MainLayout>
@@ -154,6 +232,42 @@ textarea {
 .actions {
   display: flex;
   justify-content: flex-end;
+}
+
+.compare-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.compare-controls select {
+  min-width: 180px;
+  padding: 8px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+}
+
+.compare-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.compare-card {
+  padding: 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+}
+
+.compare-card h3 {
+  margin: 0 0 8px;
+}
+
+.compare-card ul {
+  margin: 0;
+  padding-left: 18px;
 }
 
 .version-table {
