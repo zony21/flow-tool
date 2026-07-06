@@ -47,8 +47,8 @@ export const useFlowStore = defineStore('flow', {
       }
       await this.loadFlows(projectId)
     },
-    async saveStructure(request: SaveFlowStructureRequest): Promise<void> {
-      const response = await saveFlowStructure(request.flowId, request)
+    async saveStructure(projectId: string, request: SaveFlowStructureRequest): Promise<void> {
+      const response = await saveFlowStructure(projectId, request.flowId, request)
       if (this.currentFlow?.flowId === request.flowId) {
         this.currentFlow = {
           ...this.currentFlow,
