@@ -13,7 +13,8 @@ import ForbiddenPage from '../pages/ForbiddenPage.vue'
 const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { path: '/', name: 'project-list', component: ProjectListPage, meta: { requiresAuth: true } },
+    { path: '/', redirect: { name: 'project-list' } },
+    { path: '/projects', name: 'project-list', component: ProjectListPage, meta: { requiresAuth: true } },
     { path: '/projects/:projectId', name: 'project-detail', component: ProjectDetailPage, meta: { requiresAuth: true, permission: PermissionCodes.ProjectRead } },
     { path: '/projects/:projectId/flows/:flowId/editor', name: 'flow-editor', component: FlowEditorPage, meta: { requiresAuth: true, permission: PermissionCodes.FlowRead } },
     { path: '/projects/:projectId/flows/:flowId/versions', name: 'flow-versions', component: VersionManagementPage, meta: { requiresAuth: true, permission: PermissionCodes.VersionRead } },
