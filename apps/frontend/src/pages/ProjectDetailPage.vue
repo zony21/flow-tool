@@ -15,13 +15,23 @@ const projectStore = useProjectStore()
 const flowStore = useFlowStore()
 const permissionStore = useProjectPermissionStore()
 
+const projectEditName = ref('')
+const projectEditDescription = ref('')
+const editingProject = ref(false)
+const savingFlowId = ref<string | null>(null)
+const editingFlowId = ref<string | null>(null)
+const editingFlowName = ref('')
+const editingFlowDescription = ref('')
 const flowName = ref('')
 const flowDescription = ref('')
 const flowErrorMessage = ref<string | null>(null)
 
 const projectId = computed(() => String(route.params.projectId ?? ''))
+const canUpdateProject = computed(() => permissionStore.can(PermissionCodes.ProjectUpdate))
 const canCreateFlow = computed(() => permissionStore.can(PermissionCodes.FlowUpdate))
+const canSubmitProject = computed(() => projectEditName.value.trim().length > 0 && !projectStore.saving && canUpdateProject.value)
 const canSubmitFlow = computed(() => flowName.value.trim().length > 0 && !flowStore.loading && canCreateFlow.value)
+const canSubmitFlowEdit = computed(() => editingFlowName.value.trim().length > 0 && savingFlowId.value === null && canCreateFlow.value)
 
 onMounted(async () => {
   await loadPage()
@@ -35,6 +45,7 @@ async function loadPage(): Promise<void> {
     projectStore.loadProject(projectId.value),
     loadFlows(),
   ])
+  resetProjectEditForm()
 }
 
 async function loadFlows(): Promise<void> {
@@ -45,6 +56,36 @@ async function loadFlows(): Promise<void> {
   } catch (error) {
     flowErrorMessage.value = normalizeApiError(error).message
   }
+}
+
+function resetProjectEditForm(): void {
+  projectEditName.value = projectStore.currentProject?.name ?? ''
+  projectEditDescription.value = projectStore.currentProject?.description ?? ''
+}
+
+function startProjectEdit(): void {
+  if (!canUpdateProject.value) return
+  resetProjectEditForm()
+  editingProject.value = true
+}
+
+function cancelProjectEdit(): void {
+  editingProject.value = false
+  resetProjectEditForm()
+}
+
+async function saveProject(): Promise<void> {
+  const name = projectEditName.value.trim()
+  if (!name || !canUpdateProject.value) return
+
+  const project = await projectStore.update(projectId.value, {
+    name,
+    description: projectEditDescription.value.trim() || null,
+  })
+  if (!project) return
+
+  editingProject.value = false
+  resetProjectEditForm()
 }
 
 async function createFlow(): Promise<void> {
@@ -65,6 +106,38 @@ async function createFlow(): Promise<void> {
   }
 }
 
+function startFlowEdit(flowId: string, name: string, description?: string | null): void {
+  if (!canCreateFlow.value) return
+  editingFlowId.value = flowId
+  editingFlowName.value = name
+  editingFlowDescription.value = description ?? ''
+}
+
+function cancelFlowEdit(): void {
+  editingFlowId.value = null
+  editingFlowName.value = ''
+  editingFlowDescription.value = ''
+}
+
+async function saveFlow(flowId: string): Promise<void> {
+  const name = editingFlowName.value.trim()
+  if (!name || !canCreateFlow.value) return
+
+  savingFlowId.value = flowId
+  flowErrorMessage.value = null
+  try {
+    await flowStore.update(projectId.value, flowId, {
+      name,
+      description: editingFlowDescription.value.trim() || null,
+    })
+    cancelFlowEdit()
+  } catch (error) {
+    flowErrorMessage.value = normalizeApiError(error).message
+  } finally {
+    savingFlowId.value = null
+  }
+}
+
 async function openFlow(flowId: string): Promise<void> {
   await router.push({ name: 'flow-editor', params: { projectId: projectId.value, flowId } })
 }
@@ -82,13 +155,29 @@ function formatDate(value: string): string {
   <MainLayout>
     <section class="page project-detail-page">
       <div class="card page-header">
-        <div>
+        <div v-if="!editingProject">
           <h1>{{ projectStore.currentProject?.name ?? 'プロジェクト詳細' }}</h1>
           <p>{{ projectStore.currentProject?.description || 'Project詳細とFlow一覧を表示します。' }}</p>
           <p class="meta">projectId: {{ projectId }}</p>
         </div>
+        <div v-else class="edit-panel">
+          <h1>Project編集</h1>
+          <div class="form-grid single-column">
+            <label>
+              Project名
+              <input v-model="projectEditName" type="text" :disabled="projectStore.saving" />
+            </label>
+            <label>
+              説明
+              <textarea v-model="projectEditDescription" rows="3" :disabled="projectStore.saving" />
+            </label>
+          </div>
+        </div>
         <div class="header-actions">
           <Button label="Project一覧へ戻る" severity="secondary" @click="backToProjects()" />
+          <Button v-if="!editingProject && canUpdateProject" label="Project編集" severity="secondary" @click="startProjectEdit()" />
+          <Button v-if="editingProject" label="キャンセル" severity="secondary" :disabled="projectStore.saving" @click="cancelProjectEdit()" />
+          <Button v-if="editingProject" label="保存" :disabled="!canSubmitProject" @click="saveProject()" />
           <Button label="再読み込み" severity="secondary" :disabled="projectStore.loading || flowStore.loading" @click="loadPage()" />
         </div>
       </div>
@@ -132,12 +221,32 @@ function formatDate(value: string): string {
           </thead>
           <tbody>
             <tr v-for="flow in flowStore.flows" :key="flow.flowId">
-              <td>{{ flow.name }}</td>
-              <td>{{ flow.description || '説明なし' }}</td>
-              <td>{{ formatDate(flow.updatedAtUtc) }}</td>
-              <td>
-                <Button label="Editor" size="small" @click="openFlow(flow.flowId)" />
-              </td>
+              <template v-if="editingFlowId === flow.flowId">
+                <td>
+                  <input v-model="editingFlowName" type="text" :disabled="savingFlowId === flow.flowId" />
+                </td>
+                <td>
+                  <textarea v-model="editingFlowDescription" rows="2" :disabled="savingFlowId === flow.flowId" />
+                </td>
+                <td>{{ formatDate(flow.updatedAtUtc) }}</td>
+                <td>
+                  <div class="row-actions">
+                    <Button label="保存" size="small" :disabled="!canSubmitFlowEdit" @click="saveFlow(flow.flowId)" />
+                    <Button label="キャンセル" size="small" severity="secondary" :disabled="savingFlowId === flow.flowId" @click="cancelFlowEdit()" />
+                  </div>
+                </td>
+              </template>
+              <template v-else>
+                <td>{{ flow.name }}</td>
+                <td>{{ flow.description || '説明なし' }}</td>
+                <td>{{ formatDate(flow.updatedAtUtc) }}</td>
+                <td>
+                  <div class="row-actions">
+                    <Button label="Editor" size="small" @click="openFlow(flow.flowId)" />
+                    <Button v-if="canCreateFlow" label="編集" size="small" severity="secondary" @click="startFlowEdit(flow.flowId, flow.name, flow.description)" />
+                  </div>
+                </td>
+              </template>
             </tr>
           </tbody>
         </table>
@@ -156,16 +265,18 @@ function formatDate(value: string): string {
 .page-header,
 .section-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
 }
 
 .header-actions,
-.actions {
+.actions,
+.row-actions {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .page-header h1,
@@ -178,6 +289,10 @@ function formatDate(value: string): string {
   font-size: 0.85rem;
 }
 
+.edit-panel {
+  flex: 1 1 auto;
+}
+
 .create-card {
   display: flex;
   flex-direction: column;
@@ -188,6 +303,10 @@ function formatDate(value: string): string {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 12px;
+}
+
+.single-column {
+  grid-template-columns: 1fr;
 }
 
 label {
