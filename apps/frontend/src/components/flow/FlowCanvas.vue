@@ -37,6 +37,7 @@ const laneHeaderWidth = 160
 
 const stageColumns = computed(() => props.flow.stages.slice().sort((a, b) => a.sortOrder - b.sortOrder))
 const laneRows = computed(() => props.flow.lanes.slice().sort((a, b) => a.sortOrder - b.sortOrder))
+const hasStructureGrid = computed(() => stageColumns.value.length > 0 && laneRows.value.length > 0)
 const nodeOptions = computed(() =>
   props.flow.nodes.map((node) => ({
     nodeId: node.nodeId,
@@ -156,7 +157,7 @@ function onPaneClick(_: unknown): void {
 <template>
   <div class="flow-canvas">
     <div class="canvas-toolbar">
-      <button type="button" class="canvas-button" :disabled="readonly" @click="emit('add-node')">Node追加</button>
+      <button type="button" class="canvas-button" :disabled="readonly || !hasStructureGrid" @click="emit('add-node')">Node追加</button>
       <div class="link-builder">
         <select v-model="selectedSourceNodeId" class="canvas-select" :disabled="readonly || flow.nodes.length < 2">
           <option v-for="option in nodeOptions" :key="`source-${option.nodeId}`" :value="option.nodeId">
@@ -178,6 +179,12 @@ function onPaneClick(_: unknown): void {
           Link追加
         </button>
       </div>
+    </div>
+
+    <div v-if="!hasStructureGrid" class="canvas-guidance">
+      <h2>Lane / Stage が未作成です</h2>
+      <p>NodeはLaneが責務、Stageが工程を表すため、先に構造グリッドを作成してください。</p>
+      <p>新規Flowでは自動で初期Lane / Stageが作成されます。既存の空Flowは再作成するか、今後のLane / Stage編集機能で補完してください。</p>
     </div>
 
     <div class="stage-header" :style="{ marginLeft: `${laneHeaderWidth}px` }">
@@ -292,6 +299,31 @@ function onPaneClick(_: unknown): void {
   cursor: not-allowed;
 }
 
+.canvas-guidance {
+  position: absolute;
+  top: 88px;
+  left: 50%;
+  z-index: 5;
+  width: min(520px, calc(100% - 48px));
+  padding: 20px;
+  color: #334155;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgb(15 23 42 / 14%);
+  transform: translateX(-50%);
+}
+
+.canvas-guidance h2 {
+  margin: 0 0 8px;
+  font-size: 1rem;
+  color: #0f172a;
+}
+
+.canvas-guidance p {
+  margin: 6px 0 0;
+}
+
 .stage-header {
   position: absolute;
   top: 0;
@@ -358,11 +390,10 @@ function onPaneClick(_: unknown): void {
 
 :deep(.selected-flow-node) {
   outline: 3px solid #2563eb;
-  border-radius: 6px;
 }
 
 :deep(.selected-flow-link path) {
-  stroke: #2563eb !important;
-  stroke-width: 3px;
+  stroke: #dc2626;
+  stroke-width: 3;
 }
 </style>
