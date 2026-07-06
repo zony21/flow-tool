@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { getNodeTypeLabel, nodeSamples } from '../../constants/nodeSamples'
 import type { FlowDetail, FlowNode } from '../../types/flow'
-
-const nodeTypes = ['start', 'process', 'decision', 'end'] as const
 
 const props = defineProps<{
   flow: FlowDetail
@@ -36,27 +35,28 @@ function deleteSelectedNode(): void {
 <template>
   <aside class="node-property-panel">
     <header class="panel-header">
-      <h2>Property Panel</h2>
-      <p>選択Nodeの設計情報を編集します。</p>
+      <h2>図形の詳細</h2>
+      <p>選択中の図形情報を編集します。</p>
     </header>
 
     <div v-if="!selectedNode" class="empty-state">
-      Nodeを選択してください。
+      図形を選択してください。
     </div>
 
     <div v-else class="form-grid">
       <label class="field">
-        <span>Node名</span>
+        <span>図形名</span>
         <input :value="selectedNode.name" :disabled="readonly" @input="updateField('name', ($event.target as HTMLInputElement).value)" />
       </label>
 
       <label class="field">
-        <span>Node種別</span>
+        <span>図形種別</span>
         <select :value="selectedNode.nodeType" :disabled="readonly" @change="updateField('nodeType', ($event.target as HTMLSelectElement).value)">
-          <option v-for="type in nodeTypes" :key="type" :value="type">
-            {{ type }}
+          <option v-for="sample in nodeSamples" :key="sample.type" :value="sample.type">
+            {{ sample.label }}
           </option>
         </select>
+        <small>{{ getNodeTypeLabel(selectedNode.nodeType) }}として表示されます。</small>
       </label>
 
       <label class="field">
@@ -70,7 +70,7 @@ function deleteSelectedNode(): void {
       </label>
 
       <label class="field">
-        <span>Lane（担当）</span>
+        <span>担当</span>
         <select :value="selectedNode.laneId ?? ''" :disabled="readonly" @change="updateField('laneId', ($event.target as HTMLSelectElement).value || null)">
           <option value="">未設定</option>
           <option v-for="lane in lanes" :key="lane.laneId" :value="lane.laneId">
@@ -80,7 +80,7 @@ function deleteSelectedNode(): void {
       </label>
 
       <label class="field">
-        <span>Stage（工程）</span>
+        <span>設備・場所</span>
         <select :value="selectedNode.stageId ?? ''" :disabled="readonly" @change="updateField('stageId', ($event.target as HTMLSelectElement).value || null)">
           <option value="">未設定</option>
           <option v-for="stage in stages" :key="stage.stageId" :value="stage.stageId">
@@ -91,17 +91,17 @@ function deleteSelectedNode(): void {
 
       <div class="read-only-grid">
         <div>
-          <span>ID</span>
+          <span>識別ID</span>
           <strong>{{ selectedNode.nodeId }}</strong>
         </div>
         <div>
-          <span>X / Y</span>
+          <span>表示位置</span>
           <strong>{{ Math.round(selectedNode.x) }} / {{ Math.round(selectedNode.y) }}</strong>
         </div>
       </div>
 
       <button type="button" class="delete-button" :disabled="readonly" @click="deleteSelectedNode">
-        Node削除
+        図形削除
       </button>
     </div>
   </aside>
@@ -153,6 +153,11 @@ function deleteSelectedNode(): void {
   font-size: 13px;
   font-weight: 700;
   color: #334155;
+}
+
+.field small {
+  color: #64748b;
+  font-weight: 400;
 }
 
 .field input,
