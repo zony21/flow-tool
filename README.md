@@ -12,6 +12,9 @@ Single Source of Truth（SSOT）を採用する。
 
 図形は結果であり、保存・解析・出力の正は構造化データである。
 
+Node座標（X/Y）は設計意味を持たないView Hintとして扱う。
+処理順・責務・AI DSL解析は構造化データから判断する。
+
 ## 3. 技術スタック
 
 | 区分 | 技術 |
@@ -31,7 +34,7 @@ Single Source of Truth（SSOT）を採用する。
 | `03_画面設計` | 画面設計 | 詳細化済み |
 | `04_DB設計` | DB設計 | 詳細化済み |
 | `05_API設計` | API設計 | 詳細化済み |
-| `06_フローエディタ設計` | フローエディタ | 詳細化済み |
+| `06_フローエディタ設計` | フローエディタ（Node座標View Hint仕様含む） | 詳細化済み |
 | `07_Mermaid出力設計` | Mermaid出力 | 詳細化済み |
 | `08_PDF出力設計` | PDF出力 | 詳細化済み |
 | `09_AI構造化データ設計` | AI構造化データ | 詳細化済み |
@@ -65,22 +68,23 @@ Single Source of Truth（SSOT）を採用する。
 
 - AI DSL Schema仕様
 - Node拡張仕様
+- Node座標View Hint仕様
 - Import設計
 - AI Review設計
 - ErrorResponse共通仕様
 - Performance設計
 
-次工程は再監査、または実装開始前のRepository構成確認を想定する。
+次工程は実装フェーズ。
 
-## 7. 実装構成 (Phase 0)
+## 7. 実装構成
 
 - apps/frontend
 	- Vue3 + TypeScript + Vite
-	- Pinia / Vue Router / PrimeVue / Vue Flow の初期構成
+	- Pinia / Vue Router / PrimeVue / Vue Flow
 - apps/backend
 	- ASP.NET Core .NET 8
-	- Api / Application / Domain / Infrastructure / Tests の分割構成
-	- SQLite接続設定と `GET /api/health` を実装
+	- Api / Application / Domain / Infrastructure / Tests
+	- SQLite接続
 
 ## 8. 起動手順
 
