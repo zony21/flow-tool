@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { VueFlow, type Edge, type Node, type NodeDragEvent } from '@vue-flow/core'
+import { VueFlow, type Edge, type Node, type NodeDragEvent, type NodeMouseEvent } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
 import type { FlowDetail } from '../../types/flow'
@@ -9,12 +9,14 @@ import '@vue-flow/core/dist/theme-default.css'
 
 const props = defineProps<{
   flow: FlowDetail
+  selectedNodeId?: string | null
 }>()
 
 const emit = defineEmits<{
   (event: 'add-node'): void
   (event: 'add-link', payload: { sourceNodeId: string; targetNodeId: string }): void
   (event: 'node-moved', payload: { nodeId: string; x: number; y: number; laneId?: string; stageId?: string }): void
+  (event: 'node-selected', payload: { nodeId: string }): void
 }>()
 
 const laneHeight = 140
@@ -66,6 +68,7 @@ const nodes = computed<Node[]>(() =>
       },
       data: flowNode,
       draggable: true,
+      class: flowNode.nodeId === props.selectedNodeId ? 'selected-flow-node' : undefined,
     }
   }),
 )
@@ -105,7 +108,6 @@ function onNodeDragStop(event: NodeDragEvent): void {
   const laneId = laneRows.value[laneIndex]?.laneId
   const stageId = stageColumns.value[stageIndex]?.stageId
 
-  // Snap dropped nodes to the target lane/stage cell for stable layout.
   const snappedX = stageIndex * stageWidth + 40
   const snappedY = laneIndex * laneHeight + 40
 
@@ -116,6 +118,10 @@ function onNodeDragStop(event: NodeDragEvent): void {
     laneId,
     stageId,
   })
+}
+
+function onNodeClick(event: NodeMouseEvent): void {
+  emit('node-selected', { nodeId: event.node.id })
 }
 </script>
 
@@ -184,7 +190,14 @@ function onNodeDragStop(event: NodeDragEvent): void {
       </div>
     </div>
 
-    <VueFlow class="vue-flow" :nodes="nodes" :edges="edges" :fit-view-on-init="true" @node-drag-stop="onNodeDragStop">
+    <VueFlow
+      class="vue-flow"
+      :nodes="nodes"
+      :edges="edges"
+      :fit-view-on-init="true"
+      @node-drag-stop="onNodeDragStop"
+      @node-click="onNodeClick"
+    >
       <Background />
       <Controls />
     </VueFlow>
@@ -311,5 +324,10 @@ function onNodeDragStop(event: NodeDragEvent): void {
   inset: 48px 0 0 160px;
   z-index: 2;
   background: transparent;
+}
+
+:deep(.selected-flow-node) {
+  outline: 3px solid #2563eb;
+  border-radius: 6px;
 }
 </style>
