@@ -39,11 +39,11 @@ function updateStageName(stage: Stage, name: string): void {
   <aside class="lane-stage-panel">
     <section>
       <div class="section-header">
-        <h2>Lane</h2>
+        <h2>担当</h2>
         <Button label="追加" size="small" :disabled="readonly" @click="emit('add-lane')" />
       </div>
-      <p class="help-text">責務・担当範囲を表します。</p>
-      <div v-if="sortedLanes.length === 0" class="empty-message">Laneがありません。</div>
+      <p class="help-text">作業・判断を担当する部署、人、システムを表します。</p>
+      <div v-if="sortedLanes.length === 0" class="empty-message">担当がありません。</div>
       <div v-for="lane in sortedLanes" :key="lane.laneId" class="item-row">
         <input
           :value="lane.name"
@@ -57,11 +57,11 @@ function updateStageName(stage: Stage, name: string): void {
 
     <section>
       <div class="section-header">
-        <h2>Stage</h2>
+        <h2>設備・場所</h2>
         <Button label="追加" size="small" :disabled="readonly" @click="emit('add-stage')" />
       </div>
-      <p class="help-text">工程・処理段階を表します。</p>
-      <div v-if="sortedStages.length === 0" class="empty-message">Stageがありません。</div>
+      <p class="help-text">包装機、コンベア、倉庫、タブレットなど、図形を配置する横方向の列を表します。</p>
+      <div v-if="sortedStages.length === 0" class="empty-message">設備・場所がありません。</div>
       <div v-for="stage in sortedStages" :key="stage.stageId" class="item-row">
         <input
           :value="stage.name"
