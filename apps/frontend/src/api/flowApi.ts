@@ -30,7 +30,7 @@ export async function deleteFlow(projectId: string, flowId: string): Promise<voi
   await httpClient.delete(`/api/projects/${projectId}/flows/${flowId}`)
 }
 
-export async function saveFlowStructure(flowId: string, request: SaveFlowStructureRequest): Promise<SaveFlowStructureResponse> {
-  const response = await httpClient.put<SaveFlowStructureResponse>(`/api/flows/${flowId}/structure`, request)
+export async function saveFlowStructure(projectId: string, flowId: string, request: SaveFlowStructureRequest): Promise<SaveFlowStructureResponse> {
+  const response = await httpClient.put<SaveFlowStructureResponse>(`/api/projects/${projectId}/flows/${flowId}/structure`, request)
   return response.data
 }
