@@ -10,6 +10,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (event: 'update-link', payload: FlowLink): void
+  (event: 'delete-link', payload: { linkId: string }): void
 }>()
 
 const selectedLink = computed(() => props.flow.links.find((link) => link.linkId === props.linkId) ?? null)
@@ -20,6 +21,11 @@ function updateField<K extends keyof FlowLink>(key: K, value: FlowLink[K]): void
     ...selectedLink.value,
     [key]: value,
   })
+}
+
+function deleteSelectedLink(): void {
+  if (!selectedLink.value || props.readonly) return
+  emit('delete-link', { linkId: selectedLink.value.linkId })
 }
 </script>
 
@@ -64,6 +70,10 @@ function updateField<K extends keyof FlowLink>(key: K, value: FlowLink[K]): void
           <strong>{{ selectedLink.sourceNodeId }} → {{ selectedLink.targetNodeId }}</strong>
         </div>
       </div>
+
+      <button type="button" class="delete-button" :disabled="readonly" @click="deleteSelectedLink">
+        Link削除
+      </button>
     </div>
   </aside>
 </template>
@@ -154,5 +164,23 @@ function updateField<K extends keyof FlowLink>(key: K, value: FlowLink[K]): void
   overflow-wrap: anywhere;
   color: #0f172a;
   font-size: 12px;
+}
+
+.delete-button {
+  width: 100%;
+  margin-top: 4px;
+  padding: 10px 12px;
+  color: #991b1b;
+  background: #fee2e2;
+  border: 1px solid #fca5a5;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.delete-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 </style>

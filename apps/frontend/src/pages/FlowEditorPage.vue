@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, watch } from 'vue'
+import { computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import Button from 'primevue/button'
 import MainLayout from '../layouts/MainLayout.vue'
@@ -10,6 +10,7 @@ import NodePropertyPanel from '../components/flow/NodePropertyPanel.vue'
 import { useEditorStore } from '../stores/editorStore'
 import { useFlowStore } from '../stores/flowStore'
 import { useProjectPermissionStore } from '../stores/projectPermissionStore'
+import { useUndoRedoStore } from '../stores/undoRedoStore'
 import type { FlowLink, FlowNode } from '../types/flow'
 import { PermissionCodes } from '../types/permission'
 
@@ -17,6 +18,7 @@ const route = useRoute()
 const flowStore = useFlowStore()
 const editorStore = useEditorStore()
 const permissionStore = useProjectPermissionStore()
+const undoRedoStore = useUndoRedoStore()
 
 const projectId = computed(() => String(route.params.projectId ?? ''))
 const flowId = computed(() => String(route.params.flowId ?? ''))
@@ -32,10 +34,20 @@ const canEdit = computed(() => canUpdateFlow.value)
 
 onMounted(async () => {
   editorStore.reset()
+  undoRedoStore.reset()
   if (projectId.value && flowId.value) {
     await flowStore.loadFlow(projectId.value, flowId.value)
     editorStore.markSaved()
+    if (flowStore.currentFlow) {
+      undoRedoStore.init(flowStore.currentFlow)
+    }
   }
+
+  window.addEventListener('keydown', handleKeydown)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeydown)
 })
 
 watch(flow, (currentFlow) => {
@@ -94,6 +106,27 @@ async function saveCurrentStructure(): Promise<void> {
     changeSummary: null,
   })
   editorStore.markSaved()
+  if (flowStore.currentFlow) {
+    undoRedoStore.markSaved(flowStore.currentFlow)
+  }
+}
+
+function applyFlowChange(
+  transform: (current: NonNullable<typeof flow.value>) => NonNullable<typeof flow.value>,
+  options?: { actionKey?: string; coalesceWindowMs?: number },
+): void {
+  if (!flow.value || !canEdit.value) return
+
+  const before = undoRedoStore.serialize(flow.value)
+  const updatedFlow = transform(flow.value)
+  const after = undoRedoStore.serialize(updatedFlow)
+  if (before === after) {
+    return
+  }
+
+  undoRedoStore.record(flow.value, options)
+  flowStore.setCurrentFlow(updatedFlow)
+  editorStore.markDirty()
 }
 
 function addNode(): void {
@@ -104,13 +137,13 @@ function addNode(): void {
   const nodeIndex = flow.value.nodes.length
   const nodeId = crypto.randomUUID()
 
-  flowStore.setCurrentFlow({
-    ...flow.value,
+  applyFlowChange((currentFlow) => ({
+    ...currentFlow,
     nodes: [
-      ...flow.value.nodes,
+      ...currentFlow.nodes,
       {
         nodeId,
-        flowId: flow.value.flowId,
+        flowId: currentFlow.flowId,
         laneId: defaultLane?.laneId,
         stageId: defaultStage?.stageId,
         nodeType: 'process',
@@ -120,9 +153,8 @@ function addNode(): void {
         y: 40 + Math.floor(nodeIndex / 3) * 80,
       },
     ],
-  })
+  }), { actionKey: 'node:add' })
   editorStore.selectNode(nodeId)
-  editorStore.markDirty()
 }
 
 function addLink(payload: { sourceNodeId: string; targetNodeId: string }): void {
@@ -135,30 +167,29 @@ function addLink(payload: { sourceNodeId: string; targetNodeId: string }): void 
   if (exists) return
 
   const linkId = crypto.randomUUID()
-  flowStore.setCurrentFlow({
-    ...flow.value,
+  applyFlowChange((currentFlow) => ({
+    ...currentFlow,
     links: [
-      ...flow.value.links,
+      ...currentFlow.links,
       {
         linkId,
-        flowId: flow.value.flowId,
+        flowId: currentFlow.flowId,
         sourceNodeId: payload.sourceNodeId,
         targetNodeId: payload.targetNodeId,
         label: null,
         condition: null,
       },
     ],
-  })
+  }), { actionKey: 'link:add' })
   editorStore.selectLink(linkId)
-  editorStore.markDirty()
 }
 
 function updateNodePosition(payload: { nodeId: string; x: number; y: number; laneId?: string; stageId?: string }): void {
   if (!flow.value || !canEdit.value) return
 
-  flowStore.setCurrentFlow({
-    ...flow.value,
-    nodes: flow.value.nodes.map((node) =>
+  applyFlowChange((currentFlow) => ({
+    ...currentFlow,
+    nodes: currentFlow.nodes.map((node) =>
       node.nodeId === payload.nodeId
         ? {
             ...node,
@@ -169,44 +200,129 @@ function updateNodePosition(payload: { nodeId: string; x: number; y: number; lan
           }
         : node,
     ),
-  })
-  editorStore.markDirty()
+  }), { actionKey: `node:move:${payload.nodeId}`, coalesceWindowMs: 1200 })
 }
 
 function updateNode(updatedNode: FlowNode): void {
   if (!flow.value || !canEdit.value) return
 
-  flowStore.setCurrentFlow({
-    ...flow.value,
-    nodes: flow.value.nodes.map((node) => (node.nodeId === updatedNode.nodeId ? updatedNode : node)),
-  })
-  editorStore.markDirty()
+  applyFlowChange((currentFlow) => ({
+    ...currentFlow,
+    nodes: currentFlow.nodes.map((node) => (node.nodeId === updatedNode.nodeId ? updatedNode : node)),
+  }), { actionKey: `node:update:${updatedNode.nodeId}`, coalesceWindowMs: 800 })
 }
 
 function updateLink(updatedLink: FlowLink): void {
   if (!flow.value || !canEdit.value) return
 
-  flowStore.setCurrentFlow({
-    ...flow.value,
-    links: flow.value.links.map((link) => (link.linkId === updatedLink.linkId ? updatedLink : link)),
-  })
-  editorStore.markDirty()
+  applyFlowChange((currentFlow) => ({
+    ...currentFlow,
+    links: currentFlow.links.map((link) => (link.linkId === updatedLink.linkId ? updatedLink : link)),
+  }), { actionKey: `link:update:${updatedLink.linkId}`, coalesceWindowMs: 800 })
 }
 
 function deleteNode(payload: { nodeId: string }): void {
   if (!flow.value || !canEdit.value) return
 
-  flowStore.setCurrentFlow({
-    ...flow.value,
-    nodes: flow.value.nodes.filter((node) => node.nodeId !== payload.nodeId),
-    links: flow.value.links.filter((link) => link.sourceNodeId !== payload.nodeId && link.targetNodeId !== payload.nodeId),
-    comments: flow.value.comments.filter((comment) => comment.nodeId !== payload.nodeId),
-  })
+  applyFlowChange((currentFlow) => ({
+    ...currentFlow,
+    nodes: currentFlow.nodes.filter((node) => node.nodeId !== payload.nodeId),
+    links: currentFlow.links.filter((link) => link.sourceNodeId !== payload.nodeId && link.targetNodeId !== payload.nodeId),
+    comments: currentFlow.comments.filter((comment) => comment.nodeId !== payload.nodeId),
+  }), { actionKey: `node:delete:${payload.nodeId}` })
 
   if (editorStore.selectedNodeId === payload.nodeId) {
     editorStore.clearSelection()
   }
-  editorStore.markDirty()
+}
+
+function deleteLink(payload: { linkId: string }): void {
+  if (!flow.value || !canEdit.value) return
+
+  applyFlowChange((currentFlow) => ({
+    ...currentFlow,
+    links: currentFlow.links.filter((link) => link.linkId !== payload.linkId),
+  }), { actionKey: `link:delete:${payload.linkId}` })
+
+  if (editorStore.selectedLinkId === payload.linkId) {
+    editorStore.clearSelection()
+  }
+}
+
+function undo(): void {
+  if (!flow.value || !canEdit.value) return
+  const previous = undoRedoStore.undo(flow.value)
+  if (!previous) return
+
+  flowStore.setCurrentFlow(previous)
+  editorStore.clearMissingSelection(
+    previous.nodes.map((node) => node.nodeId),
+    previous.links.map((link) => link.linkId),
+  )
+
+  if (undoRedoStore.isSaved(previous)) {
+    editorStore.markSaved()
+  } else {
+    editorStore.markDirty()
+  }
+}
+
+function redo(): void {
+  if (!flow.value || !canEdit.value) return
+  const next = undoRedoStore.redo(flow.value)
+  if (!next) return
+
+  flowStore.setCurrentFlow(next)
+  editorStore.clearMissingSelection(
+    next.nodes.map((node) => node.nodeId),
+    next.links.map((link) => link.linkId),
+  )
+
+  if (undoRedoStore.isSaved(next)) {
+    editorStore.markSaved()
+  } else {
+    editorStore.markDirty()
+  }
+}
+
+function handleKeydown(event: KeyboardEvent): void {
+  if (!canEdit.value) return
+
+  const target = event.target as HTMLElement | null
+  const tag = target?.tagName?.toLowerCase()
+  const isTextEditing = tag === 'input' || tag === 'textarea' || target?.isContentEditable
+  if (isTextEditing) {
+    return
+  }
+
+  const zPressed = event.key.toLowerCase() === 'z'
+  const yPressed = event.key.toLowerCase() === 'y'
+  const withMod = event.ctrlKey || event.metaKey
+
+  if (event.key === 'Delete') {
+    event.preventDefault()
+    if (editorStore.selectedNodeId) {
+      deleteNode({ nodeId: editorStore.selectedNodeId })
+      return
+    }
+    if (editorStore.selectedLinkId) {
+      deleteLink({ linkId: editorStore.selectedLinkId })
+    }
+    return
+  }
+
+  if (!withMod) return
+
+  if (zPressed && !event.shiftKey) {
+    event.preventDefault()
+    undo()
+    return
+  }
+
+  if (yPressed || (zPressed && event.shiftKey)) {
+    event.preventDefault()
+    redo()
+  }
 }
 
 function handleNodeSelected(payload: { nodeId: string }): void {
@@ -236,7 +352,11 @@ function handleCanvasCleared(): void {
             <p v-else>projectId: {{ projectId }} / flowId: {{ flowId }}</p>
             <p v-if="!canEdit" class="viewer-badge">Viewerモード: 編集は無効です</p>
           </div>
-          <Button label="保存" :disabled="!flow || flowStore.loading || !canSaveStructure || !editorStore.isDirty" @click="saveCurrentStructure" />
+          <div class="header-actions">
+            <Button label="Undo" severity="secondary" :disabled="!canEdit || !undoRedoStore.canUndo" @click="undo" />
+            <Button label="Redo" severity="secondary" :disabled="!canEdit || !undoRedoStore.canRedo" @click="redo" />
+            <Button label="保存" :disabled="!flow || flowStore.loading || !canSaveStructure || !editorStore.isDirty" @click="saveCurrentStructure" />
+          </div>
         </div>
 
         <p v-if="flowStore.loading">読み込み中...</p>
@@ -266,6 +386,7 @@ function handleCanvasCleared(): void {
               :link-id="editorStore.selectedLinkId"
               :readonly="!canEdit"
               @update-link="updateLink"
+              @delete-link="deleteLink"
             />
           </div>
         </div>
@@ -315,6 +436,12 @@ function handleCanvasCleared(): void {
   color: #92400e;
   font-size: 12px;
   font-weight: 700;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .dirty-badge {
