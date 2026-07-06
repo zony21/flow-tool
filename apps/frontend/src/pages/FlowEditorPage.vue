@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import Button from 'primevue/button'
 import MainLayout from '../layouts/MainLayout.vue'
 import EditorLayout from '../layouts/EditorLayout.vue'
@@ -14,6 +14,7 @@ import { useUndoRedoStore } from '../stores/undoRedoStore'
 import { PermissionCodes } from '../types/permission'
 
 const route = useRoute()
+const router = useRouter()
 const flowStore = useFlowStore()
 const editorStore = useEditorStore()
 const permissionStore = useProjectPermissionStore()
@@ -30,6 +31,7 @@ const canSaveStructure = computed(
   () => canUpdateFlow.value && canUpdateNode.value && canUpdateLink.value && canUpdateComment.value,
 )
 const canEdit = computed(() => canUpdateFlow.value)
+const canCreateVersion = computed(() => permissionStore.can(PermissionCodes.VersionCreate))
 
 onMounted(async () => {
   editorStore.reset()
@@ -104,6 +106,57 @@ async function saveCurrentStructure(): Promise<void> {
   editorStore.markSaved()
 }
 
+async function createVersionFromCurrentFlow(): Promise<void> {
+  if (!flow.value || !canSaveStructure.value || !canCreateVersion.value) return
+
+  const changeSummary = window.prompt('Versionコメントを入力してください（任意）', '')
+  if (changeSummary === null) {
+    return
+  }
+
+  await flowStore.saveStructure(projectId.value, {
+    flowId: flow.value.flowId,
+    clientRevision: flow.value.currentRevision,
+    lanes: flow.value.lanes.map((lane) => ({
+      laneId: lane.laneId,
+      name: lane.name,
+      sortOrder: lane.sortOrder,
+    })),
+    stages: flow.value.stages.map((stage) => ({
+      stageId: stage.stageId,
+      name: stage.name,
+      sortOrder: stage.sortOrder,
+    })),
+    nodes: flow.value.nodes.map((node) => ({
+      nodeId: node.nodeId,
+      laneId: node.laneId,
+      stageId: node.stageId,
+      nodeType: node.nodeType,
+      name: node.name,
+      description: node.description,
+      x: node.x,
+      y: node.y,
+    })),
+    links: flow.value.links.map((link) => ({
+      linkId: link.linkId,
+      sourceNodeId: link.sourceNodeId,
+      targetNodeId: link.targetNodeId,
+      label: link.label,
+      condition: link.condition,
+    })),
+    comments: flow.value.comments.map((comment) => ({
+      commentId: comment.commentId,
+      nodeId: comment.nodeId,
+      text: comment.text,
+      x: comment.x,
+      y: comment.y,
+    })),
+    createVersion: true,
+    changeSummary: changeSummary || null,
+  })
+  editorStore.markSaved()
+}
+
 function handleKeydown(event: KeyboardEvent): void {
   if (!canEdit.value) return
 
@@ -160,6 +213,8 @@ function handleKeydown(event: KeyboardEvent): void {
             <p v-if="!canEdit" class="viewer-badge">Viewerモード: 編集は無効です</p>
           </div>
           <div class="header-actions">
+            <Button label="Version管理" severity="secondary" @click="router.push({ name: 'flow-versions', params: { projectId, flowId } })" />
+            <Button label="Version作成" severity="secondary" :disabled="!flow || flowStore.loading || !canSaveStructure || !canCreateVersion" @click="createVersionFromCurrentFlow" />
             <Button label="Undo" severity="secondary" :disabled="!canEdit || !undoRedoStore.canUndo" @click="editorStore.undo" />
             <Button label="Redo" severity="secondary" :disabled="!canEdit || !undoRedoStore.canRedo" @click="editorStore.redo" />
             <Button label="保存" :disabled="!flow || flowStore.loading || !canSaveStructure || !editorStore.isDirty" @click="saveCurrentStructure" />

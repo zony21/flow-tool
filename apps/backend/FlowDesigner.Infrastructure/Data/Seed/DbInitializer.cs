@@ -30,6 +30,8 @@ public static class DbInitializer
                 new Permission { PermissionId = Guid.NewGuid(), PermissionCode = PermissionCodes.ProjectUpdate, Name = "Project Update" },
                 new Permission { PermissionId = Guid.NewGuid(), PermissionCode = PermissionCodes.FlowRead, Name = "Flow Read" },
                 new Permission { PermissionId = Guid.NewGuid(), PermissionCode = PermissionCodes.FlowUpdate, Name = "Flow Update" },
+                new Permission { PermissionId = Guid.NewGuid(), PermissionCode = PermissionCodes.VersionRead, Name = "Version Read" },
+                new Permission { PermissionId = Guid.NewGuid(), PermissionCode = PermissionCodes.VersionCreate, Name = "Version Create" },
                 new Permission { PermissionId = Guid.NewGuid(), PermissionCode = PermissionCodes.NodeUpdate, Name = "Node Update" },
                 new Permission { PermissionId = Guid.NewGuid(), PermissionCode = PermissionCodes.LinkUpdate, Name = "Link Update" },
                 new Permission { PermissionId = Guid.NewGuid(), PermissionCode = PermissionCodes.CommentUpdate, Name = "Comment Update" },
@@ -48,7 +50,7 @@ public static class DbInitializer
                 });
             }
 
-            foreach (var permission in permissions.Where(x => x.PermissionCode is PermissionCodes.ProjectRead or PermissionCodes.FlowRead or PermissionCodes.FlowUpdate or PermissionCodes.NodeUpdate or PermissionCodes.LinkUpdate or PermissionCodes.CommentUpdate or PermissionCodes.ExportExecute))
+            foreach (var permission in permissions.Where(x => x.PermissionCode is PermissionCodes.ProjectRead or PermissionCodes.FlowRead or PermissionCodes.FlowUpdate or PermissionCodes.VersionRead or PermissionCodes.VersionCreate or PermissionCodes.NodeUpdate or PermissionCodes.LinkUpdate or PermissionCodes.CommentUpdate or PermissionCodes.ExportExecute))
             {
                 dbContext.RolePermissions.Add(new RolePermission
                 {
@@ -58,7 +60,7 @@ public static class DbInitializer
                 });
             }
 
-            foreach (var permission in permissions.Where(x => x.PermissionCode is PermissionCodes.ProjectRead or PermissionCodes.FlowRead))
+            foreach (var permission in permissions.Where(x => x.PermissionCode is PermissionCodes.ProjectRead or PermissionCodes.FlowRead or PermissionCodes.VersionRead))
             {
                 dbContext.RolePermissions.Add(new RolePermission
                 {
