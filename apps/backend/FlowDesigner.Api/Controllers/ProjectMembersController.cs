@@ -1,6 +1,7 @@
 using FlowDesigner.Api.Attributes;
 using FlowDesigner.Application.DTOs.Auth;
 using FlowDesigner.Application.Interfaces.Authorization;
+using FlowDesigner.Application.Security;
 using FlowDesigner.Application.Interfaces.Services;
 using FlowDesigner.Domain.Entities.Auth;
 using FlowDesigner.Domain.Entities.Core;
@@ -17,7 +18,7 @@ public sealed class ProjectMembersController(
     ICurrentUserService currentUserService) : ControllerBase
 {
     [HttpGet]
-    [RequirePermission("project.read")]
+    [RequirePermission(PermissionCodes.ProjectRead)]
     public async Task<ActionResult<IReadOnlyList<ProjectMemberDto>>> List(Guid projectId, CancellationToken cancellationToken)
     {
         var members = await dbContext.ProjectMembers
@@ -44,7 +45,7 @@ public sealed class ProjectMembersController(
     public sealed record ChangeRoleRequest(string RoleCode);
 
     [HttpPost("invite")]
-    [RequirePermission("project.write")]
+    [RequirePermission(PermissionCodes.ProjectUpdate)]
     public async Task<IActionResult> Invite(Guid projectId, [FromBody] InviteRequest request, CancellationToken cancellationToken)
     {
         var currentUserId = currentUserService.GetCurrentUserId();
@@ -76,7 +77,7 @@ public sealed class ProjectMembersController(
     }
 
     [HttpPatch("{memberId:guid}/role")]
-    [RequirePermission("project.write")]
+    [RequirePermission(PermissionCodes.ProjectUpdate)]
     public async Task<IActionResult> ChangeRole(Guid projectId, Guid memberId, [FromBody] ChangeRoleRequest request, CancellationToken cancellationToken)
     {
         var member = await dbContext.ProjectMembers.Include(x => x.Role).FirstOrDefaultAsync(x => x.ProjectMemberId == memberId && x.ProjectId == projectId, cancellationToken);
@@ -107,7 +108,7 @@ public sealed class ProjectMembersController(
     }
 
     [HttpDelete("{memberId:guid}")]
-    [RequirePermission("project.write")]
+    [RequirePermission(PermissionCodes.ProjectUpdate)]
     public async Task<IActionResult> Remove(Guid projectId, Guid memberId, CancellationToken cancellationToken)
     {
         var member = await dbContext.ProjectMembers.Include(x => x.Role).FirstOrDefaultAsync(x => x.ProjectMemberId == memberId && x.ProjectId == projectId, cancellationToken);

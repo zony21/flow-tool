@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../stores/authStore'
 import { useProjectPermissionStore } from '../stores/projectPermissionStore'
+import { PermissionCodes } from '../types/permission'
 import ProjectListPage from '../pages/ProjectListPage.vue'
 import ProjectDetailPage from '../pages/ProjectDetailPage.vue'
 import FlowEditorPage from '../pages/FlowEditorPage.vue'
@@ -12,8 +13,8 @@ const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/', name: 'project-list', component: ProjectListPage, meta: { requiresAuth: true } },
-    { path: '/projects/:projectId', name: 'project-detail', component: ProjectDetailPage, meta: { requiresAuth: true, permission: 'project.read' } },
-    { path: '/projects/:projectId/flows/:flowId/editor', name: 'flow-editor', component: FlowEditorPage, meta: { requiresAuth: true, permission: 'flow.read' } },
+    { path: '/projects/:projectId', name: 'project-detail', component: ProjectDetailPage, meta: { requiresAuth: true, permission: PermissionCodes.ProjectRead } },
+    { path: '/projects/:projectId/flows/:flowId/editor', name: 'flow-editor', component: FlowEditorPage, meta: { requiresAuth: true, permission: PermissionCodes.FlowRead } },
     { path: '/settings', name: 'settings', component: SettingsPage, meta: { requiresAuth: true } },
     { path: '/login', name: 'login', component: LoginPage },
     { path: '/forbidden', name: 'forbidden', component: ForbiddenPage },

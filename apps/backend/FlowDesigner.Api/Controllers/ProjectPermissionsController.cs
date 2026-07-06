@@ -1,6 +1,7 @@
 using FlowDesigner.Api.Attributes;
 using FlowDesigner.Application.DTOs.Auth;
 using FlowDesigner.Application.Interfaces.Authorization;
+using FlowDesigner.Application.Security;
 using FlowDesigner.Application.Interfaces.Services;
 using Microsoft.AspNetCore.Mvc;
 
@@ -13,7 +14,7 @@ public sealed class ProjectPermissionsController(
     IPermissionService permissionService) : ControllerBase
 {
     [HttpGet("me")]
-    [RequirePermission("project.read")]
+    [RequirePermission(PermissionCodes.ProjectRead)]
     public async Task<ActionResult<ProjectPermissionDto>> Me(Guid projectId, CancellationToken cancellationToken)
     {
         var userId = currentUserService.GetCurrentUserId();

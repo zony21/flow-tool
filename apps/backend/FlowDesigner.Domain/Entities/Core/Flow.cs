@@ -7,6 +7,7 @@ public class Flow
     public string Name { get; set; } = string.Empty;
     public string? Description { get; set; }
     public int SortOrder { get; set; }
+    public int Revision { get; set; }
     public DateTime CreatedAtUtc { get; set; }
     public DateTime UpdatedAtUtc { get; set; }
 

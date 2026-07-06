@@ -1,5 +1,6 @@
 using FlowDesigner.Application.DTOs.Auth;
 using FlowDesigner.Application.Interfaces.Authorization;
+using FlowDesigner.Application.Security;
 using FlowDesigner.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -23,7 +24,11 @@ public sealed class PermissionService(AppDbContext dbContext) : IPermissionServi
             where member.UserId == userId && member.ProjectId == projectId
             select permission.PermissionCode;
 
-        return await query.Distinct().ToListAsync(cancellationToken);
+        var permissions = await query
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        return permissions.Select(NormalizePermissionCode).ToList();
     }
 
     public async Task<ProjectPermissionDto?> GetProjectPermissionAsync(Guid userId, Guid projectId, CancellationToken cancellationToken = default)
@@ -40,5 +45,18 @@ public sealed class PermissionService(AppDbContext dbContext) : IPermissionServi
 
         var permissions = await GetPermissionsAsync(userId, projectId, cancellationToken);
         return new ProjectPermissionDto(projectId, member.Role.RoleCode, permissions);
+    }
+
+    private static string NormalizePermissionCode(string permissionCode)
+    {
+        return permissionCode switch
+        {
+            "project.read" => PermissionCodes.ProjectRead,
+            "project.write" => PermissionCodes.ProjectUpdate,
+            "flow.read" => PermissionCodes.FlowRead,
+            "flow.write" => PermissionCodes.FlowUpdate,
+            "export.execute" => PermissionCodes.ExportExecute,
+            _ => permissionCode,
+        };
     }
 }

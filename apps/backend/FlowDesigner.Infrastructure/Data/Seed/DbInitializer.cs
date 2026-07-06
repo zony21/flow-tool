@@ -1,5 +1,6 @@
 using FlowDesigner.Domain.Entities.Auth;
 using FlowDesigner.Domain.Entities.Core;
+using FlowDesigner.Application.Security;
 using FlowDesigner.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -25,11 +26,14 @@ public static class DbInitializer
 
             var permissions = new[]
             {
-                new Permission { PermissionId = Guid.NewGuid(), PermissionCode = "project.read", Name = "Project Read" },
-                new Permission { PermissionId = Guid.NewGuid(), PermissionCode = "project.write", Name = "Project Write" },
-                new Permission { PermissionId = Guid.NewGuid(), PermissionCode = "flow.read", Name = "Flow Read" },
-                new Permission { PermissionId = Guid.NewGuid(), PermissionCode = "flow.write", Name = "Flow Write" },
-                new Permission { PermissionId = Guid.NewGuid(), PermissionCode = "export.execute", Name = "Export Execute" }
+                new Permission { PermissionId = Guid.NewGuid(), PermissionCode = PermissionCodes.ProjectRead, Name = "Project Read" },
+                new Permission { PermissionId = Guid.NewGuid(), PermissionCode = PermissionCodes.ProjectUpdate, Name = "Project Update" },
+                new Permission { PermissionId = Guid.NewGuid(), PermissionCode = PermissionCodes.FlowRead, Name = "Flow Read" },
+                new Permission { PermissionId = Guid.NewGuid(), PermissionCode = PermissionCodes.FlowUpdate, Name = "Flow Update" },
+                new Permission { PermissionId = Guid.NewGuid(), PermissionCode = PermissionCodes.NodeUpdate, Name = "Node Update" },
+                new Permission { PermissionId = Guid.NewGuid(), PermissionCode = PermissionCodes.LinkUpdate, Name = "Link Update" },
+                new Permission { PermissionId = Guid.NewGuid(), PermissionCode = PermissionCodes.CommentUpdate, Name = "Comment Update" },
+                new Permission { PermissionId = Guid.NewGuid(), PermissionCode = PermissionCodes.ExportExecute, Name = "Export Execute" }
             };
 
             dbContext.Permissions.AddRange(permissions);
@@ -44,7 +48,7 @@ public static class DbInitializer
                 });
             }
 
-            foreach (var permission in permissions.Where(x => x.PermissionCode is "project.read" or "flow.read" or "flow.write" or "export.execute"))
+            foreach (var permission in permissions.Where(x => x.PermissionCode is PermissionCodes.ProjectRead or PermissionCodes.FlowRead or PermissionCodes.FlowUpdate or PermissionCodes.NodeUpdate or PermissionCodes.LinkUpdate or PermissionCodes.CommentUpdate or PermissionCodes.ExportExecute))
             {
                 dbContext.RolePermissions.Add(new RolePermission
                 {
@@ -54,7 +58,7 @@ public static class DbInitializer
                 });
             }
 
-            foreach (var permission in permissions.Where(x => x.PermissionCode is "project.read" or "flow.read"))
+            foreach (var permission in permissions.Where(x => x.PermissionCode is PermissionCodes.ProjectRead or PermissionCodes.FlowRead))
             {
                 dbContext.RolePermissions.Add(new RolePermission
                 {

@@ -1,10 +1,12 @@
 using FlowDesigner.Api.Attributes;
 using FlowDesigner.Application.DTOs.Flows;
+using FlowDesigner.Application.Security;
 using FlowDesigner.Domain.Entities.Core;
 using FlowDesigner.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 namespace FlowDesigner.Api.Controllers;
 
@@ -14,7 +16,7 @@ namespace FlowDesigner.Api.Controllers;
 public sealed class FlowsController(AppDbContext dbContext) : ControllerBase
 {
     [HttpGet]
-    [RequirePermission("flow.read")]
+    [RequirePermission(PermissionCodes.FlowRead)]
     public async Task<ActionResult<IReadOnlyList<FlowSummaryDto>>> List(Guid projectId, CancellationToken cancellationToken)
     {
         var flows = await dbContext.Flows
@@ -36,7 +38,7 @@ public sealed class FlowsController(AppDbContext dbContext) : ControllerBase
     }
 
     [HttpPost]
-    [RequirePermission("flow.write")]
+    [RequirePermission(PermissionCodes.FlowUpdate)]
     public async Task<ActionResult<FlowDetailDto>> Create(Guid projectId, [FromBody] CreateFlowRequest request, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(request.Name))
@@ -75,7 +77,7 @@ public sealed class FlowsController(AppDbContext dbContext) : ControllerBase
     }
 
     [HttpGet("{flowId:guid}")]
-    [RequirePermission("flow.read")]
+    [RequirePermission(PermissionCodes.FlowRead)]
     public async Task<ActionResult<FlowDetailDto>> Get(Guid projectId, Guid flowId, CancellationToken cancellationToken)
     {
         var flow = await dbContext.Flows
@@ -91,7 +93,7 @@ public sealed class FlowsController(AppDbContext dbContext) : ControllerBase
     }
 
     [HttpPut("{flowId:guid}")]
-    [RequirePermission("flow.write")]
+    [RequirePermission(PermissionCodes.FlowUpdate)]
     public async Task<ActionResult<FlowDetailDto>> Update(Guid projectId, Guid flowId, [FromBody] UpdateFlowRequest request, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(request.Name))
@@ -113,8 +115,142 @@ public sealed class FlowsController(AppDbContext dbContext) : ControllerBase
         return Ok(await BuildDetailDtoAsync(flowId, cancellationToken));
     }
 
+    [HttpPut("/api/flows/{flowId:guid}/structure")]
+    [RequirePermission(PermissionCodes.FlowUpdate)]
+    public async Task<ActionResult<SaveFlowStructureResponse>> SaveStructure(Guid flowId, [FromBody] SaveFlowStructureRequest request, CancellationToken cancellationToken)
+    {
+        if (request.FlowId != flowId)
+        {
+            return BadRequest(new { message = "FlowId in path and body must match." });
+        }
+
+        var flow = await dbContext.Flows.FirstOrDefaultAsync(x => x.FlowId == flowId, cancellationToken);
+        if (flow is null)
+        {
+            return NotFound();
+        }
+
+        if (request.ClientRevision != flow.Revision)
+        {
+            return Conflict(new { code = "REVISION_CONFLICT", message = "Flow structure has changed." });
+        }
+
+        var lanes = (request.Lanes ?? Array.Empty<SaveLaneRequest>()).ToList();
+        var stages = (request.Stages ?? Array.Empty<SaveStageRequest>()).ToList();
+        var nodes = (request.Nodes ?? Array.Empty<SaveNodeRequest>()).ToList();
+        var links = (request.Links ?? Array.Empty<SaveLinkRequest>()).ToList();
+        var comments = (request.Comments ?? Array.Empty<SaveCommentRequest>()).ToList();
+
+        var validationError = ValidateStructure(lanes, stages, nodes, links, comments);
+        if (validationError is not null)
+        {
+            return UnprocessableEntity(new { code = "VALIDATION_ERROR", message = validationError });
+        }
+
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+        var existingLanes = await dbContext.Lanes.Where(x => x.FlowId == flowId).ToListAsync(cancellationToken);
+        var existingStages = await dbContext.Stages.Where(x => x.FlowId == flowId).ToListAsync(cancellationToken);
+        var existingNodes = await dbContext.Nodes.Where(x => x.FlowId == flowId).ToListAsync(cancellationToken);
+        var existingLinks = await dbContext.Links.Where(x => x.FlowId == flowId).ToListAsync(cancellationToken);
+        var existingComments = await dbContext.Comments.Where(x => x.FlowId == flowId).ToListAsync(cancellationToken);
+
+        dbContext.Comments.RemoveRange(existingComments);
+        dbContext.Links.RemoveRange(existingLinks);
+        dbContext.Nodes.RemoveRange(existingNodes);
+        dbContext.Stages.RemoveRange(existingStages);
+        dbContext.Lanes.RemoveRange(existingLanes);
+
+        dbContext.Lanes.AddRange(lanes.Select(lane => new Lane
+        {
+            LaneId = lane.LaneId,
+            FlowId = flowId,
+            Name = lane.Name.Trim(),
+            SortOrder = lane.SortOrder,
+        }));
+
+        dbContext.Stages.AddRange(stages.Select(stage => new Stage
+        {
+            StageId = stage.StageId,
+            FlowId = flowId,
+            Name = stage.Name.Trim(),
+            SortOrder = stage.SortOrder,
+        }));
+
+        dbContext.Nodes.AddRange(nodes.Select(node => new FlowNode
+        {
+            NodeId = node.NodeId,
+            FlowId = flowId,
+            LaneId = node.LaneId,
+            StageId = node.StageId,
+            NodeType = node.NodeType.Trim(),
+            Name = node.Name.Trim(),
+            Description = node.Description,
+            X = node.X,
+            Y = node.Y,
+        }));
+
+        dbContext.Links.AddRange(links.Select(link => new FlowLink
+        {
+            LinkId = link.LinkId,
+            FlowId = flowId,
+            SourceNodeId = link.SourceNodeId,
+            TargetNodeId = link.TargetNodeId,
+            Label = link.Label,
+            Condition = link.Condition,
+        }));
+
+        dbContext.Comments.AddRange(comments.Select(comment => new FlowComment
+        {
+            CommentId = comment.CommentId,
+            FlowId = flowId,
+            NodeId = comment.NodeId,
+            Text = comment.Text.Trim(),
+            X = comment.X,
+            Y = comment.Y,
+        }));
+
+        if (request.CreateVersion)
+        {
+            var nextVersionNumber = await dbContext.Versions
+                .Where(x => x.FlowId == flowId)
+                .Select(x => (int?)x.VersionNumber)
+                .MaxAsync(cancellationToken) ?? 0;
+
+            var snapshot = JsonSerializer.Serialize(new
+            {
+                flowId,
+                request.ClientRevision,
+                lanes,
+                stages,
+                nodes,
+                links,
+                comments,
+                request.ChangeSummary,
+            }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+
+            dbContext.Versions.Add(new FlowVersion
+            {
+                VersionId = Guid.NewGuid(),
+                FlowId = flowId,
+                VersionNumber = nextVersionNumber + 1,
+                SnapshotJson = snapshot,
+                Note = request.ChangeSummary,
+                CreatedAtUtc = DateTime.UtcNow,
+            });
+        }
+
+        flow.Revision += 1;
+        flow.UpdatedAtUtc = DateTime.UtcNow;
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        return Ok(new SaveFlowStructureResponse(flow.FlowId, flow.Revision, flow.UpdatedAtUtc));
+    }
+
     [HttpDelete("{flowId:guid}")]
-    [RequirePermission("flow.write")]
+    [RequirePermission(PermissionCodes.FlowUpdate)]
     public async Task<IActionResult> Delete(Guid projectId, Guid flowId, CancellationToken cancellationToken)
     {
         var flow = await dbContext.Flows.FirstOrDefaultAsync(x => x.ProjectId == projectId && x.FlowId == flowId, cancellationToken);
@@ -170,11 +306,76 @@ public sealed class FlowsController(AppDbContext dbContext) : ControllerBase
             flow.Name,
             flow.Description,
             flow.SortOrder,
+            flow.Revision,
             lanes,
             stages,
             nodes,
             links,
             comments,
             metadata);
+    }
+
+    private static string? ValidateStructure(
+        IReadOnlyList<SaveLaneRequest> lanes,
+        IReadOnlyList<SaveStageRequest> stages,
+        IReadOnlyList<SaveNodeRequest> nodes,
+        IReadOnlyList<SaveLinkRequest> links,
+        IReadOnlyList<SaveCommentRequest> comments)
+    {
+        if (lanes.GroupBy(x => x.SortOrder).Any(group => group.Count() > 1))
+        {
+            return "Lane display order must be unique.";
+        }
+
+        if (stages.GroupBy(x => x.SortOrder).Any(group => group.Count() > 1))
+        {
+            return "Stage display order must be unique.";
+        }
+
+        if (lanes.Any(x => string.IsNullOrWhiteSpace(x.Name)))
+        {
+            return "Lane name is required.";
+        }
+
+        if (stages.Any(x => string.IsNullOrWhiteSpace(x.Name)))
+        {
+            return "Stage name is required.";
+        }
+
+        if (nodes.Any(x => string.IsNullOrWhiteSpace(x.NodeType) || string.IsNullOrWhiteSpace(x.Name)))
+        {
+            return "Node type and name are required.";
+        }
+
+        if (nodes.Any(x => x.X is double.NaN or double.PositiveInfinity or double.NegativeInfinity || x.Y is double.NaN or double.PositiveInfinity or double.NegativeInfinity))
+        {
+            return "Node coordinates must be finite numbers.";
+        }
+
+        var laneIds = lanes.Select(x => x.LaneId).ToHashSet();
+        var stageIds = stages.Select(x => x.StageId).ToHashSet();
+        var nodeIds = nodes.Select(x => x.NodeId).ToHashSet();
+
+        if (nodes.Any(x => x.LaneId is not null && !laneIds.Contains(x.LaneId.Value)))
+        {
+            return "Node lane must exist in the same flow.";
+        }
+
+        if (nodes.Any(x => x.StageId is not null && !stageIds.Contains(x.StageId.Value)))
+        {
+            return "Node stage must exist in the same flow.";
+        }
+
+        if (links.Any(x => !nodeIds.Contains(x.SourceNodeId) || !nodeIds.Contains(x.TargetNodeId)))
+        {
+            return "Link endpoints must exist in the same flow.";
+        }
+
+        if (comments.Any(x => x.NodeId is not null && !nodeIds.Contains(x.NodeId.Value)))
+        {
+            return "Comment node must exist in the same flow.";
+        }
+
+        return null;
     }
 }

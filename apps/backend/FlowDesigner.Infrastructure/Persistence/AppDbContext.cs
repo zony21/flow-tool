@@ -50,6 +50,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasKey(x => x.FlowId);
             entity.HasIndex(x => new { x.ProjectId, x.Name }).IsUnique();
             entity.Property(x => x.Name).HasMaxLength(200).IsRequired();
+            entity.Property(x => x.Revision).IsRequired();
             entity.HasOne(x => x.Project).WithMany(x => x.Flows).HasForeignKey(x => x.ProjectId).OnDelete(DeleteBehavior.Cascade);
         });
 

@@ -1,5 +1,6 @@
 using FlowDesigner.Api.Attributes;
 using FlowDesigner.Application.DTOs.Projects;
+using FlowDesigner.Application.Security;
 using FlowDesigner.Application.Interfaces.Services;
 using FlowDesigner.Domain.Entities.Auth;
 using FlowDesigner.Domain.Entities.Core;
@@ -93,7 +94,7 @@ public sealed class ProjectsController(
     }
 
     [HttpGet("{projectId:guid}")]
-    [RequirePermission("project.read")]
+    [RequirePermission(PermissionCodes.ProjectRead)]
     public async Task<ActionResult<ProjectDetailDto>> Get(Guid projectId, CancellationToken cancellationToken)
     {
         var project = await dbContext.Projects
@@ -104,7 +105,7 @@ public sealed class ProjectsController(
     }
 
     [HttpPut("{projectId:guid}")]
-    [RequirePermission("project.write")]
+    [RequirePermission(PermissionCodes.ProjectUpdate)]
     public async Task<ActionResult<ProjectDetailDto>> Update(Guid projectId, [FromBody] UpdateProjectRequest request, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(request.Name))
@@ -126,7 +127,7 @@ public sealed class ProjectsController(
     }
 
     [HttpDelete("{projectId:guid}")]
-    [RequirePermission("project.write")]
+    [RequirePermission(PermissionCodes.ProjectUpdate)]
     public async Task<IActionResult> Delete(Guid projectId, CancellationToken cancellationToken)
     {
         var project = await dbContext.Projects.FirstOrDefaultAsync(x => x.ProjectId == projectId, cancellationToken);

@@ -2620,11 +2620,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\user\\Desktop\\久野\\04_実装\\mygit\\flow-tool\\apps\\backend\\FlowDesigner.Infrastructure\\FlowDesigner.Infrastructure.csproj",
+      "projectUniqueName": "c:\\Users\\user\\Desktop\\久野\\04_実装\\mygit\\flow-tool\\apps\\backend\\FlowDesigner.Infrastructure\\FlowDesigner.Infrastructure.csproj",
       "projectName": "FlowDesigner.Infrastructure",
-      "projectPath": "C:\\Users\\user\\Desktop\\久野\\04_実装\\mygit\\flow-tool\\apps\\backend\\FlowDesigner.Infrastructure\\FlowDesigner.Infrastructure.csproj",
+      "projectPath": "c:\\Users\\user\\Desktop\\久野\\04_実装\\mygit\\flow-tool\\apps\\backend\\FlowDesigner.Infrastructure\\FlowDesigner.Infrastructure.csproj",
       "packagesPath": "C:\\Users\\user\\.nuget\\packages\\",
-      "outputPath": "C:\\Users\\user\\Desktop\\久野\\04_実装\\mygit\\flow-tool\\apps\\backend\\FlowDesigner.Infrastructure\\obj\\",
+      "outputPath": "c:\\Users\\user\\Desktop\\久野\\04_実装\\mygit\\flow-tool\\apps\\backend\\FlowDesigner.Infrastructure\\obj\\",
       "projectStyle": "PackageReference",
       "configFilePaths": [
         "C:\\Users\\user\\AppData\\Roaming\\NuGet\\NuGet.Config",

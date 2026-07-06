@@ -15,12 +15,63 @@ public sealed record FlowDetailDto(
     string Name,
     string? Description,
     int SortOrder,
+    int CurrentRevision,
     IReadOnlyList<LaneDto> Lanes,
     IReadOnlyList<StageDto> Stages,
     IReadOnlyList<NodeDto> Nodes,
     IReadOnlyList<LinkDto> Links,
     IReadOnlyList<CommentDto> Comments,
     IReadOnlyList<MetadataDto> Metadata);
+
+public sealed record SaveFlowStructureRequest(
+    Guid FlowId,
+    int ClientRevision,
+    IReadOnlyList<SaveLaneRequest>? Lanes,
+    IReadOnlyList<SaveStageRequest>? Stages,
+    IReadOnlyList<SaveNodeRequest>? Nodes,
+    IReadOnlyList<SaveLinkRequest>? Links,
+    IReadOnlyList<SaveCommentRequest>? Comments,
+    bool CreateVersion,
+    string? ChangeSummary);
+
+public sealed record SaveFlowStructureResponse(
+    Guid FlowId,
+    int ServerRevision,
+    DateTime UpdatedAtUtc);
+
+public sealed record SaveLaneRequest(
+    Guid LaneId,
+    string Name,
+    int SortOrder);
+
+public sealed record SaveStageRequest(
+    Guid StageId,
+    string Name,
+    int SortOrder);
+
+public sealed record SaveNodeRequest(
+    Guid NodeId,
+    Guid? LaneId,
+    Guid? StageId,
+    string NodeType,
+    string Name,
+    string? Description,
+    double X,
+    double Y);
+
+public sealed record SaveLinkRequest(
+    Guid LinkId,
+    Guid SourceNodeId,
+    Guid TargetNodeId,
+    string? Label,
+    string? Condition);
+
+public sealed record SaveCommentRequest(
+    Guid CommentId,
+    Guid? NodeId,
+    string Text,
+    double X,
+    double Y);
 
 public sealed record LaneDto(
     Guid LaneId,

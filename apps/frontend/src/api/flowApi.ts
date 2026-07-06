@@ -1,5 +1,5 @@
 import { httpClient } from './httpClient'
-import type { FlowDetail, FlowSummary } from '../types/flow'
+import type { FlowDetail, FlowSummary, SaveFlowStructureRequest, SaveFlowStructureResponse } from '../types/flow'
 
 export type FlowSaveRequest = {
   name: string
@@ -28,4 +28,9 @@ export async function updateFlow(projectId: string, flowId: string, request: Flo
 
 export async function deleteFlow(projectId: string, flowId: string): Promise<void> {
   await httpClient.delete(`/api/projects/${projectId}/flows/${flowId}`)
+}
+
+export async function saveFlowStructure(flowId: string, request: SaveFlowStructureRequest): Promise<SaveFlowStructureResponse> {
+  const response = await httpClient.put<SaveFlowStructureResponse>(`/api/flows/${flowId}/structure`, request)
+  return response.data
 }
