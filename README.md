@@ -71,3 +71,36 @@ Single Source of Truth（SSOT）を採用する。
 - Performance設計
 
 次工程は再監査、または実装開始前のRepository構成確認を想定する。
+
+## 7. 実装構成 (Phase 0)
+
+- apps/frontend
+	- Vue3 + TypeScript + Vite
+	- Pinia / Vue Router / PrimeVue / Vue Flow の初期構成
+- apps/backend
+	- ASP.NET Core .NET 8
+	- Api / Application / Domain / Infrastructure / Tests の分割構成
+	- SQLite接続設定と `GET /api/health` を実装
+
+## 8. 起動手順
+
+Frontend:
+
+```bash
+cd apps/frontend
+npm install
+npm run dev
+```
+
+Backend:
+
+```bash
+cd apps/backend
+dotnet restore FlowDesigner.sln
+dotnet run --project FlowDesigner.Api/FlowDesigner.Api.csproj
+```
+
+## 9. 補足
+
+- PowerShell環境でnpmが実行ポリシーにより失敗する場合は `npm.cmd` を利用する。
+- SQLite接続文字列は `apps/backend/FlowDesigner.Api/appsettings*.json` で管理する。

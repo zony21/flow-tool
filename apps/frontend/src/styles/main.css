@@ -1,0 +1,44 @@
+:root {
+  --app-bg: #f4f6f9;
+  --panel-bg: #ffffff;
+  --text-main: #1f2937;
+  --text-sub: #4b5563;
+  --border: #d1d5db;
+  --brand: #0f766e;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  min-height: 100%;
+  font-family: 'Segoe UI', 'Yu Gothic UI', sans-serif;
+  background: linear-gradient(180deg, #eef2f7 0%, #f7fafc 100%);
+  color: var(--text-main);
+}
+
+.page {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.card {
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+}
+
+h1 {
+  margin: 0 0 12px;
+  font-size: 1.5rem;
+}
+
+p {
+  color: var(--text-sub);
+}
