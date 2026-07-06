@@ -64,6 +64,76 @@ async function saveCurrentStructure(): Promise<void> {
     changeSummary: null,
   })
 }
+
+function addNode(): void {
+  if (!flow.value) return
+
+  const defaultLane = flow.value.lanes.slice().sort((a, b) => a.sortOrder - b.sortOrder)[0]
+  const defaultStage = flow.value.stages.slice().sort((a, b) => a.sortOrder - b.sortOrder)[0]
+  const nodeIndex = flow.value.nodes.length
+
+  flowStore.setCurrentFlow({
+    ...flow.value,
+    nodes: [
+      ...flow.value.nodes,
+      {
+        nodeId: crypto.randomUUID(),
+        flowId: flow.value.flowId,
+        laneId: defaultLane?.laneId,
+        stageId: defaultStage?.stageId,
+        nodeType: 'Task',
+        name: `Node ${nodeIndex + 1}`,
+        description: null,
+        x: 40 + (nodeIndex % 3) * 80,
+        y: 40 + Math.floor(nodeIndex / 3) * 80,
+      },
+    ],
+  })
+}
+
+function addLink(payload: { sourceNodeId: string; targetNodeId: string }): void {
+  if (!flow.value) return
+  if (payload.sourceNodeId === payload.targetNodeId) return
+
+  const exists = flow.value.links.some(
+    (link) => link.sourceNodeId === payload.sourceNodeId && link.targetNodeId === payload.targetNodeId,
+  )
+  if (exists) return
+
+  flowStore.setCurrentFlow({
+    ...flow.value,
+    links: [
+      ...flow.value.links,
+      {
+        linkId: crypto.randomUUID(),
+        flowId: flow.value.flowId,
+        sourceNodeId: payload.sourceNodeId,
+        targetNodeId: payload.targetNodeId,
+        label: null,
+        condition: null,
+      },
+    ],
+  })
+}
+
+function updateNodePosition(payload: { nodeId: string; x: number; y: number; laneId?: string; stageId?: string }): void {
+  if (!flow.value) return
+
+  flowStore.setCurrentFlow({
+    ...flow.value,
+    nodes: flow.value.nodes.map((node) =>
+      node.nodeId === payload.nodeId
+        ? {
+            ...node,
+            x: payload.x,
+            y: payload.y,
+            laneId: payload.laneId ?? null,
+            stageId: payload.stageId ?? null,
+          }
+        : node,
+    ),
+  })
+}
 </script>
 
 <template>
@@ -80,7 +150,13 @@ async function saveCurrentStructure(): Promise<void> {
         </div>
 
         <p v-if="flowStore.loading">読み込み中...</p>
-        <FlowCanvas v-else-if="flow" :flow="flow" />
+        <FlowCanvas
+          v-else-if="flow"
+          :flow="flow"
+          @add-node="addNode"
+          @add-link="addLink"
+          @node-moved="updateNodePosition"
+        />
         <p v-else>Flowを取得できませんでした。</p>
       </section>
     </EditorLayout>

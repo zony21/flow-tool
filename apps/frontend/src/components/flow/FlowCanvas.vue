@@ -11,6 +11,12 @@ const props = defineProps<{
   flow: FlowDetail
 }>()
 
+const emit = defineEmits<{
+  (event: 'add-node'): void
+  (event: 'add-link', payload: { sourceNodeId: string; targetNodeId: string }): void
+  (event: 'node-moved', payload: { nodeId: string; x: number; y: number; laneId?: string; stageId?: string }): void
+}>()
+
 const laneHeight = 140
 const stageWidth = 240
 const headerHeight = 48
@@ -24,8 +30,8 @@ const nodes = computed<Node[]>(() =>
     const laneIndex = Math.max(0, laneRows.value.findIndex((lane) => lane.laneId === flowNode.laneId))
     const stageIndex = Math.max(0, stageColumns.value.findIndex((stage) => stage.stageId === flowNode.stageId))
 
-    const fallbackX = laneHeaderWidth + stageIndex * stageWidth + 40
-    const fallbackY = headerHeight + laneIndex * laneHeight + 40
+    const fallbackX = stageIndex * stageWidth + 40
+    const fallbackY = laneIndex * laneHeight + 40
 
     return {
       id: flowNode.nodeId,
@@ -36,7 +42,7 @@ const nodes = computed<Node[]>(() =>
         y: flowNode.y || fallbackY,
       },
       data: flowNode,
-      draggable: false,
+      draggable: true,
     }
   }),
 )
@@ -50,10 +56,47 @@ const edges = computed<Edge[]>(() =>
     type: 'default',
   })),
 )
+
+function clampIndex(index: number, max: number): number {
+  if (max <= 0) return 0
+  if (index < 0) return 0
+  if (index >= max) return max - 1
+  return index
+}
+
+function createLink(): void {
+  if (props.flow.nodes.length < 2) {
+    return
+  }
+
+  const source = props.flow.nodes[props.flow.nodes.length - 2]
+  const target = props.flow.nodes[props.flow.nodes.length - 1]
+  emit('add-link', { sourceNodeId: source.nodeId, targetNodeId: target.nodeId })
+}
+
+function onNodeDragStop(_: unknown, node: Node): void {
+  const laneIndex = clampIndex(Math.floor(node.position.y / laneHeight), laneRows.value.length)
+  const stageIndex = clampIndex(Math.floor(node.position.x / stageWidth), stageColumns.value.length)
+  const laneId = laneRows.value[laneIndex]?.laneId
+  const stageId = stageColumns.value[stageIndex]?.stageId
+
+  emit('node-moved', {
+    nodeId: node.id,
+    x: node.position.x,
+    y: node.position.y,
+    laneId,
+    stageId,
+  })
+}
 </script>
 
 <template>
   <div class="flow-canvas">
+    <div class="canvas-toolbar">
+      <button type="button" class="canvas-button" @click="emit('add-node')">Node追加</button>
+      <button type="button" class="canvas-button" :disabled="flow.nodes.length < 2" @click="createLink">Link追加</button>
+    </div>
+
     <div class="stage-header" :style="{ marginLeft: `${laneHeaderWidth}px` }">
       <div
         v-for="stage in stageColumns"
@@ -92,7 +135,7 @@ const edges = computed<Edge[]>(() =>
       </div>
     </div>
 
-    <VueFlow class="vue-flow" :nodes="nodes" :edges="edges" :fit-view-on-init="true">
+    <VueFlow class="vue-flow" :nodes="nodes" :edges="edges" :fit-view-on-init="true" @node-drag-stop="onNodeDragStop">
       <Background />
       <Controls />
     </VueFlow>
@@ -109,6 +152,31 @@ const edges = computed<Edge[]>(() =>
   background: #f8fafc;
   border: 1px solid #dbe3ef;
   border-radius: 12px;
+}
+
+.canvas-toolbar {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 4;
+  display: flex;
+  gap: 8px;
+}
+
+.canvas-button {
+  padding: 6px 12px;
+  color: #0f172a;
+  background: #e2e8f0;
+  border: 1px solid #94a3b8;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.canvas-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .stage-header {
