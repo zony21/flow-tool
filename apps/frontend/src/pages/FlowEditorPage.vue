@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import Button from 'primevue/button'
 import MainLayout from '../layouts/MainLayout.vue'
@@ -7,6 +7,7 @@ import EditorLayout from '../layouts/EditorLayout.vue'
 import FlowCanvas from '../components/flow/FlowCanvas.vue'
 import LinkPropertyPanel from '../components/flow/LinkPropertyPanel.vue'
 import NodePropertyPanel from '../components/flow/NodePropertyPanel.vue'
+import { useEditorStore } from '../stores/editorStore'
 import { useFlowStore } from '../stores/flowStore'
 import { useProjectPermissionStore } from '../stores/projectPermissionStore'
 import type { FlowLink, FlowNode } from '../types/flow'
@@ -14,13 +15,12 @@ import { PermissionCodes } from '../types/permission'
 
 const route = useRoute()
 const flowStore = useFlowStore()
+const editorStore = useEditorStore()
 const permissionStore = useProjectPermissionStore()
 
 const projectId = computed(() => String(route.params.projectId ?? ''))
 const flowId = computed(() => String(route.params.flowId ?? ''))
 const flow = computed(() => flowStore.currentFlow)
-const selectedNodeId = ref<string | null>(null)
-const selectedLinkId = ref<string | null>(null)
 const canUpdateFlow = computed(() => permissionStore.can(PermissionCodes.FlowUpdate))
 const canUpdateNode = computed(() => permissionStore.can(PermissionCodes.NodeUpdate))
 const canUpdateLink = computed(() => permissionStore.can(PermissionCodes.LinkUpdate))
@@ -31,24 +31,23 @@ const canSaveStructure = computed(
 const canEdit = computed(() => canUpdateFlow.value)
 
 onMounted(async () => {
+  editorStore.reset()
   if (projectId.value && flowId.value) {
     await flowStore.loadFlow(projectId.value, flowId.value)
+    editorStore.markSaved()
   }
 })
 
 watch(flow, (currentFlow) => {
   if (!currentFlow) {
-    selectedNodeId.value = null
+    editorStore.clearSelection()
     return
   }
 
-  if (selectedNodeId.value && !currentFlow.nodes.some((node) => node.nodeId === selectedNodeId.value)) {
-    selectedNodeId.value = null
-  }
-
-  if (selectedLinkId.value && !currentFlow.links.some((link) => link.linkId === selectedLinkId.value)) {
-    selectedLinkId.value = null
-  }
+  editorStore.clearMissingSelection(
+    currentFlow.nodes.map((node) => node.nodeId),
+    currentFlow.links.map((link) => link.linkId),
+  )
 })
 
 async function saveCurrentStructure(): Promise<void> {
@@ -94,6 +93,7 @@ async function saveCurrentStructure(): Promise<void> {
     createVersion: false,
     changeSummary: null,
   })
+  editorStore.markSaved()
 }
 
 function addNode(): void {
@@ -121,8 +121,8 @@ function addNode(): void {
       },
     ],
   })
-  selectedNodeId.value = nodeId
-  selectedLinkId.value = null
+  editorStore.selectNode(nodeId)
+  editorStore.markDirty()
 }
 
 function addLink(payload: { sourceNodeId: string; targetNodeId: string }): void {
@@ -149,7 +149,8 @@ function addLink(payload: { sourceNodeId: string; targetNodeId: string }): void 
       },
     ],
   })
-  selectedLinkId.value = linkId
+  editorStore.selectLink(linkId)
+  editorStore.markDirty()
 }
 
 function updateNodePosition(payload: { nodeId: string; x: number; y: number; laneId?: string; stageId?: string }): void {
@@ -169,6 +170,7 @@ function updateNodePosition(payload: { nodeId: string; x: number; y: number; lan
         : node,
     ),
   })
+  editorStore.markDirty()
 }
 
 function updateNode(updatedNode: FlowNode): void {
@@ -178,6 +180,7 @@ function updateNode(updatedNode: FlowNode): void {
     ...flow.value,
     nodes: flow.value.nodes.map((node) => (node.nodeId === updatedNode.nodeId ? updatedNode : node)),
   })
+  editorStore.markDirty()
 }
 
 function updateLink(updatedLink: FlowLink): void {
@@ -187,6 +190,7 @@ function updateLink(updatedLink: FlowLink): void {
     ...flow.value,
     links: flow.value.links.map((link) => (link.linkId === updatedLink.linkId ? updatedLink : link)),
   })
+  editorStore.markDirty()
 }
 
 function deleteNode(payload: { nodeId: string }): void {
@@ -199,24 +203,22 @@ function deleteNode(payload: { nodeId: string }): void {
     comments: flow.value.comments.filter((comment) => comment.nodeId !== payload.nodeId),
   })
 
-  if (selectedNodeId.value === payload.nodeId) {
-    selectedNodeId.value = null
+  if (editorStore.selectedNodeId === payload.nodeId) {
+    editorStore.clearSelection()
   }
+  editorStore.markDirty()
 }
 
 function handleNodeSelected(payload: { nodeId: string }): void {
-  selectedNodeId.value = payload.nodeId
-  selectedLinkId.value = null
+  editorStore.selectNode(payload.nodeId)
 }
 
 function handleLinkSelected(payload: { linkId: string }): void {
-  selectedLinkId.value = payload.linkId
-  selectedNodeId.value = null
+  editorStore.selectLink(payload.linkId)
 }
 
 function handleCanvasCleared(): void {
-  selectedNodeId.value = null
-  selectedLinkId.value = null
+  editorStore.clearSelection()
 }
 </script>
 
@@ -227,11 +229,14 @@ function handleCanvasCleared(): void {
         <div class="flow-editor-header">
           <div>
             <h1>フローエディタ</h1>
-            <p v-if="flow">{{ flow.name }} / revision {{ flow.currentRevision }}</p>
+            <p v-if="flow">
+              {{ flow.name }} / revision {{ flow.currentRevision }}
+              <span v-if="editorStore.isDirty" class="dirty-badge">未保存</span>
+            </p>
             <p v-else>projectId: {{ projectId }} / flowId: {{ flowId }}</p>
             <p v-if="!canEdit" class="viewer-badge">Viewerモード: 編集は無効です</p>
           </div>
-          <Button label="保存" :disabled="!flow || flowStore.loading || !canSaveStructure" @click="saveCurrentStructure" />
+          <Button label="保存" :disabled="!flow || flowStore.loading || !canSaveStructure || !editorStore.isDirty" @click="saveCurrentStructure" />
         </div>
 
         <p v-if="flowStore.loading">読み込み中...</p>
@@ -239,8 +244,8 @@ function handleCanvasCleared(): void {
           <FlowCanvas
             :flow="flow"
             :readonly="!canEdit"
-            :selected-node-id="selectedNodeId"
-            :selected-link-id="selectedLinkId"
+            :selected-node-id="editorStore.selectedNodeId"
+            :selected-link-id="editorStore.selectedLinkId"
             @add-node="addNode"
             @add-link="addLink"
             @node-moved="updateNodePosition"
@@ -251,14 +256,14 @@ function handleCanvasCleared(): void {
           <div class="property-panels">
             <NodePropertyPanel
               :flow="flow"
-              :node-id="selectedNodeId"
+              :node-id="editorStore.selectedNodeId"
               :readonly="!canEdit"
               @update-node="updateNode"
               @delete-node="deleteNode"
             />
             <LinkPropertyPanel
               :flow="flow"
-              :link-id="selectedLinkId"
+              :link-id="editorStore.selectedLinkId"
               :readonly="!canEdit"
               @update-link="updateLink"
             />
@@ -308,6 +313,17 @@ function handleCanvasCleared(): void {
 .viewer-badge {
   margin-top: 8px;
   color: #92400e;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.dirty-badge {
+  display: inline-flex;
+  margin-left: 8px;
+  padding: 2px 6px;
+  color: #92400e;
+  background: #fef3c7;
+  border-radius: 999px;
   font-size: 12px;
   font-weight: 700;
 }
