@@ -1,0 +1,186 @@
+<script setup lang="ts">
+import { computed } from 'vue'
+import type { FlowDetail, FlowNode } from '../../types/flow'
+
+const nodeTypes = ['start', 'process', 'decision', 'end'] as const
+
+const props = defineProps<{
+  flow: FlowDetail
+  nodeId: string | null
+}>()
+
+const emit = defineEmits<{
+  (event: 'update-node', payload: FlowNode): void
+}>()
+
+const selectedNode = computed(() => props.flow.nodes.find((node) => node.nodeId === props.nodeId) ?? null)
+const lanes = computed(() => props.flow.lanes.slice().sort((a, b) => a.sortOrder - b.sortOrder))
+const stages = computed(() => props.flow.stages.slice().sort((a, b) => a.sortOrder - b.sortOrder))
+
+function updateField<K extends keyof FlowNode>(key: K, value: FlowNode[K]): void {
+  if (!selectedNode.value) return
+  emit('update-node', {
+    ...selectedNode.value,
+    [key]: value,
+  })
+}
+</script>
+
+<template>
+  <aside class="node-property-panel">
+    <header class="panel-header">
+      <h2>Property Panel</h2>
+      <p>選択Nodeの設計情報を編集します。</p>
+    </header>
+
+    <div v-if="!selectedNode" class="empty-state">
+      Nodeを選択してください。
+    </div>
+
+    <div v-else class="form-grid">
+      <label class="field">
+        <span>Node名</span>
+        <input :value="selectedNode.name" @input="updateField('name', ($event.target as HTMLInputElement).value)" />
+      </label>
+
+      <label class="field">
+        <span>Node種別</span>
+        <select :value="selectedNode.nodeType" @change="updateField('nodeType', ($event.target as HTMLSelectElement).value)">
+          <option v-for="type in nodeTypes" :key="type" :value="type">
+            {{ type }}
+          </option>
+        </select>
+      </label>
+
+      <label class="field">
+        <span>説明</span>
+        <textarea
+          rows="4"
+          :value="selectedNode.description ?? ''"
+          @input="updateField('description', ($event.target as HTMLTextAreaElement).value || null)"
+        />
+      </label>
+
+      <label class="field">
+        <span>Lane（担当）</span>
+        <select :value="selectedNode.laneId ?? ''" @change="updateField('laneId', ($event.target as HTMLSelectElement).value || null)">
+          <option value="">未設定</option>
+          <option v-for="lane in lanes" :key="lane.laneId" :value="lane.laneId">
+            {{ lane.name }}
+          </option>
+        </select>
+      </label>
+
+      <label class="field">
+        <span>Stage（工程）</span>
+        <select :value="selectedNode.stageId ?? ''" @change="updateField('stageId', ($event.target as HTMLSelectElement).value || null)">
+          <option value="">未設定</option>
+          <option v-for="stage in stages" :key="stage.stageId" :value="stage.stageId">
+            {{ stage.name }}
+          </option>
+        </select>
+      </label>
+
+      <div class="read-only-grid">
+        <div>
+          <span>ID</span>
+          <strong>{{ selectedNode.nodeId }}</strong>
+        </div>
+        <div>
+          <span>X / Y</span>
+          <strong>{{ Math.round(selectedNode.x) }} / {{ Math.round(selectedNode.y) }}</strong>
+        </div>
+      </div>
+    </div>
+  </aside>
+</template>
+
+<style scoped>
+.node-property-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 320px;
+  min-width: 320px;
+  padding: 16px;
+  background: #ffffff;
+  border: 1px solid #dbe3ef;
+  border-radius: 12px;
+}
+
+.panel-header h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.panel-header p {
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.empty-state {
+  padding: 20px;
+  color: #64748b;
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 10px;
+  text-align: center;
+}
+
+.form-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #334155;
+}
+
+.field input,
+.field select,
+.field textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  color: #0f172a;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font: inherit;
+  font-weight: 400;
+}
+
+.read-only-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.read-only-grid div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  background: #f8fafc;
+  border-radius: 8px;
+}
+
+.read-only-grid span {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.read-only-grid strong {
+  overflow-wrap: anywhere;
+  color: #0f172a;
+  font-size: 12px;
+}
+</style>
