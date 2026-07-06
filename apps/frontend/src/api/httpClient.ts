@@ -5,3 +5,8 @@ export const httpClient = axios.create({
   timeout: 15000,
   withCredentials: true,
 })
+
+httpClient.interceptors.response.use(
+  (response) => response,
+  (error) => Promise.reject(error),
+)
