@@ -88,8 +88,8 @@ function formatDate(value: string): string {
           <p class="meta">projectId: {{ projectId }}</p>
         </div>
         <div class="header-actions">
-          <Button label="Project一覧へ戻る" severity="secondary" @click="backToProjects" />
-          <Button label="再読み込み" severity="secondary" :disabled="projectStore.loading || flowStore.loading" @click="loadPage" />
+          <Button label="Project一覧へ戻る" severity="secondary" @click="backToProjects()" />
+          <Button label="再読み込み" severity="secondary" :disabled="projectStore.loading || flowStore.loading" @click="loadPage()" />
         </div>
       </div>
 
@@ -110,7 +110,7 @@ function formatDate(value: string): string {
           </label>
         </div>
         <div class="actions">
-          <Button label="Flow作成してEditorを開く" :disabled="!canSubmitFlow" @click="createFlow" />
+          <Button label="Flow作成してEditorを開く" :disabled="!canSubmitFlow" @click="createFlow()" />
         </div>
       </div>
 
