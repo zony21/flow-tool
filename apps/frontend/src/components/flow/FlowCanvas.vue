@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { VueFlow, type Edge, type Node } from '@vue-flow/core'
+import { computed, ref, watch } from 'vue'
+import { VueFlow, type Edge, type Node, type NodeDragEvent } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
 import type { FlowDetail } from '../../types/flow'
@@ -24,6 +24,29 @@ const laneHeaderWidth = 160
 
 const stageColumns = computed(() => props.flow.stages.slice().sort((a, b) => a.sortOrder - b.sortOrder))
 const laneRows = computed(() => props.flow.lanes.slice().sort((a, b) => a.sortOrder - b.sortOrder))
+const nodeOptions = computed(() =>
+  props.flow.nodes.map((node) => ({
+    nodeId: node.nodeId,
+    label: `${node.nodeType}: ${node.name}`,
+  })),
+)
+
+const selectedSourceNodeId = ref('')
+const selectedTargetNodeId = ref('')
+
+watch(
+  nodeOptions,
+  (options) => {
+    if (!options.some((option) => option.nodeId === selectedSourceNodeId.value)) {
+      selectedSourceNodeId.value = options[0]?.nodeId ?? ''
+    }
+
+    if (!options.some((option) => option.nodeId === selectedTargetNodeId.value)) {
+      selectedTargetNodeId.value = options[1]?.nodeId ?? options[0]?.nodeId ?? ''
+    }
+  },
+  { immediate: true },
+)
 
 const nodes = computed<Node[]>(() =>
   props.flow.nodes.map((flowNode) => {
@@ -65,25 +88,31 @@ function clampIndex(index: number, max: number): number {
 }
 
 function createLink(): void {
-  if (props.flow.nodes.length < 2) {
+  if (!selectedSourceNodeId.value || !selectedTargetNodeId.value) {
     return
   }
 
-  const source = props.flow.nodes[props.flow.nodes.length - 2]
-  const target = props.flow.nodes[props.flow.nodes.length - 1]
-  emit('add-link', { sourceNodeId: source.nodeId, targetNodeId: target.nodeId })
+  emit('add-link', {
+    sourceNodeId: selectedSourceNodeId.value,
+    targetNodeId: selectedTargetNodeId.value,
+  })
 }
 
-function onNodeDragStop(_: unknown, node: Node): void {
+function onNodeDragStop(event: NodeDragEvent): void {
+  const node = event.node
   const laneIndex = clampIndex(Math.floor(node.position.y / laneHeight), laneRows.value.length)
   const stageIndex = clampIndex(Math.floor(node.position.x / stageWidth), stageColumns.value.length)
   const laneId = laneRows.value[laneIndex]?.laneId
   const stageId = stageColumns.value[stageIndex]?.stageId
 
+  // Snap dropped nodes to the target lane/stage cell for stable layout.
+  const snappedX = stageIndex * stageWidth + 40
+  const snappedY = laneIndex * laneHeight + 40
+
   emit('node-moved', {
     nodeId: node.id,
-    x: node.position.x,
-    y: node.position.y,
+    x: snappedX,
+    y: snappedY,
     laneId,
     stageId,
   })
@@ -94,7 +123,27 @@ function onNodeDragStop(_: unknown, node: Node): void {
   <div class="flow-canvas">
     <div class="canvas-toolbar">
       <button type="button" class="canvas-button" @click="emit('add-node')">Node追加</button>
-      <button type="button" class="canvas-button" :disabled="flow.nodes.length < 2" @click="createLink">Link追加</button>
+      <div class="link-builder">
+        <select v-model="selectedSourceNodeId" class="canvas-select" :disabled="flow.nodes.length < 2">
+          <option v-for="option in nodeOptions" :key="`source-${option.nodeId}`" :value="option.nodeId">
+            {{ option.label }}
+          </option>
+        </select>
+        <span class="link-arrow">→</span>
+        <select v-model="selectedTargetNodeId" class="canvas-select" :disabled="flow.nodes.length < 2">
+          <option v-for="option in nodeOptions" :key="`target-${option.nodeId}`" :value="option.nodeId">
+            {{ option.label }}
+          </option>
+        </select>
+        <button
+          type="button"
+          class="canvas-button"
+          :disabled="flow.nodes.length < 2 || !selectedSourceNodeId || !selectedTargetNodeId"
+          @click="createLink"
+        >
+          Link追加
+        </button>
+      </div>
     </div>
 
     <div class="stage-header" :style="{ marginLeft: `${laneHeaderWidth}px` }">
@@ -160,7 +209,28 @@ function onNodeDragStop(_: unknown, node: Node): void {
   left: 8px;
   z-index: 4;
   display: flex;
+  align-items: center;
   gap: 8px;
+}
+
+.link-builder {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.canvas-select {
+  max-width: 200px;
+  padding: 6px 8px;
+  color: #0f172a;
+  background: #fff;
+  border: 1px solid #94a3b8;
+  border-radius: 8px;
+}
+
+.link-arrow {
+  color: #334155;
+  font-weight: 700;
 }
 
 .canvas-button {
