@@ -187,6 +187,95 @@ public sealed class ProjectFlowControllerTests
     }
 
     [Fact]
+    public async Task DuplicateFlow_CopiesStructureWithNewIdsAndInitialVersion()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var flow = await fixture.CreateProjectAndFlowAsync();
+        var laneId = Guid.NewGuid();
+        var stageId = Guid.NewGuid();
+        var startNodeId = Guid.NewGuid();
+        var endNodeId = Guid.NewGuid();
+        var linkId = Guid.NewGuid();
+        var commentId = Guid.NewGuid();
+
+        await fixture.SaveStructureAsync(
+            flow,
+            [new SaveLaneRequest(laneId, "Lane", 1)],
+            [new SaveStageRequest(stageId, "Stage", 1)],
+            [
+                new SaveNodeRequest(startNodeId, laneId, stageId, "Start", "Start", null, 10, 20),
+                new SaveNodeRequest(endNodeId, laneId, stageId, "End", "End", null, 110, 20),
+            ],
+            [new SaveLinkRequest(linkId, startNodeId, endNodeId, "next", null)],
+            [new SaveCommentRequest(commentId, startNodeId, "Check label", 20, 40)],
+            createVersion: false);
+
+        var response = await fixture.CreateFlowsController().Duplicate(
+            flow.ProjectId,
+            flow.FlowId,
+            new DuplicateFlowRequest(null),
+            CancellationToken.None);
+
+        var created = Assert.IsType<CreatedAtActionResult>(response.Result);
+        var duplicate = Assert.IsType<FlowDetailDto>(created.Value);
+
+        Assert.NotEqual(flow.FlowId, duplicate.FlowId);
+        Assert.Equal("Flow Copy", duplicate.Name);
+        Assert.Single(duplicate.Lanes);
+        Assert.Single(duplicate.Stages);
+        Assert.Equal(2, duplicate.Nodes.Count);
+        Assert.Single(duplicate.Links);
+        Assert.Single(duplicate.Comments);
+        Assert.DoesNotContain(duplicate.Lanes, lane => lane.LaneId == laneId);
+        Assert.DoesNotContain(duplicate.Stages, stage => stage.StageId == stageId);
+        Assert.DoesNotContain(duplicate.Nodes, node => node.NodeId == startNodeId || node.NodeId == endNodeId);
+        Assert.DoesNotContain(duplicate.Links, link => link.LinkId == linkId);
+        Assert.DoesNotContain(duplicate.Comments, comment => comment.CommentId == commentId);
+
+        var duplicateLink = Assert.Single(duplicate.Links);
+        Assert.Contains(duplicate.Nodes, node => node.NodeId == duplicateLink.SourceNodeId);
+        Assert.Contains(duplicate.Nodes, node => node.NodeId == duplicateLink.TargetNodeId);
+
+        var duplicateComment = Assert.Single(duplicate.Comments);
+        Assert.Contains(duplicate.Nodes, node => node.NodeId == duplicateComment.NodeId);
+
+        var duplicateVersion = Assert.Single(await fixture.DbContext.Versions.Where(version => version.FlowId == duplicate.FlowId).ToListAsync());
+        Assert.Equal(1, duplicateVersion.VersionNumber);
+    }
+
+    [Fact]
+    public async Task DeleteFlow_WithStructureAndVersions_RemovesFlowGraph()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var flow = await fixture.CreateProjectAndFlowAsync();
+        var firstNodeId = Guid.NewGuid();
+        var secondNodeId = Guid.NewGuid();
+
+        await fixture.SaveStructureAsync(
+            flow,
+            [new SaveLaneRequest(Guid.NewGuid(), "Lane", 1)],
+            [new SaveStageRequest(Guid.NewGuid(), "Stage", 1)],
+            [
+                new SaveNodeRequest(firstNodeId, null, null, "Start", "Start", null, 10, 20),
+                new SaveNodeRequest(secondNodeId, null, null, "End", "End", null, 110, 20),
+            ],
+            [new SaveLinkRequest(Guid.NewGuid(), firstNodeId, secondNodeId, "next", null)],
+            [new SaveCommentRequest(Guid.NewGuid(), firstNodeId, "Check label", 20, 40)],
+            createVersion: true);
+
+        var response = await fixture.CreateFlowsController().Delete(flow.ProjectId, flow.FlowId, CancellationToken.None);
+
+        Assert.IsType<NoContentResult>(response);
+        Assert.Equal(0, await fixture.DbContext.Flows.CountAsync());
+        Assert.Equal(0, await fixture.DbContext.Lanes.CountAsync());
+        Assert.Equal(0, await fixture.DbContext.Stages.CountAsync());
+        Assert.Equal(0, await fixture.DbContext.Nodes.CountAsync());
+        Assert.Equal(0, await fixture.DbContext.Links.CountAsync());
+        Assert.Equal(0, await fixture.DbContext.Comments.CountAsync());
+        Assert.Equal(0, await fixture.DbContext.Versions.CountAsync());
+    }
+
+    [Fact]
     public async Task FlowVersions_CreateCompareAndRestore_PersistExpectedSnapshots()
     {
         await using var fixture = await TestFixture.CreateAsync();

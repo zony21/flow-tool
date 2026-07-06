@@ -26,6 +26,11 @@ export async function updateFlow(projectId: string, flowId: string, request: Flo
   return response.data
 }
 
+export async function duplicateFlow(projectId: string, flowId: string): Promise<FlowDetail> {
+  const response = await httpClient.post<FlowDetail>(`/api/projects/${projectId}/flows/${flowId}/duplicate`, {})
+  return response.data
+}
+
 export async function deleteFlow(projectId: string, flowId: string): Promise<void> {
   await httpClient.delete(`/api/projects/${projectId}/flows/${flowId}`)
 }

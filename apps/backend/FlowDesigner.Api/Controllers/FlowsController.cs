@@ -21,6 +21,11 @@ public sealed class FlowsController(
     ICurrentUserService currentUserService,
     IPermissionService permissionService) : ControllerBase
 {
+    private static readonly JsonSerializerOptions SnapshotJsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+    };
+
     [HttpGet]
     [RequirePermission(PermissionCodes.FlowRead)]
     public async Task<ActionResult<IReadOnlyList<FlowSummaryDto>>> List(Guid projectId, CancellationToken cancellationToken)
@@ -298,6 +303,215 @@ public sealed class FlowsController(
         return Ok(new SaveFlowStructureResponse(flow.FlowId, flow.Revision, flow.UpdatedAtUtc));
     }
 
+    [HttpPost("{flowId:guid}/duplicate")]
+    [RequirePermission(PermissionCodes.FlowUpdate)]
+    public async Task<ActionResult<FlowDetailDto>> Duplicate(
+        Guid projectId,
+        Guid flowId,
+        [FromBody] DuplicateFlowRequest? request,
+        CancellationToken cancellationToken)
+    {
+        var sourceFlow = await dbContext.Flows
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.ProjectId == projectId && x.FlowId == flowId, cancellationToken);
+
+        if (sourceFlow is null)
+        {
+            return ApiError.NotFound<FlowDetailDto>(this, "Flow was not found.");
+        }
+
+        var currentUserId = currentUserService.GetCurrentUserId();
+        if (currentUserId is null)
+        {
+            return Unauthorized(ApiError.Create(HttpContext, ApiErrorCodes.Unauthorized, "Authentication is required."));
+        }
+
+        var now = DateTime.UtcNow;
+        var nextSortOrder = await dbContext.Flows
+            .Where(flow => flow.ProjectId == projectId)
+            .Select(flow => (int?)flow.SortOrder)
+            .MaxAsync(cancellationToken) ?? 0;
+
+        var requestedName = request?.Name?.Trim();
+        var duplicateName = await BuildDuplicateFlowNameAsync(
+            projectId,
+            string.IsNullOrWhiteSpace(requestedName) ? $"{sourceFlow.Name} Copy" : requestedName,
+            cancellationToken);
+
+        var duplicateFlow = new Flow
+        {
+            FlowId = Guid.NewGuid(),
+            ProjectId = projectId,
+            Name = duplicateName,
+            Description = sourceFlow.Description,
+            SortOrder = nextSortOrder + 1,
+            Revision = 0,
+            CreatedAtUtc = now,
+            UpdatedAtUtc = now,
+        };
+
+        var sourceLanes = await dbContext.Lanes.AsNoTracking().Where(x => x.FlowId == flowId).OrderBy(x => x.SortOrder).ToListAsync(cancellationToken);
+        var sourceStages = await dbContext.Stages.AsNoTracking().Where(x => x.FlowId == flowId).OrderBy(x => x.SortOrder).ToListAsync(cancellationToken);
+        var sourceNodes = await dbContext.Nodes.AsNoTracking().Where(x => x.FlowId == flowId).OrderBy(x => x.Name).ToListAsync(cancellationToken);
+        var sourceLinks = await dbContext.Links.AsNoTracking().Where(x => x.FlowId == flowId).ToListAsync(cancellationToken);
+        var sourceComments = await dbContext.Comments.AsNoTracking().Where(x => x.FlowId == flowId).ToListAsync(cancellationToken);
+        var sourceMetadata = await dbContext.MetadataItems.AsNoTracking().Where(x => x.FlowId == flowId).ToListAsync(cancellationToken);
+
+        var laneIdMap = sourceLanes.ToDictionary(x => x.LaneId, _ => Guid.NewGuid());
+        var stageIdMap = sourceStages.ToDictionary(x => x.StageId, _ => Guid.NewGuid());
+        var nodeIdMap = sourceNodes.ToDictionary(x => x.NodeId, _ => Guid.NewGuid());
+
+        var duplicateLanes = sourceLanes.Select(lane => new Lane
+        {
+            LaneId = laneIdMap[lane.LaneId],
+            FlowId = duplicateFlow.FlowId,
+            Name = lane.Name,
+            SortOrder = lane.SortOrder,
+        }).ToList();
+
+        var duplicateStages = sourceStages.Select(stage => new Stage
+        {
+            StageId = stageIdMap[stage.StageId],
+            FlowId = duplicateFlow.FlowId,
+            Name = stage.Name,
+            SortOrder = stage.SortOrder,
+        }).ToList();
+
+        var duplicateNodes = sourceNodes.Select(node => new FlowNode
+        {
+            NodeId = nodeIdMap[node.NodeId],
+            FlowId = duplicateFlow.FlowId,
+            LaneId = node.LaneId is not null && laneIdMap.TryGetValue(node.LaneId.Value, out var laneId) ? laneId : null,
+            StageId = node.StageId is not null && stageIdMap.TryGetValue(node.StageId.Value, out var stageId) ? stageId : null,
+            NodeType = node.NodeType,
+            Name = node.Name,
+            Description = node.Description,
+            X = node.X,
+            Y = node.Y,
+        }).ToList();
+
+        var duplicateLinks = sourceLinks
+            .Where(link => nodeIdMap.ContainsKey(link.SourceNodeId) && nodeIdMap.ContainsKey(link.TargetNodeId))
+            .Select(link => new FlowLink
+            {
+                LinkId = Guid.NewGuid(),
+                FlowId = duplicateFlow.FlowId,
+                SourceNodeId = nodeIdMap[link.SourceNodeId],
+                TargetNodeId = nodeIdMap[link.TargetNodeId],
+                Label = link.Label,
+                Condition = link.Condition,
+            })
+            .ToList();
+
+        var duplicateComments = sourceComments.Select(comment => new FlowComment
+        {
+            CommentId = Guid.NewGuid(),
+            FlowId = duplicateFlow.FlowId,
+            NodeId = comment.NodeId is not null && nodeIdMap.TryGetValue(comment.NodeId.Value, out var nodeId) ? nodeId : null,
+            Text = comment.Text,
+            X = comment.X,
+            Y = comment.Y,
+        }).ToList();
+
+        var duplicateMetadata = sourceMetadata.Select(metadata => new FlowMetadata
+        {
+            MetadataId = Guid.NewGuid(),
+            FlowId = duplicateFlow.FlowId,
+            MetaKey = metadata.MetaKey,
+            MetaValue = metadata.MetaValue,
+        }).ToList();
+
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+        dbContext.Flows.Add(duplicateFlow);
+        dbContext.Lanes.AddRange(duplicateLanes);
+        dbContext.Stages.AddRange(duplicateStages);
+        dbContext.Nodes.AddRange(duplicateNodes);
+        dbContext.Links.AddRange(duplicateLinks);
+        dbContext.Comments.AddRange(duplicateComments);
+        dbContext.MetadataItems.AddRange(duplicateMetadata);
+
+        dbContext.Versions.Add(new FlowVersion
+        {
+            VersionId = Guid.NewGuid(),
+            FlowId = duplicateFlow.FlowId,
+            VersionNumber = 1,
+            CreatedByUserId = currentUserId,
+            SnapshotJson = JsonSerializer.Serialize(new
+            {
+                schemaVersion = 1,
+                flow = new
+                {
+                    duplicateFlow.FlowId,
+                    duplicateFlow.ProjectId,
+                    duplicateFlow.Name,
+                    duplicateFlow.Description,
+                    duplicateFlow.SortOrder,
+                    duplicateFlow.Revision,
+                },
+                lanes = duplicateLanes.Select(lane => new
+                {
+                    lane.LaneId,
+                    lane.FlowId,
+                    lane.Name,
+                    lane.SortOrder,
+                }),
+                stages = duplicateStages.Select(stage => new
+                {
+                    stage.StageId,
+                    stage.FlowId,
+                    stage.Name,
+                    stage.SortOrder,
+                }),
+                nodes = duplicateNodes.Select(node => new
+                {
+                    node.NodeId,
+                    node.FlowId,
+                    node.LaneId,
+                    node.StageId,
+                    node.NodeType,
+                    node.Name,
+                    node.Description,
+                    node.X,
+                    node.Y,
+                }),
+                links = duplicateLinks.Select(link => new
+                {
+                    link.LinkId,
+                    link.FlowId,
+                    link.SourceNodeId,
+                    link.TargetNodeId,
+                    link.Label,
+                    link.Condition,
+                }),
+                comments = duplicateComments.Select(comment => new
+                {
+                    comment.CommentId,
+                    comment.FlowId,
+                    comment.NodeId,
+                    comment.Text,
+                    comment.X,
+                    comment.Y,
+                }),
+                metadata = duplicateMetadata.Select(metadata => new
+                {
+                    metadata.MetadataId,
+                    metadata.FlowId,
+                    metadata.MetaKey,
+                    metadata.MetaValue,
+                }),
+            }, SnapshotJsonOptions),
+            Note = $"Duplicated from {sourceFlow.Name}",
+            CreatedAtUtc = now,
+        });
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        var detail = await BuildDetailDtoAsync(projectId, duplicateFlow.FlowId, cancellationToken);
+        return CreatedAtAction(nameof(Get), new { projectId, flowId = duplicateFlow.FlowId }, detail);
+    }
+
     [HttpDelete("{flowId:guid}")]
     [RequirePermission(PermissionCodes.FlowUpdate)]
     public async Task<IActionResult> Delete(Guid projectId, Guid flowId, CancellationToken cancellationToken)
@@ -308,8 +522,25 @@ public sealed class FlowsController(
             return NotFound(ApiError.Create(HttpContext, ApiErrorCodes.NotFound, "Flow was not found."));
         }
 
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+        var images = await dbContext.Images.Where(x => x.FlowId == flowId).ToListAsync(cancellationToken);
+        foreach (var image in images)
+        {
+            image.FlowId = null;
+        }
+
+        dbContext.Comments.RemoveRange(await dbContext.Comments.Where(x => x.FlowId == flowId).ToListAsync(cancellationToken));
+        dbContext.Links.RemoveRange(await dbContext.Links.Where(x => x.FlowId == flowId).ToListAsync(cancellationToken));
+        dbContext.MetadataItems.RemoveRange(await dbContext.MetadataItems.Where(x => x.FlowId == flowId).ToListAsync(cancellationToken));
+        dbContext.Versions.RemoveRange(await dbContext.Versions.Where(x => x.FlowId == flowId).ToListAsync(cancellationToken));
+        dbContext.Nodes.RemoveRange(await dbContext.Nodes.Where(x => x.FlowId == flowId).ToListAsync(cancellationToken));
+        dbContext.Stages.RemoveRange(await dbContext.Stages.Where(x => x.FlowId == flowId).ToListAsync(cancellationToken));
+        dbContext.Lanes.RemoveRange(await dbContext.Lanes.Where(x => x.FlowId == flowId).ToListAsync(cancellationToken));
         dbContext.Flows.Remove(flow);
+
         await dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
         return NoContent();
     }
 
@@ -426,5 +657,29 @@ public sealed class FlowsController(
         }
 
         return null;
+    }
+
+    private async Task<string> BuildDuplicateFlowNameAsync(Guid projectId, string baseName, CancellationToken cancellationToken)
+    {
+        var existingNames = await dbContext.Flows
+            .AsNoTracking()
+            .Where(flow => flow.ProjectId == projectId)
+            .Select(flow => flow.Name)
+            .ToListAsync(cancellationToken);
+
+        var existing = existingNames.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (!existing.Contains(baseName))
+        {
+            return baseName;
+        }
+
+        for (var index = 2; ; index++)
+        {
+            var candidate = $"{baseName} {index}";
+            if (!existing.Contains(candidate))
+            {
+                return candidate;
+            }
+        }
     }
 }

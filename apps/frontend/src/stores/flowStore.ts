@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { createFlow, deleteFlow, fetchFlow, fetchFlows, saveFlowStructure, updateFlow, type FlowSaveRequest } from '../api/flowApi'
+import { createFlow, deleteFlow, duplicateFlow, fetchFlow, fetchFlows, saveFlowStructure, updateFlow, type FlowSaveRequest } from '../api/flowApi'
 import type { SaveFlowStructureRequest } from '../types/flow'
 import type { FlowDetail, FlowSummary } from '../types/flow'
 
@@ -37,6 +37,11 @@ export const useFlowStore = defineStore('flow', {
     async update(projectId: string, flowId: string, request: FlowSaveRequest): Promise<FlowDetail> {
       const flow = await updateFlow(projectId, flowId, request)
       this.currentFlow = flow
+      await this.loadFlows(projectId)
+      return flow
+    },
+    async duplicate(projectId: string, flowId: string): Promise<FlowDetail> {
+      const flow = await duplicateFlow(projectId, flowId)
       await this.loadFlows(projectId)
       return flow
     },

@@ -125,3 +125,6 @@ public sealed record CreateFlowRequest(
 public sealed record UpdateFlowRequest(
     string Name,
     string? Description);
+
+public sealed record DuplicateFlowRequest(
+    string? Name);

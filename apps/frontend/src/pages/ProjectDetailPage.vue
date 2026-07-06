@@ -22,6 +22,7 @@ const editingProject = ref(false)
 const createFlowDialogVisible = ref(false)
 const savingFlowId = ref<string | null>(null)
 const creatingFlow = ref(false)
+const duplicatingFlowId = ref<string | null>(null)
 const deletingFlowId = ref<string | null>(null)
 const flowDeleteTarget = ref<{ flowId: string; name: string } | null>(null)
 const editingFlowId = ref<string | null>(null)
@@ -168,6 +169,21 @@ async function openFlow(flowId: string): Promise<void> {
   await router.push({ name: 'flow-editor', params: { projectId: projectId.value, flowId } })
 }
 
+async function duplicateFlow(flowId: string): Promise<void> {
+  if (!canCreateFlow.value) return
+
+  duplicatingFlowId.value = flowId
+  flowErrorMessage.value = null
+  try {
+    const duplicated = await flowStore.duplicate(projectId.value, flowId)
+    await router.push({ name: 'flow-editor', params: { projectId: projectId.value, flowId: duplicated.flowId } })
+  } catch (error) {
+    flowErrorMessage.value = normalizeApiError(error).message
+  } finally {
+    duplicatingFlowId.value = null
+  }
+}
+
 function requestDeleteFlow(flowId: string, name: string): void {
   if (!canCreateFlow.value) return
   flowDeleteTarget.value = { flowId, name }
@@ -279,6 +295,15 @@ function formatDate(value: string): string {
                 <td>
                   <div class="row-actions">
                     <Button label="Editor" size="small" @click="openFlow(flow.flowId)" />
+                    <Button
+                      v-if="canCreateFlow"
+                      label="複製"
+                      icon="pi pi-copy"
+                      size="small"
+                      severity="secondary"
+                      :disabled="duplicatingFlowId === flow.flowId"
+                      @click="duplicateFlow(flow.flowId)"
+                    />
                     <Button v-if="canCreateFlow" label="編集" size="small" severity="secondary" @click="startFlowEdit(flow.flowId, flow.name, flow.description)" />
                     <Button
                       v-if="canCreateFlow"
