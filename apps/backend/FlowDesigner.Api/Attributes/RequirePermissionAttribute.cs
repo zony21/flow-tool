@@ -7,9 +7,15 @@ using Microsoft.AspNetCore.Mvc.Filters;
 namespace FlowDesigner.Api.Attributes;
 
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = true)]
-public sealed class RequirePermissionAttribute(string permissionCode) : TypeFilterAttribute(typeof(RequirePermissionFilter))
+public sealed class RequirePermissionAttribute : TypeFilterAttribute
 {
-    public string PermissionCode { get; } = permissionCode;
+    public RequirePermissionAttribute(string permissionCode) : base(typeof(RequirePermissionFilter))
+    {
+        PermissionCode = permissionCode;
+        Arguments = [permissionCode];
+    }
+
+    public string PermissionCode { get; }
 
     private sealed class RequirePermissionFilter(
         string permissionCode,
