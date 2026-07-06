@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import Button from 'primevue/button'
 import MainLayout from '../layouts/MainLayout.vue'
 import EditorLayout from '../layouts/EditorLayout.vue'
 import FlowCanvas from '../components/flow/FlowCanvas.vue'
+import NodePropertyPanel from '../components/flow/NodePropertyPanel.vue'
 import { useFlowStore } from '../stores/flowStore'
+import type { FlowNode } from '../types/flow'
 
 const route = useRoute()
 const flowStore = useFlowStore()
@@ -13,10 +15,22 @@ const flowStore = useFlowStore()
 const projectId = computed(() => String(route.params.projectId ?? ''))
 const flowId = computed(() => String(route.params.flowId ?? ''))
 const flow = computed(() => flowStore.currentFlow)
+const selectedNodeId = ref<string | null>(null)
 
 onMounted(async () => {
   if (projectId.value && flowId.value) {
     await flowStore.loadFlow(projectId.value, flowId.value)
+  }
+})
+
+watch(flow, (currentFlow) => {
+  if (!currentFlow) {
+    selectedNodeId.value = null
+    return
+  }
+
+  if (selectedNodeId.value && !currentFlow.nodes.some((node) => node.nodeId === selectedNodeId.value)) {
+    selectedNodeId.value = null
   }
 })
 
@@ -71,17 +85,18 @@ function addNode(): void {
   const defaultLane = flow.value.lanes.slice().sort((a, b) => a.sortOrder - b.sortOrder)[0]
   const defaultStage = flow.value.stages.slice().sort((a, b) => a.sortOrder - b.sortOrder)[0]
   const nodeIndex = flow.value.nodes.length
+  const nodeId = crypto.randomUUID()
 
   flowStore.setCurrentFlow({
     ...flow.value,
     nodes: [
       ...flow.value.nodes,
       {
-        nodeId: crypto.randomUUID(),
+        nodeId,
         flowId: flow.value.flowId,
         laneId: defaultLane?.laneId,
         stageId: defaultStage?.stageId,
-        nodeType: 'Task',
+        nodeType: 'process',
         name: `Node ${nodeIndex + 1}`,
         description: null,
         x: 40 + (nodeIndex % 3) * 80,
@@ -89,6 +104,7 @@ function addNode(): void {
       },
     ],
   })
+  selectedNodeId.value = nodeId
 }
 
 function addLink(payload: { sourceNodeId: string; targetNodeId: string }): void {
@@ -134,6 +150,15 @@ function updateNodePosition(payload: { nodeId: string; x: number; y: number; lan
     ),
   })
 }
+
+function updateNode(updatedNode: FlowNode): void {
+  if (!flow.value) return
+
+  flowStore.setCurrentFlow({
+    ...flow.value,
+    nodes: flow.value.nodes.map((node) => (node.nodeId === updatedNode.nodeId ? updatedNode : node)),
+  })
+}
 </script>
 
 <template>
@@ -150,13 +175,17 @@ function updateNodePosition(payload: { nodeId: string; x: number; y: number; lan
         </div>
 
         <p v-if="flowStore.loading">読み込み中...</p>
-        <FlowCanvas
-          v-else-if="flow"
-          :flow="flow"
-          @add-node="addNode"
-          @add-link="addLink"
-          @node-moved="updateNodePosition"
-        />
+        <div v-else-if="flow" class="editor-workspace">
+          <FlowCanvas
+            :flow="flow"
+            :selected-node-id="selectedNodeId"
+            @add-node="addNode"
+            @add-link="addLink"
+            @node-moved="updateNodePosition"
+            @node-selected="selectedNodeId = $event.nodeId"
+          />
+          <NodePropertyPanel :flow="flow" :node-id="selectedNodeId" @update-node="updateNode" />
+        </div>
         <p v-else>Flowを取得できませんでした。</p>
       </section>
     </EditorLayout>
@@ -184,5 +213,15 @@ function updateNodePosition(payload: { nodeId: string; x: number; y: number; lan
 .flow-editor-header p {
   margin: 4px 0 0;
   color: #64748b;
+}
+
+.editor-workspace {
+  display: flex;
+  align-items: stretch;
+  gap: 16px;
+}
+
+.editor-workspace :deep(.flow-canvas) {
+  flex: 1 1 auto;
 }
 </style>
