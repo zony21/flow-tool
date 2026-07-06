@@ -11,7 +11,6 @@ import { useEditorStore } from '../stores/editorStore'
 import { useFlowStore } from '../stores/flowStore'
 import { useProjectPermissionStore } from '../stores/projectPermissionStore'
 import { useUndoRedoStore } from '../stores/undoRedoStore'
-import type { FlowLink, FlowNode } from '../types/flow'
 import { PermissionCodes } from '../types/permission'
 
 const route = useRoute()
@@ -37,10 +36,7 @@ onMounted(async () => {
   undoRedoStore.reset()
   if (projectId.value && flowId.value) {
     await flowStore.loadFlow(projectId.value, flowId.value)
-    editorStore.markSaved()
-    if (flowStore.currentFlow) {
-      undoRedoStore.init(flowStore.currentFlow)
-    }
+    editorStore.initHistory()
   }
 
   window.addEventListener('keydown', handleKeydown)
@@ -106,183 +102,6 @@ async function saveCurrentStructure(): Promise<void> {
     changeSummary: null,
   })
   editorStore.markSaved()
-  if (flowStore.currentFlow) {
-    undoRedoStore.markSaved(flowStore.currentFlow)
-  }
-}
-
-function applyFlowChange(
-  transform: (current: NonNullable<typeof flow.value>) => NonNullable<typeof flow.value>,
-  options?: { actionKey?: string; coalesceWindowMs?: number },
-): void {
-  if (!flow.value || !canEdit.value) return
-
-  const before = undoRedoStore.serialize(flow.value)
-  const updatedFlow = transform(flow.value)
-  const after = undoRedoStore.serialize(updatedFlow)
-  if (before === after) {
-    return
-  }
-
-  undoRedoStore.record(flow.value, options)
-  flowStore.setCurrentFlow(updatedFlow)
-  editorStore.markDirty()
-}
-
-function addNode(): void {
-  if (!flow.value || !canEdit.value) return
-
-  const defaultLane = flow.value.lanes.slice().sort((a, b) => a.sortOrder - b.sortOrder)[0]
-  const defaultStage = flow.value.stages.slice().sort((a, b) => a.sortOrder - b.sortOrder)[0]
-  const nodeIndex = flow.value.nodes.length
-  const nodeId = crypto.randomUUID()
-
-  applyFlowChange((currentFlow) => ({
-    ...currentFlow,
-    nodes: [
-      ...currentFlow.nodes,
-      {
-        nodeId,
-        flowId: currentFlow.flowId,
-        laneId: defaultLane?.laneId,
-        stageId: defaultStage?.stageId,
-        nodeType: 'process',
-        name: `Node ${nodeIndex + 1}`,
-        description: null,
-        x: 40 + (nodeIndex % 3) * 80,
-        y: 40 + Math.floor(nodeIndex / 3) * 80,
-      },
-    ],
-  }), { actionKey: 'node:add' })
-  editorStore.selectNode(nodeId)
-}
-
-function addLink(payload: { sourceNodeId: string; targetNodeId: string }): void {
-  if (!flow.value || !canEdit.value) return
-  if (payload.sourceNodeId === payload.targetNodeId) return
-
-  const exists = flow.value.links.some(
-    (link) => link.sourceNodeId === payload.sourceNodeId && link.targetNodeId === payload.targetNodeId,
-  )
-  if (exists) return
-
-  const linkId = crypto.randomUUID()
-  applyFlowChange((currentFlow) => ({
-    ...currentFlow,
-    links: [
-      ...currentFlow.links,
-      {
-        linkId,
-        flowId: currentFlow.flowId,
-        sourceNodeId: payload.sourceNodeId,
-        targetNodeId: payload.targetNodeId,
-        label: null,
-        condition: null,
-      },
-    ],
-  }), { actionKey: 'link:add' })
-  editorStore.selectLink(linkId)
-}
-
-function updateNodePosition(payload: { nodeId: string; x: number; y: number; laneId?: string; stageId?: string }): void {
-  if (!flow.value || !canEdit.value) return
-
-  applyFlowChange((currentFlow) => ({
-    ...currentFlow,
-    nodes: currentFlow.nodes.map((node) =>
-      node.nodeId === payload.nodeId
-        ? {
-            ...node,
-            x: payload.x,
-            y: payload.y,
-            laneId: payload.laneId ?? null,
-            stageId: payload.stageId ?? null,
-          }
-        : node,
-    ),
-  }), { actionKey: `node:move:${payload.nodeId}`, coalesceWindowMs: 1200 })
-}
-
-function updateNode(updatedNode: FlowNode): void {
-  if (!flow.value || !canEdit.value) return
-
-  applyFlowChange((currentFlow) => ({
-    ...currentFlow,
-    nodes: currentFlow.nodes.map((node) => (node.nodeId === updatedNode.nodeId ? updatedNode : node)),
-  }), { actionKey: `node:update:${updatedNode.nodeId}`, coalesceWindowMs: 800 })
-}
-
-function updateLink(updatedLink: FlowLink): void {
-  if (!flow.value || !canEdit.value) return
-
-  applyFlowChange((currentFlow) => ({
-    ...currentFlow,
-    links: currentFlow.links.map((link) => (link.linkId === updatedLink.linkId ? updatedLink : link)),
-  }), { actionKey: `link:update:${updatedLink.linkId}`, coalesceWindowMs: 800 })
-}
-
-function deleteNode(payload: { nodeId: string }): void {
-  if (!flow.value || !canEdit.value) return
-
-  applyFlowChange((currentFlow) => ({
-    ...currentFlow,
-    nodes: currentFlow.nodes.filter((node) => node.nodeId !== payload.nodeId),
-    links: currentFlow.links.filter((link) => link.sourceNodeId !== payload.nodeId && link.targetNodeId !== payload.nodeId),
-    comments: currentFlow.comments.filter((comment) => comment.nodeId !== payload.nodeId),
-  }), { actionKey: `node:delete:${payload.nodeId}` })
-
-  if (editorStore.selectedNodeId === payload.nodeId) {
-    editorStore.clearSelection()
-  }
-}
-
-function deleteLink(payload: { linkId: string }): void {
-  if (!flow.value || !canEdit.value) return
-
-  applyFlowChange((currentFlow) => ({
-    ...currentFlow,
-    links: currentFlow.links.filter((link) => link.linkId !== payload.linkId),
-  }), { actionKey: `link:delete:${payload.linkId}` })
-
-  if (editorStore.selectedLinkId === payload.linkId) {
-    editorStore.clearSelection()
-  }
-}
-
-function undo(): void {
-  if (!flow.value || !canEdit.value) return
-  const previous = undoRedoStore.undo(flow.value)
-  if (!previous) return
-
-  flowStore.setCurrentFlow(previous)
-  editorStore.clearMissingSelection(
-    previous.nodes.map((node) => node.nodeId),
-    previous.links.map((link) => link.linkId),
-  )
-
-  if (undoRedoStore.isSaved(previous)) {
-    editorStore.markSaved()
-  } else {
-    editorStore.markDirty()
-  }
-}
-
-function redo(): void {
-  if (!flow.value || !canEdit.value) return
-  const next = undoRedoStore.redo(flow.value)
-  if (!next) return
-
-  flowStore.setCurrentFlow(next)
-  editorStore.clearMissingSelection(
-    next.nodes.map((node) => node.nodeId),
-    next.links.map((link) => link.linkId),
-  )
-
-  if (undoRedoStore.isSaved(next)) {
-    editorStore.markSaved()
-  } else {
-    editorStore.markDirty()
-  }
 }
 
 function handleKeydown(event: KeyboardEvent): void {
@@ -302,11 +121,11 @@ function handleKeydown(event: KeyboardEvent): void {
   if (event.key === 'Delete') {
     event.preventDefault()
     if (editorStore.selectedNodeId) {
-      deleteNode({ nodeId: editorStore.selectedNodeId })
+      editorStore.deleteNode({ nodeId: editorStore.selectedNodeId })
       return
     }
     if (editorStore.selectedLinkId) {
-      deleteLink({ linkId: editorStore.selectedLinkId })
+      editorStore.deleteLink({ linkId: editorStore.selectedLinkId })
     }
     return
   }
@@ -315,26 +134,14 @@ function handleKeydown(event: KeyboardEvent): void {
 
   if (zPressed && !event.shiftKey) {
     event.preventDefault()
-    undo()
+    editorStore.undo()
     return
   }
 
   if (yPressed || (zPressed && event.shiftKey)) {
     event.preventDefault()
-    redo()
+    editorStore.redo()
   }
-}
-
-function handleNodeSelected(payload: { nodeId: string }): void {
-  editorStore.selectNode(payload.nodeId)
-}
-
-function handleLinkSelected(payload: { linkId: string }): void {
-  editorStore.selectLink(payload.linkId)
-}
-
-function handleCanvasCleared(): void {
-  editorStore.clearSelection()
 }
 </script>
 
@@ -353,8 +160,8 @@ function handleCanvasCleared(): void {
             <p v-if="!canEdit" class="viewer-badge">Viewerモード: 編集は無効です</p>
           </div>
           <div class="header-actions">
-            <Button label="Undo" severity="secondary" :disabled="!canEdit || !undoRedoStore.canUndo" @click="undo" />
-            <Button label="Redo" severity="secondary" :disabled="!canEdit || !undoRedoStore.canRedo" @click="redo" />
+            <Button label="Undo" severity="secondary" :disabled="!canEdit || !undoRedoStore.canUndo" @click="editorStore.undo" />
+            <Button label="Redo" severity="secondary" :disabled="!canEdit || !undoRedoStore.canRedo" @click="editorStore.redo" />
             <Button label="保存" :disabled="!flow || flowStore.loading || !canSaveStructure || !editorStore.isDirty" @click="saveCurrentStructure" />
           </div>
         </div>
@@ -366,27 +173,27 @@ function handleCanvasCleared(): void {
             :readonly="!canEdit"
             :selected-node-id="editorStore.selectedNodeId"
             :selected-link-id="editorStore.selectedLinkId"
-            @add-node="addNode"
-            @add-link="addLink"
-            @node-moved="updateNodePosition"
-            @node-selected="handleNodeSelected"
-            @link-selected="handleLinkSelected"
-            @canvas-cleared="handleCanvasCleared"
+            @add-node="editorStore.addNode"
+            @add-link="editorStore.addLink"
+            @node-moved="editorStore.moveNode"
+            @node-selected="editorStore.selectNode($event.nodeId)"
+            @link-selected="editorStore.selectLink($event.linkId)"
+            @canvas-cleared="editorStore.clearSelection"
           />
           <div class="property-panels">
             <NodePropertyPanel
               :flow="flow"
               :node-id="editorStore.selectedNodeId"
               :readonly="!canEdit"
-              @update-node="updateNode"
-              @delete-node="deleteNode"
+              @update-node="editorStore.updateNode"
+              @delete-node="editorStore.deleteNode"
             />
             <LinkPropertyPanel
               :flow="flow"
               :link-id="editorStore.selectedLinkId"
               :readonly="!canEdit"
-              @update-link="updateLink"
-              @delete-link="deleteLink"
+              @update-link="editorStore.updateLink"
+              @delete-link="editorStore.deleteLink"
             />
           </div>
         </div>
