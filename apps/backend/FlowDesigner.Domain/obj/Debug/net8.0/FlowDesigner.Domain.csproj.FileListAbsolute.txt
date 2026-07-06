@@ -22,3 +22,15 @@ C:\Users\user\Desktop\久野\04_実装\mygit\flow-tool\app\backend\FlowDesigner.
 C:\Users\user\Desktop\久野\04_実装\mygit\flow-tool\app\backend\FlowDesigner.Domain\obj\Debug\net8.0\refint\FlowDesigner.Domain.dll
 C:\Users\user\Desktop\久野\04_実装\mygit\flow-tool\app\backend\FlowDesigner.Domain\obj\Debug\net8.0\FlowDesigner.Domain.pdb
 C:\Users\user\Desktop\久野\04_実装\mygit\flow-tool\app\backend\FlowDesigner.Domain\obj\Debug\net8.0\ref\FlowDesigner.Domain.dll
+C:\Users\user\Desktop\久野\04_実装\mygit\flow-tool\apps\backend\FlowDesigner.Domain\bin\Debug\net8.0\FlowDesigner.Domain.deps.json
+C:\Users\user\Desktop\久野\04_実装\mygit\flow-tool\apps\backend\FlowDesigner.Domain\bin\Debug\net8.0\FlowDesigner.Domain.dll
+C:\Users\user\Desktop\久野\04_実装\mygit\flow-tool\apps\backend\FlowDesigner.Domain\bin\Debug\net8.0\FlowDesigner.Domain.pdb
+C:\Users\user\Desktop\久野\04_実装\mygit\flow-tool\apps\backend\FlowDesigner.Domain\obj\Debug\net8.0\FlowDesigner.Domain.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\user\Desktop\久野\04_実装\mygit\flow-tool\apps\backend\FlowDesigner.Domain\obj\Debug\net8.0\FlowDesigner.Domain.AssemblyInfoInputs.cache
+C:\Users\user\Desktop\久野\04_実装\mygit\flow-tool\apps\backend\FlowDesigner.Domain\obj\Debug\net8.0\FlowDesigner.Domain.AssemblyInfo.cs
+C:\Users\user\Desktop\久野\04_実装\mygit\flow-tool\apps\backend\FlowDesigner.Domain\obj\Debug\net8.0\FlowDesigner.Domain.csproj.CoreCompileInputs.cache
+C:\Users\user\Desktop\久野\04_実装\mygit\flow-tool\apps\backend\FlowDesigner.Domain\obj\Debug\net8.0\FlowDesigner.Domain.sourcelink.json
+C:\Users\user\Desktop\久野\04_実装\mygit\flow-tool\apps\backend\FlowDesigner.Domain\obj\Debug\net8.0\FlowDesigner.Domain.dll
+C:\Users\user\Desktop\久野\04_実装\mygit\flow-tool\apps\backend\FlowDesigner.Domain\obj\Debug\net8.0\refint\FlowDesigner.Domain.dll
+C:\Users\user\Desktop\久野\04_実装\mygit\flow-tool\apps\backend\FlowDesigner.Domain\obj\Debug\net8.0\FlowDesigner.Domain.pdb
+C:\Users\user\Desktop\久野\04_実装\mygit\flow-tool\apps\backend\FlowDesigner.Domain\obj\Debug\net8.0\ref\FlowDesigner.Domain.dll

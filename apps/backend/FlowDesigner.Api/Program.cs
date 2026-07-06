@@ -2,12 +2,21 @@ using FlowDesigner.Application.Extensions;
 using FlowDesigner.Infrastructure.Data.Seed;
 using FlowDesigner.Infrastructure.Extensions;
 using FlowDesigner.Infrastructure.Persistence;
+using Microsoft.AspNetCore.Authentication.Cookies;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+    .AddCookie(options =>
+    {
+        options.LoginPath = "/api/auth/github/login-url";
+        options.Cookie.HttpOnly = true;
+        options.Cookie.SameSite = SameSiteMode.Lax;
+    });
+builder.Services.AddAuthorization();
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
@@ -15,7 +24,8 @@ builder.Services.AddCors(options =>
         policy
             .WithOrigins("http://localhost:5173")
             .AllowAnyHeader()
-            .AllowAnyMethod();
+            .AllowAnyMethod()
+            .AllowCredentials();
     });
 });
 
@@ -38,6 +48,8 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseCors("AllowFrontend");
+    app.UseAuthentication();
+    app.UseAuthorization();
 app.MapControllers();
 
 app.Run();

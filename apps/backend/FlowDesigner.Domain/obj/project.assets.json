@@ -13,11 +13,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\user\\Desktop\\久野\\04_実装\\mygit\\flow-tool\\app\\backend\\FlowDesigner.Domain\\FlowDesigner.Domain.csproj",
+      "projectUniqueName": "C:\\Users\\user\\Desktop\\久野\\04_実装\\mygit\\flow-tool\\apps\\backend\\FlowDesigner.Domain\\FlowDesigner.Domain.csproj",
       "projectName": "FlowDesigner.Domain",
-      "projectPath": "C:\\Users\\user\\Desktop\\久野\\04_実装\\mygit\\flow-tool\\app\\backend\\FlowDesigner.Domain\\FlowDesigner.Domain.csproj",
+      "projectPath": "C:\\Users\\user\\Desktop\\久野\\04_実装\\mygit\\flow-tool\\apps\\backend\\FlowDesigner.Domain\\FlowDesigner.Domain.csproj",
       "packagesPath": "C:\\Users\\user\\.nuget\\packages\\",
-      "outputPath": "C:\\Users\\user\\Desktop\\久野\\04_実装\\mygit\\flow-tool\\app\\backend\\FlowDesigner.Domain\\obj\\",
+      "outputPath": "C:\\Users\\user\\Desktop\\久野\\04_実装\\mygit\\flow-tool\\apps\\backend\\FlowDesigner.Domain\\obj\\",
       "projectStyle": "PackageReference",
       "configFilePaths": [
         "C:\\Users\\user\\AppData\\Roaming\\NuGet\\NuGet.Config",

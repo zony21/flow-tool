@@ -10,6 +10,7 @@ const route = useRoute()
   <MainLayout>
     <EditorLayout>
       <h1>フローエディタ</h1>
+      <p>projectId: {{ route.params.projectId }}</p>
       <p>flowId: {{ route.params.flowId }}</p>
     </EditorLayout>
   </MainLayout>
