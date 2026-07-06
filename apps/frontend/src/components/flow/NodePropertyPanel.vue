@@ -7,10 +7,12 @@ const nodeTypes = ['start', 'process', 'decision', 'end'] as const
 const props = defineProps<{
   flow: FlowDetail
   nodeId: string | null
+  readonly?: boolean
 }>()
 
 const emit = defineEmits<{
   (event: 'update-node', payload: FlowNode): void
+  (event: 'delete-node', payload: { nodeId: string }): void
 }>()
 
 const selectedNode = computed(() => props.flow.nodes.find((node) => node.nodeId === props.nodeId) ?? null)
@@ -18,11 +20,16 @@ const lanes = computed(() => props.flow.lanes.slice().sort((a, b) => a.sortOrder
 const stages = computed(() => props.flow.stages.slice().sort((a, b) => a.sortOrder - b.sortOrder))
 
 function updateField<K extends keyof FlowNode>(key: K, value: FlowNode[K]): void {
-  if (!selectedNode.value) return
+  if (!selectedNode.value || props.readonly) return
   emit('update-node', {
     ...selectedNode.value,
     [key]: value,
   })
+}
+
+function deleteSelectedNode(): void {
+  if (!selectedNode.value || props.readonly) return
+  emit('delete-node', { nodeId: selectedNode.value.nodeId })
 }
 </script>
 
@@ -40,12 +47,12 @@ function updateField<K extends keyof FlowNode>(key: K, value: FlowNode[K]): void
     <div v-else class="form-grid">
       <label class="field">
         <span>Node名</span>
-        <input :value="selectedNode.name" @input="updateField('name', ($event.target as HTMLInputElement).value)" />
+        <input :value="selectedNode.name" :disabled="readonly" @input="updateField('name', ($event.target as HTMLInputElement).value)" />
       </label>
 
       <label class="field">
         <span>Node種別</span>
-        <select :value="selectedNode.nodeType" @change="updateField('nodeType', ($event.target as HTMLSelectElement).value)">
+        <select :value="selectedNode.nodeType" :disabled="readonly" @change="updateField('nodeType', ($event.target as HTMLSelectElement).value)">
           <option v-for="type in nodeTypes" :key="type" :value="type">
             {{ type }}
           </option>
@@ -57,13 +64,14 @@ function updateField<K extends keyof FlowNode>(key: K, value: FlowNode[K]): void
         <textarea
           rows="4"
           :value="selectedNode.description ?? ''"
+          :disabled="readonly"
           @input="updateField('description', ($event.target as HTMLTextAreaElement).value || null)"
         />
       </label>
 
       <label class="field">
         <span>Lane（担当）</span>
-        <select :value="selectedNode.laneId ?? ''" @change="updateField('laneId', ($event.target as HTMLSelectElement).value || null)">
+        <select :value="selectedNode.laneId ?? ''" :disabled="readonly" @change="updateField('laneId', ($event.target as HTMLSelectElement).value || null)">
           <option value="">未設定</option>
           <option v-for="lane in lanes" :key="lane.laneId" :value="lane.laneId">
             {{ lane.name }}
@@ -73,7 +81,7 @@ function updateField<K extends keyof FlowNode>(key: K, value: FlowNode[K]): void
 
       <label class="field">
         <span>Stage（工程）</span>
-        <select :value="selectedNode.stageId ?? ''" @change="updateField('stageId', ($event.target as HTMLSelectElement).value || null)">
+        <select :value="selectedNode.stageId ?? ''" :disabled="readonly" @change="updateField('stageId', ($event.target as HTMLSelectElement).value || null)">
           <option value="">未設定</option>
           <option v-for="stage in stages" :key="stage.stageId" :value="stage.stageId">
             {{ stage.name }}
@@ -91,6 +99,10 @@ function updateField<K extends keyof FlowNode>(key: K, value: FlowNode[K]): void
           <strong>{{ Math.round(selectedNode.x) }} / {{ Math.round(selectedNode.y) }}</strong>
         </div>
       </div>
+
+      <button type="button" class="delete-button" :disabled="readonly" @click="deleteSelectedNode">
+        Node削除
+      </button>
     </div>
   </aside>
 </template>
@@ -182,5 +194,23 @@ function updateField<K extends keyof FlowNode>(key: K, value: FlowNode[K]): void
   overflow-wrap: anywhere;
   color: #0f172a;
   font-size: 12px;
+}
+
+.delete-button {
+  width: 100%;
+  margin-top: 4px;
+  padding: 10px 12px;
+  color: #991b1b;
+  background: #fee2e2;
+  border: 1px solid #fca5a5;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.delete-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 </style>

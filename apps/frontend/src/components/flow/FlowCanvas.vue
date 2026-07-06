@@ -1,6 +1,13 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { VueFlow, type Edge, type Node, type NodeDragEvent, type NodeMouseEvent } from '@vue-flow/core'
+import {
+  VueFlow,
+  type Edge,
+  type EdgeMouseEvent,
+  type Node,
+  type NodeDragEvent,
+  type NodeMouseEvent,
+} from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
 import type { FlowDetail } from '../../types/flow'
@@ -10,6 +17,8 @@ import '@vue-flow/core/dist/theme-default.css'
 const props = defineProps<{
   flow: FlowDetail
   selectedNodeId?: string | null
+  selectedLinkId?: string | null
+  readonly?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -17,6 +26,8 @@ const emit = defineEmits<{
   (event: 'add-link', payload: { sourceNodeId: string; targetNodeId: string }): void
   (event: 'node-moved', payload: { nodeId: string; x: number; y: number; laneId?: string; stageId?: string }): void
   (event: 'node-selected', payload: { nodeId: string }): void
+  (event: 'link-selected', payload: { linkId: string }): void
+  (event: 'canvas-cleared'): void
 }>()
 
 const laneHeight = 140
@@ -80,6 +91,7 @@ const edges = computed<Edge[]>(() =>
     target: link.targetNodeId,
     label: link.condition || link.label || undefined,
     type: 'default',
+    class: link.linkId === props.selectedLinkId ? 'selected-flow-link' : undefined,
   })),
 )
 
@@ -91,6 +103,10 @@ function clampIndex(index: number, max: number): number {
 }
 
 function createLink(): void {
+  if (props.readonly) {
+    return
+  }
+
   if (!selectedSourceNodeId.value || !selectedTargetNodeId.value) {
     return
   }
@@ -102,6 +118,10 @@ function createLink(): void {
 }
 
 function onNodeDragStop(event: NodeDragEvent): void {
+  if (props.readonly) {
+    return
+  }
+
   const node = event.node
   const laneIndex = clampIndex(Math.floor(node.position.y / laneHeight), laneRows.value.length)
   const stageIndex = clampIndex(Math.floor(node.position.x / stageWidth), stageColumns.value.length)
@@ -123,20 +143,28 @@ function onNodeDragStop(event: NodeDragEvent): void {
 function onNodeClick(event: NodeMouseEvent): void {
   emit('node-selected', { nodeId: event.node.id })
 }
+
+function onEdgeClick(event: EdgeMouseEvent): void {
+  emit('link-selected', { linkId: event.edge.id })
+}
+
+function onPaneClick(_: unknown): void {
+  emit('canvas-cleared')
+}
 </script>
 
 <template>
   <div class="flow-canvas">
     <div class="canvas-toolbar">
-      <button type="button" class="canvas-button" @click="emit('add-node')">Node追加</button>
+      <button type="button" class="canvas-button" :disabled="readonly" @click="emit('add-node')">Node追加</button>
       <div class="link-builder">
-        <select v-model="selectedSourceNodeId" class="canvas-select" :disabled="flow.nodes.length < 2">
+        <select v-model="selectedSourceNodeId" class="canvas-select" :disabled="readonly || flow.nodes.length < 2">
           <option v-for="option in nodeOptions" :key="`source-${option.nodeId}`" :value="option.nodeId">
             {{ option.label }}
           </option>
         </select>
         <span class="link-arrow">→</span>
-        <select v-model="selectedTargetNodeId" class="canvas-select" :disabled="flow.nodes.length < 2">
+        <select v-model="selectedTargetNodeId" class="canvas-select" :disabled="readonly || flow.nodes.length < 2">
           <option v-for="option in nodeOptions" :key="`target-${option.nodeId}`" :value="option.nodeId">
             {{ option.label }}
           </option>
@@ -144,7 +172,7 @@ function onNodeClick(event: NodeMouseEvent): void {
         <button
           type="button"
           class="canvas-button"
-          :disabled="flow.nodes.length < 2 || !selectedSourceNodeId || !selectedTargetNodeId"
+          :disabled="readonly || flow.nodes.length < 2 || !selectedSourceNodeId || !selectedTargetNodeId"
           @click="createLink"
         >
           Link追加
@@ -197,6 +225,8 @@ function onNodeClick(event: NodeMouseEvent): void {
       :fit-view-on-init="true"
       @node-drag-stop="onNodeDragStop"
       @node-click="onNodeClick"
+      @edge-click="onEdgeClick"
+      @pane-click="onPaneClick"
     >
       <Background />
       <Controls />
@@ -329,5 +359,10 @@ function onNodeClick(event: NodeMouseEvent): void {
 :deep(.selected-flow-node) {
   outline: 3px solid #2563eb;
   border-radius: 6px;
+}
+
+:deep(.selected-flow-link path) {
+  stroke: #2563eb !important;
+  stroke-width: 3px;
 }
 </style>
