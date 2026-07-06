@@ -49,7 +49,7 @@ function formatDate(value: string): string {
           <h1>プロジェクト一覧</h1>
           <p>参照権限を持つProjectを表示します。</p>
         </div>
-        <Button label="再読み込み" severity="secondary" :disabled="projectStore.loading" @click="projectStore.loadProjects" />
+        <Button label="再読み込み" severity="secondary" :disabled="projectStore.loading" @click="projectStore.loadProjects()" />
       </div>
 
       <div class="card create-card">
@@ -65,7 +65,7 @@ function formatDate(value: string): string {
           </label>
         </div>
         <div class="actions">
-          <Button label="Project作成" :disabled="!canCreate" @click="createProject" />
+          <Button label="Project作成" :disabled="!canCreate" @click="createProject()" />
         </div>
       </div>
 
