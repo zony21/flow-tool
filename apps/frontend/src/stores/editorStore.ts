@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import type { FlowDetail, FlowLink, FlowNode, Lane, Stage } from '../types/flow'
+import { getNodeSample } from '../constants/nodeSamples'
 import { useFlowStore } from './flowStore'
 import { useUndoRedoStore } from './undoRedoStore'
 
@@ -16,10 +17,24 @@ type MoveNodePayload = {
   stageId?: string
 }
 
+type AddNodePayload = {
+  nodeType?: string
+  name?: string
+  laneId?: string
+  stageId?: string
+}
+
 type AddLinkPayload = {
   sourceNodeId: string
   targetNodeId: string
 }
+
+const laneHeight = 160
+const stageWidth = 260
+const nodeOffsetX = 36
+const nodeOffsetY = 34
+const nodeSpacingX = 36
+const nodeSpacingY = 44
 
 export const useEditorStore = defineStore('editor', {
   state: () => ({
@@ -97,7 +112,7 @@ export const useEditorStore = defineStore('editor', {
       const lane: Lane = {
         laneId: crypto.randomUUID(),
         flowId: flow.flowId,
-        name: `Lane ${nextSortOrder}`,
+        name: `担当 ${nextSortOrder}`,
         sortOrder: nextSortOrder,
       }
 
@@ -139,7 +154,7 @@ export const useEditorStore = defineStore('editor', {
       const stage: Stage = {
         stageId: crypto.randomUUID(),
         flowId: flow.flowId,
-        name: `Stage ${nextSortOrder}`,
+        name: `設備 ${nextSortOrder}`,
         sortOrder: nextSortOrder,
       }
 
@@ -172,14 +187,20 @@ export const useEditorStore = defineStore('editor', {
         { actionKey: `stage:delete:${payload.stageId}`, coalesceWindowMs: 0 },
       )
     },
-    addNode(): void {
+    addNode(payload?: AddNodePayload): void {
       const flowStore = useFlowStore()
       const flow = flowStore.currentFlow
       if (!flow) return
 
-      const defaultLane = flow.lanes.slice().sort((a, b) => a.sortOrder - b.sortOrder)[0]
-      const defaultStage = flow.stages.slice().sort((a, b) => a.sortOrder - b.sortOrder)[0]
-      const nodeIndex = flow.nodes.length
+      const lanes = flow.lanes.slice().sort((a, b) => a.sortOrder - b.sortOrder)
+      const stages = flow.stages.slice().sort((a, b) => a.sortOrder - b.sortOrder)
+      const defaultLane = lanes.find((lane) => lane.laneId === payload?.laneId) ?? lanes[0]
+      const defaultStage = stages.find((stage) => stage.stageId === payload?.stageId) ?? stages[0]
+      const laneIndex = Math.max(0, lanes.findIndex((lane) => lane.laneId === defaultLane?.laneId))
+      const stageIndex = Math.max(0, stages.findIndex((stage) => stage.stageId === defaultStage?.stageId))
+      const nodeType = payload?.nodeType ?? 'process'
+      const sample = getNodeSample(nodeType)
+      const sameCellCount = flow.nodes.filter((node) => node.laneId === defaultLane?.laneId && node.stageId === defaultStage?.stageId).length
       const nodeId = crypto.randomUUID()
 
       this.applyFlowChange(
@@ -192,11 +213,11 @@ export const useEditorStore = defineStore('editor', {
               flowId: currentFlow.flowId,
               laneId: defaultLane?.laneId,
               stageId: defaultStage?.stageId,
-              nodeType: 'process',
-              name: `Node ${nodeIndex + 1}`,
+              nodeType,
+              name: payload?.name ?? `${sample.defaultName} ${sameCellCount + 1}`,
               description: null,
-              x: 40 + (nodeIndex % 3) * 80,
-              y: 40 + Math.floor(nodeIndex / 3) * 80,
+              x: stageIndex * stageWidth + nodeOffsetX + (sameCellCount % 3) * nodeSpacingX,
+              y: laneIndex * laneHeight + nodeOffsetY + Math.floor(sameCellCount / 3) * nodeSpacingY,
             },
           ],
         }),
