@@ -34,12 +34,19 @@ const emit = defineEmits<{
 const categoryWidth = 156
 const stageWidth = 240
 const headerHeight = 92
-const rowHeight = 132
+const minRowHeight = 132
 const nodeX = 42
 const nodeY = 28
 const ySnap = 20
+const rowPaddingBottom = 80
 const minBodyHeight = 1200
 const fixedViewport = { x: 0, y: 0, zoom: 1 }
+
+type RowLayout = {
+  laneId: string
+  top: number
+  height: number
+}
 
 const stages = computed(() => props.flow.stages.slice().sort((a, b) => a.sortOrder - b.sortOrder))
 const lanes = computed(() => props.flow.lanes.slice().sort((a, b) => a.sortOrder - b.sortOrder))
@@ -48,22 +55,34 @@ const activeStageId = ref<string | null>(null)
 const activeLaneId = ref<string | null>(null)
 
 const equipmentWidth = computed(() => Math.max(stages.value.length * stageWidth, stageWidth))
-const maxNodeY = computed(() => Math.max(0, ...props.flow.nodes.map((node) => Number.isFinite(node.y) ? node.y : 0)))
-const bodyHeight = computed(() => Math.max(lanes.value.length * rowHeight, maxNodeY.value + 240, minBodyHeight))
+const rowLayouts = computed<RowLayout[]>(() => {
+  let top = 0
+  return lanes.value.map((lane) => {
+    const laneNodes = props.flow.nodes.filter((node) => node.laneId === lane.laneId)
+    const maxNodeY = Math.max(0, ...laneNodes.map((node) => (Number.isFinite(node.y) ? node.y : nodeY)))
+    const height = Math.max(minRowHeight, maxNodeY + rowPaddingBottom)
+    const layout = { laneId: lane.laneId, top, height }
+    top += height
+    return layout
+  })
+})
+const bodyHeight = computed(() => Math.max(rowLayouts.value.reduce((sum, row) => sum + row.height, 0), minBodyHeight))
 const tableWidth = computed(() => categoryWidth + equipmentWidth.value)
 
 const nodes = computed<Node[]>(() =>
   props.flow.nodes.map((flowNode) => {
     const stageIndex = Math.max(0, stages.value.findIndex((stage) => stage.stageId === flowNode.stageId))
     const laneIndex = Math.max(0, lanes.value.findIndex((lane) => lane.laneId === flowNode.laneId))
-    const fallbackY = laneIndex * rowHeight + nodeY
+    const laneId = lanes.value[laneIndex]?.laneId
+    const row = rowLayouts.value.find((layout) => layout.laneId === laneId)
+    const laneRelativeY = Number.isFinite(flowNode.y) ? flowNode.y : nodeY
 
     return {
       id: flowNode.nodeId,
       type: 'flowShape',
       position: {
         x: stageIndex * stageWidth + nodeX,
-        y: Number.isFinite(flowNode.y) ? flowNode.y : fallbackY,
+        y: (row?.top ?? laneIndex * minRowHeight) + laneRelativeY,
       },
       data: flowNode,
       draggable: !props.readonly,
@@ -102,19 +121,27 @@ function nodeXFromStageIndex(stageIndex: number): number {
   return stageIndex * stageWidth + nodeX
 }
 
-function laneIndexFromY(y: number): number {
-  return lanes.value.length === 0 ? 0 : clamp(Math.floor(y / rowHeight), lanes.value.length)
+function rowIndexFromAbsoluteY(y: number): number {
+  if (rowLayouts.value.length === 0) return 0
+  const index = rowLayouts.value.findIndex((row) => y >= row.top && y < row.top + row.height)
+  return index >= 0 ? index : rowLayouts.value.length - 1
+}
+
+function relativeYFromAbsoluteY(rowIndex: number, y: number): number {
+  const row = rowLayouts.value[rowIndex]
+  return snapY(y - (row?.top ?? 0))
 }
 
 function getPoint(event: DragEvent): { stageIndex: number; laneIndex: number; y: number } | null {
   const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
   const x = event.clientX - rect.left - categoryWidth
-  const y = event.clientY - rect.top - headerHeight
-  if (x < 0 || y < 0 || x >= equipmentWidth.value || stages.value.length === 0) return null
+  const absoluteY = event.clientY - rect.top - headerHeight
+  if (x < 0 || absoluteY < 0 || x >= equipmentWidth.value || stages.value.length === 0) return null
+  const laneIndex = rowIndexFromAbsoluteY(absoluteY)
   return {
     stageIndex: clamp(Math.floor(x / stageWidth), stages.value.length),
-    laneIndex: laneIndexFromY(y),
-    y: snapY(y),
+    laneIndex,
+    y: relativeYFromAbsoluteY(laneIndex, absoluteY),
   }
 }
 
@@ -163,12 +190,11 @@ function onNodeDrag(event: NodeDragEvent): void {
 function onNodeDragStop(event: NodeDragEvent): void {
   if (props.readonly) return
   const stageIndex = stageIndexFromNodeX(event.node.position.x)
-  const y = snapY(event.node.position.y)
-  const laneIndex = laneIndexFromY(y)
+  const laneIndex = rowIndexFromAbsoluteY(event.node.position.y)
   emit('node-moved', {
     nodeId: event.node.id,
     x: nodeXFromStageIndex(stageIndex),
-    y,
+    y: relativeYFromAbsoluteY(laneIndex, event.node.position.y),
     stageId: stages.value[stageIndex]?.stageId,
     laneId: lanes.value[laneIndex]?.laneId,
   })
@@ -194,8 +220,8 @@ function onEdgeClick(event: EdgeMouseEvent): void {
 <template>
   <div class="flow-canvas" @dragover="onDragOver" @drop="onDrop" @dragleave="onDragLeave">
     <div v-if="!hasEquipment" class="canvas-guidance">
-      <h2>設備が未設定です</h2>
-      <p>設備/分類設定から設備を追加してください。</p>
+      <h2>列が未設定です</h2>
+      <p>設備/分類設定から列を追加してください。</p>
     </div>
 
     <div class="flow-table" :style="{ width: `max(100%, ${tableWidth}px)`, minWidth: `${tableWidth}px`, minHeight: `${headerHeight + bodyHeight}px` }">
@@ -204,19 +230,18 @@ function onEdgeClick(event: EdgeMouseEvent): void {
         <div v-for="stage in stages" :key="stage.stageId" class="equipment-cell" :style="{ width: `${stageWidth}px` }">
           <div class="equipment-icon">{{ stage.name.slice(0, 1) }}</div>
           <strong>{{ stage.name }}</strong>
-          <span>設備</span>
         </div>
       </div>
 
       <div class="category-column" :style="{ top: `${headerHeight}px`, width: `${categoryWidth}px`, minHeight: `${bodyHeight}px` }">
-        <div v-for="lane in lanes" :key="lane.laneId" class="category-cell" :class="{ active: activeLaneId === lane.laneId }" :style="{ height: `${rowHeight}px` }">
-          {{ lane.name }}
+        <div v-for="row in rowLayouts" :key="row.laneId" class="category-cell" :class="{ active: activeLaneId === row.laneId }" :style="{ height: `${row.height}px` }">
+          {{ lanes.find((lane) => lane.laneId === row.laneId)?.name }}
         </div>
       </div>
 
       <div class="grid-layer" :style="{ top: `${headerHeight}px`, left: `${categoryWidth}px`, width: `${equipmentWidth}px`, minHeight: `${bodyHeight}px` }">
         <div v-for="stage in stages" :key="stage.stageId" class="equipment-lane" :class="{ active: activeStageId === stage.stageId }" :style="{ width: `${stageWidth}px` }">
-          <div v-for="lane in lanes" :key="`${stage.stageId}-${lane.laneId}`" class="category-band" :class="{ active: activeLaneId === lane.laneId && activeStageId === stage.stageId }" :style="{ height: `${rowHeight}px` }" />
+          <div v-for="row in rowLayouts" :key="`${stage.stageId}-${row.laneId}`" class="category-band" :class="{ active: activeLaneId === row.laneId && activeStageId === stage.stageId }" :style="{ height: `${row.height}px` }" />
         </div>
       </div>
 
@@ -300,11 +325,11 @@ function onEdgeClick(event: EdgeMouseEvent): void {
 
 .equipment-cell {
   display: grid;
-  grid-template-rows: 26px auto auto;
+  grid-template-rows: 30px auto;
   place-items: center;
-  gap: 3px;
+  gap: 4px;
   box-sizing: border-box;
-  padding: 8px 12px;
+  padding: 10px 12px;
   color: #1e293b;
   background: #eef2ff;
   border-right: 1px solid #cbd5e1;
@@ -315,7 +340,7 @@ function onEdgeClick(event: EdgeMouseEvent): void {
   width: 26px;
   height: 26px;
   place-items: center;
-  color: #fff;
+  color: #ffffff;
   background: #2563eb;
   border-radius: 6px;
   font-size: 0.78rem;
@@ -330,12 +355,6 @@ function onEdgeClick(event: EdgeMouseEvent): void {
   white-space: nowrap;
 }
 
-.equipment-cell span {
-  color: #64748b;
-  font-size: 0.72rem;
-  font-weight: 700;
-}
-
 .category-column {
   left: 0;
   z-index: 3;
@@ -345,9 +364,9 @@ function onEdgeClick(event: EdgeMouseEvent): void {
 
 .category-cell {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   box-sizing: border-box;
-  padding: 0 14px;
+  padding: 18px 14px;
   color: #334155;
   border-bottom: 1px solid #dbe3ef;
   font-size: 0.86rem;
