@@ -377,13 +377,15 @@ function onEdgeClick(event: EdgeMouseEvent): void {
   left: 156px;
   z-index: 2;
   background: transparent;
+  overflow: hidden;
 }
 
 .vue-flow :deep(.vue-flow__pane) {
   background: transparent;
 }
 
-.vue-flow :deep(.vue-flow__viewport) {
+.vue-flow :deep(.vue-flow__viewport),
+.vue-flow :deep(.vue-flow__transformationpane) {
   transform: translate(0px, 0px) scale(1) !important;
 }
 
