@@ -17,6 +17,22 @@ function onPaletteDragStart(event: DragEvent, nodeType: string): void {
   event.dataTransfer.setData('application/x-flow-node-type', nodeType)
   event.dataTransfer.setData('text/plain', nodeType)
 }
+
+function polygonPoints(type: string): string {
+  switch (type) {
+    case 'start':
+    case 'end':
+      return ''
+    case 'decision':
+      return '48,4 92,32 48,60 4,32'
+    case 'preparation':
+      return '24,4 72,4 92,32 72,60 24,60 4,32'
+    case 'document':
+      return '6,6 90,6 90,48 78,58 66,52 54,58 42,52 30,58 18,52 6,58'
+    default:
+      return '6,6 90,6 90,58 6,58'
+  }
+}
 </script>
 
 <template>
@@ -35,11 +51,10 @@ function onPaletteDragStart(event: DragEvent, nodeType: string): void {
         draggable="true"
         @dragstart="onPaletteDragStart($event, sample.type)"
       >
-        <svg v-if="sample.type === 'decision'" class="sample-svg" viewBox="0 0 96 64" aria-hidden="true">
-          <polygon points="48,4 92,32 48,60 4,32" />
-        </svg>
-        <svg v-else-if="sample.type === 'preparation'" class="sample-svg" viewBox="0 0 96 64" aria-hidden="true">
-          <polygon points="24,4 72,4 92,32 72,60 24,60 4,32" />
+        <svg class="sample-svg" viewBox="0 0 96 64" aria-hidden="true">
+          <rect v-if="sample.type === 'start' || sample.type === 'end'" x="4" y="6" width="88" height="52" rx="26" ry="26" />
+          <rect v-else-if="sample.type === 'wait'" x="6" y="6" width="84" height="52" rx="4" ry="4" class="dashed" />
+          <polygon v-else :points="polygonPoints(sample.type)" />
         </svg>
         <span>{{ sample.label }}</span>
       </button>
@@ -86,14 +101,13 @@ h2 {
 .sample-button {
   position: relative;
   display: grid;
-  min-height: 48px;
+  min-height: 54px;
   place-items: center;
   padding: 6px 8px;
   color: #0f172a;
-  background: #fff;
-  border: 2px solid #475569;
-  border-radius: 4px;
-  box-shadow: 0 4px 10px rgb(15 23 42 / 8%);
+  background: transparent;
+  border: 0;
+  box-shadow: none;
   font-size: 12px;
   font-weight: 800;
   cursor: grab;
@@ -115,50 +129,30 @@ h2 {
 
 .sample-svg {
   position: absolute;
-  inset: 2px 6px;
-  width: calc(100% - 12px);
-  height: calc(100% - 4px);
+  inset: 0;
+  width: 100%;
+  height: 100%;
   overflow: visible;
   pointer-events: none;
 }
 
+.sample-svg rect,
 .sample-svg polygon {
   fill: #ffffff;
   stroke: #475569;
-  stroke-width: 2.5;
+  stroke-width: 2.4;
   vector-effect: non-scaling-stroke;
   filter: drop-shadow(0 4px 5px rgb(15 23 42 / 10%));
 }
 
-.sample-start,
-.sample-end {
-  border-radius: 999px;
-}
-
-.sample-process {
-  border-radius: 4px;
-}
-
-.sample-decision,
-.sample-preparation {
-  border: 0;
-  background: transparent;
-  box-shadow: none;
+.sample-svg .dashed {
+  stroke-dasharray: 7 5;
 }
 
 .sample-decision span {
   max-width: 38px;
   font-size: 11px;
   line-height: 1.2;
-}
-
-.sample-document {
-  border-radius: 4px 4px 18px 18px;
-}
-
-.sample-wait {
-  border-style: dashed;
-  border-radius: 4px;
 }
 
 .empty-message {
