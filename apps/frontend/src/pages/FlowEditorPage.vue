@@ -267,6 +267,7 @@ function handleKeydown(event: KeyboardEvent): void {
               :selected-node-id="editorStore.selectedNodeId"
               :selected-link-id="editorStore.selectedLinkId"
               @add-node="editorStore.addNode"
+              @add-link="editorStore.addLink"
               @node-moved="editorStore.moveNode"
               @node-selected="editorStore.selectNode($event.nodeId)"
               @link-selected="editorStore.selectLink($event.linkId)"
