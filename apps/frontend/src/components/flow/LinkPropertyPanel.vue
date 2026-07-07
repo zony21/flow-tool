@@ -30,19 +30,15 @@ function deleteSelectedLink(): void {
 </script>
 
 <template>
-  <aside class="link-property-panel">
+  <aside v-if="selectedLink" class="link-property-panel">
     <header class="panel-header">
-      <h2>Link Properties</h2>
-      <p>選択Linkのラベルと条件式を編集します。</p>
+      <h2>接続線詳細</h2>
+      <p>処理順や条件を編集します。</p>
     </header>
 
-    <div v-if="!selectedLink" class="empty-state">
-      Linkを選択してください。
-    </div>
-
-    <div v-else class="form-grid">
+    <div class="form-grid">
       <label class="field">
-        <span>Label</span>
+        <span>表示名</span>
         <input
           :value="selectedLink.label ?? ''"
           :disabled="readonly"
@@ -51,7 +47,7 @@ function deleteSelectedLink(): void {
       </label>
 
       <label class="field">
-        <span>Condition</span>
+        <span>条件</span>
         <textarea
           rows="4"
           :value="selectedLink.condition ?? ''"
@@ -66,13 +62,13 @@ function deleteSelectedLink(): void {
           <strong>{{ selectedLink.linkId }}</strong>
         </div>
         <div>
-          <span>Source → Target</span>
+          <span>接続元 → 接続先</span>
           <strong>{{ selectedLink.sourceNodeId }} → {{ selectedLink.targetNodeId }}</strong>
         </div>
       </div>
 
       <button type="button" class="delete-button" :disabled="readonly" @click="deleteSelectedLink">
-        Link削除
+        接続線を削除
       </button>
     </div>
   </aside>
@@ -88,7 +84,7 @@ function deleteSelectedLink(): void {
   padding: 16px;
   background: #ffffff;
   border: 1px solid #dbe3ef;
-  border-radius: 12px;
+  border-radius: 8px;
 }
 
 .panel-header h2 {
@@ -100,15 +96,6 @@ function deleteSelectedLink(): void {
   margin: 4px 0 0;
   color: #64748b;
   font-size: 13px;
-}
-
-.empty-state {
-  padding: 20px;
-  color: #64748b;
-  background: #f8fafc;
-  border: 1px dashed #cbd5e1;
-  border-radius: 10px;
-  text-align: center;
 }
 
 .form-grid {

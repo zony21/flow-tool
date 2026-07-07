@@ -10,13 +10,13 @@ export const nodeSamples: NodeSample[] = [
     type: 'start',
     label: '開始',
     defaultName: '開始',
-    description: '処理の開始点を表します。',
+    description: 'フローの開始点を表します。',
   },
   {
     type: 'process',
     label: '処理',
     defaultName: '処理',
-    description: '通常の作業・処理を表します。',
+    description: '通常の作業や処理を表します。',
   },
   {
     type: 'decision',
@@ -28,7 +28,7 @@ export const nodeSamples: NodeSample[] = [
     type: 'document',
     label: '帳票・データ',
     defaultName: '帳票・データ',
-    description: '帳票、ファイル、データ出力を表します。',
+    description: '帳票、ファイル、データの入出力を表します。',
   },
   {
     type: 'wait',
@@ -40,7 +40,7 @@ export const nodeSamples: NodeSample[] = [
     type: 'end',
     label: '終了',
     defaultName: '終了',
-    description: '処理の終了点を表します。',
+    description: 'フローの終了点を表します。',
   },
 ]
 

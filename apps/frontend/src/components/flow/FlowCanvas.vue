@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import {
   VueFlow,
   type Edge,
@@ -22,6 +22,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
+  (event: 'add-node', payload: { nodeType: string; laneId?: string; stageId?: string; x: number; y: number }): void
   (event: 'node-moved', payload: { nodeId: string; x: number; y: number; laneId?: string; stageId?: string }): void
   (event: 'node-selected', payload: { nodeId: string }): void
   (event: 'link-selected', payload: { linkId: string }): void
@@ -32,16 +33,18 @@ const laneHeight = 160
 const stageWidth = 260
 const headerHeight = 56
 const laneHeaderWidth = 170
+const nodeColumnOffset = 40
 
 const stageColumns = computed(() => props.flow.stages.slice().sort((a, b) => a.sortOrder - b.sortOrder))
 const laneRows = computed(() => props.flow.lanes.slice().sort((a, b) => a.sortOrder - b.sortOrder))
 const hasStructureGrid = computed(() => stageColumns.value.length > 0 && laneRows.value.length > 0)
+const activeStageId = ref<string | null>(null)
 
 const nodes = computed<Node[]>(() =>
   props.flow.nodes.map((flowNode) => {
     const laneIndex = Math.max(0, laneRows.value.findIndex((lane) => lane.laneId === flowNode.laneId))
     const stageIndex = Math.max(0, stageColumns.value.findIndex((stage) => stage.stageId === flowNode.stageId))
-    const fallbackX = stageIndex * stageWidth + 40
+    const fallbackX = stageIndex * stageWidth + nodeColumnOffset
     const fallbackY = laneIndex * laneHeight + 40
     const selectedClass = flowNode.nodeId === props.selectedNodeId ? ' selected-flow-node' : ''
 
@@ -54,7 +57,7 @@ const nodes = computed<Node[]>(() =>
         y: Number.isFinite(flowNode.y) ? flowNode.y : fallbackY,
       },
       data: flowNode,
-      draggable: true,
+      draggable: !props.readonly,
       class: `node-shape node-shape-${flowNode.nodeType}${selectedClass}`,
     }
   }),
@@ -78,6 +81,57 @@ function clampIndex(index: number, max: number): number {
   return index
 }
 
+function getGridPoint(event: DragEvent): { x: number; y: number; laneIndex: number; stageIndex: number } | null {
+  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
+  const x = event.clientX - rect.left - laneHeaderWidth
+  const y = event.clientY - rect.top - headerHeight
+  if (x < 0 || y < 0 || stageColumns.value.length === 0 || laneRows.value.length === 0) {
+    return null
+  }
+
+  return {
+    x,
+    y,
+    laneIndex: clampIndex(Math.floor(y / laneHeight), laneRows.value.length),
+    stageIndex: clampIndex(Math.floor(x / stageWidth), stageColumns.value.length),
+  }
+}
+
+function onDragOver(event: DragEvent): void {
+  if (props.readonly || !event.dataTransfer) return
+  const point = getGridPoint(event)
+  activeStageId.value = point ? stageColumns.value[point.stageIndex]?.stageId ?? null : null
+  if (!point) return
+
+  event.preventDefault()
+  event.dataTransfer.dropEffect = 'copy'
+}
+
+function onDrop(event: DragEvent): void {
+  if (props.readonly || !event.dataTransfer) return
+  const nodeType = event.dataTransfer.getData('application/x-flow-node-type') || event.dataTransfer.getData('text/plain')
+  const point = getGridPoint(event)
+  activeStageId.value = null
+  if (!nodeType || !point) return
+
+  event.preventDefault()
+  emit('add-node', {
+    nodeType,
+    laneId: laneRows.value[point.laneIndex]?.laneId,
+    stageId: stageColumns.value[point.stageIndex]?.stageId,
+    x: point.stageIndex * stageWidth + nodeColumnOffset,
+    y: Math.max(0, point.y),
+  })
+}
+
+function onDragLeave(event: DragEvent): void {
+  const current = event.currentTarget as HTMLElement
+  const next = event.relatedTarget as globalThis.Node | null
+  if (!next || !current.contains(next)) {
+    activeStageId.value = null
+  }
+}
+
 function onNodeDragStop(event: NodeDragEvent): void {
   if (props.readonly) return
   const node = event.node
@@ -85,7 +139,7 @@ function onNodeDragStop(event: NodeDragEvent): void {
   const stageIndex = clampIndex(Math.floor(node.position.x / stageWidth), stageColumns.value.length)
   emit('node-moved', {
     nodeId: node.id,
-    x: Math.max(0, node.position.x),
+    x: stageIndex * stageWidth + nodeColumnOffset,
     y: Math.max(0, node.position.y),
     laneId: laneRows.value[laneIndex]?.laneId,
     stageId: stageColumns.value[stageIndex]?.stageId,
@@ -106,14 +160,14 @@ function onPaneClick(_: unknown): void {
 </script>
 
 <template>
-  <div class="flow-canvas">
+  <div class="flow-canvas" @dragover="onDragOver" @drop="onDrop" @dragleave="onDragLeave">
     <div v-if="!hasStructureGrid" class="canvas-guidance">
-      <h2>担当または設備が未作成です</h2>
-      <p>図形は「担当」と「設備・場所」に紐付けて配置します。</p>
-      <p>既存の空フローは右側の編集パネルから追加してください。</p>
+      <h2>設備・場所または担当・責務が未設定です</h2>
+      <p>右側パネルで設備・場所の列と担当・責務の行を追加してください。</p>
+      <p>Node Paletteから図形をドラッグすると、Canvas上にノードを配置できます。</p>
     </div>
 
-    <div class="stage-header" :style="{ marginLeft: `${laneHeaderWidth}px` }">
+    <div class="stage-header" :style="{ left: `${laneHeaderWidth}px` }">
       <div v-for="stage in stageColumns" :key="stage.stageId" class="stage-cell" :style="{ width: `${stageWidth}px` }">
         {{ stage.name }}
       </div>
@@ -127,7 +181,13 @@ function onPaneClick(_: unknown): void {
 
     <div class="grid-layer" :style="{ left: `${laneHeaderWidth}px`, top: `${headerHeight}px` }">
       <div v-for="lane in laneRows" :key="lane.laneId" class="grid-row" :style="{ height: `${laneHeight}px` }">
-        <div v-for="stage in stageColumns" :key="stage.stageId" class="grid-cell" :style="{ width: `${stageWidth}px` }" />
+        <div
+          v-for="stage in stageColumns"
+          :key="stage.stageId"
+          class="grid-cell"
+          :class="{ active: activeStageId === stage.stageId }"
+          :style="{ width: `${stageWidth}px` }"
+        />
       </div>
     </div>
 
@@ -147,7 +207,7 @@ function onPaneClick(_: unknown): void {
   overflow: hidden;
   background: #f8fafc;
   border: 1px solid #dbe3ef;
-  border-radius: 12px;
+  border-radius: 8px;
 }
 
 .canvas-guidance {
@@ -160,7 +220,7 @@ function onPaneClick(_: unknown): void {
   color: #334155;
   background: #fff;
   border: 1px solid #cbd5e1;
-  border-radius: 12px;
+  border-radius: 8px;
   box-shadow: 0 12px 32px rgb(15 23 42 / 14%);
   transform: translateX(-50%);
 }
@@ -178,7 +238,6 @@ function onPaneClick(_: unknown): void {
 .stage-header {
   position: absolute;
   top: 0;
-  right: 0;
   z-index: 3;
   display: flex;
   height: 56px;
@@ -233,6 +292,11 @@ function onPaneClick(_: unknown): void {
   background: rgb(255 255 255 / 58%);
 }
 
+.grid-cell.active {
+  background: rgb(96 165 250 / 18%);
+  box-shadow: inset 0 0 0 2px rgb(37 99 235 / 28%);
+}
+
 .vue-flow {
   position: absolute;
   inset: 56px 0 0 170px;
@@ -246,7 +310,7 @@ function onPaneClick(_: unknown): void {
   white-space: pre-line;
   text-align: center;
   border: 2px solid #64748b;
-  border-radius: 10px;
+  border-radius: 8px;
   box-shadow: 0 8px 18px rgb(15 23 42 / 12%);
 }
 
@@ -256,13 +320,13 @@ function onPaneClick(_: unknown): void {
 }
 
 :deep(.node-shape-decision) {
-  transform: rotate(45deg);
   width: 108px;
   min-width: 108px;
   height: 108px;
   display: flex;
   align-items: center;
   justify-content: center;
+  transform: rotate(45deg);
 }
 
 :deep(.node-shape-decision .vue-flow__node-default) {

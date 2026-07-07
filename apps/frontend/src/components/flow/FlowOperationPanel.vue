@@ -10,13 +10,11 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  (event: 'add-node', payload: { nodeType: string; name: string; laneId?: string; stageId?: string }): void
   (event: 'add-link', payload: { sourceNodeId: string; targetNodeId: string }): void
 }>()
 
 const lanes = computed(() => props.flow.lanes.slice().sort((a, b) => a.sortOrder - b.sortOrder))
 const stages = computed(() => props.flow.stages.slice().sort((a, b) => a.sortOrder - b.sortOrder))
-const hasStructureGrid = computed(() => lanes.value.length > 0 && stages.value.length > 0)
 const nodeOptions = computed(() =>
   props.flow.nodes.map((node) => ({
     nodeId: node.nodeId,
@@ -24,25 +22,8 @@ const nodeOptions = computed(() =>
   })),
 )
 
-const selectedNodeType = ref(nodeSamples[1].type)
-const selectedLaneId = ref('')
-const selectedStageId = ref('')
 const selectedSourceNodeId = ref('')
 const selectedTargetNodeId = ref('')
-
-watch(
-  () => [lanes.value, stages.value] as const,
-  ([currentLanes, currentStages]) => {
-    if (!currentLanes.some((lane) => lane.laneId === selectedLaneId.value)) {
-      selectedLaneId.value = currentLanes[0]?.laneId ?? ''
-    }
-
-    if (!currentStages.some((stage) => stage.stageId === selectedStageId.value)) {
-      selectedStageId.value = currentStages[0]?.stageId ?? ''
-    }
-  },
-  { immediate: true },
-)
 
 watch(
   nodeOptions,
@@ -58,16 +39,12 @@ watch(
   { immediate: true },
 )
 
-function addNode(): void {
-  if (props.readonly || !hasStructureGrid.value) return
+function onPaletteDragStart(event: DragEvent, nodeType: string): void {
+  if (props.readonly || !event.dataTransfer) return
 
-  const sample = nodeSamples.find((item) => item.type === selectedNodeType.value) ?? nodeSamples[1]
-  emit('add-node', {
-    nodeType: sample.type,
-    name: sample.defaultName,
-    laneId: selectedLaneId.value || undefined,
-    stageId: selectedStageId.value || undefined,
-  })
+  event.dataTransfer.effectAllowed = 'copy'
+  event.dataTransfer.setData('application/x-flow-node-type', nodeType)
+  event.dataTransfer.setData('text/plain', nodeType)
 }
 
 function addLink(): void {
@@ -84,8 +61,8 @@ function addLink(): void {
 <template>
   <aside class="operation-panel">
     <section>
-      <h2>図形追加</h2>
-      <p class="help-text">追加する図形を選び、配置先を指定します。</p>
+      <h2>Node Palette</h2>
+      <p class="help-text">図形をCanvasへドラッグして、設備・場所の列に配置します。</p>
 
       <div class="sample-grid">
         <button
@@ -93,38 +70,37 @@ function addLink(): void {
           :key="sample.type"
           type="button"
           class="sample-button"
-          :class="[`sample-${sample.type}`, { selected: selectedNodeType === sample.type }]"
+          :class="`sample-${sample.type}`"
           :title="sample.description"
-          :disabled="readonly || !hasStructureGrid"
-          @click="selectedNodeType = sample.type"
+          :disabled="readonly || stages.length === 0 || lanes.length === 0"
+          draggable="true"
+          @dragstart="onPaletteDragStart($event, sample.type)"
         >
           <span>{{ sample.label }}</span>
         </button>
       </div>
-
-      <label class="field">
-        <span>設備・場所</span>
-        <select v-model="selectedStageId" :disabled="readonly || !hasStructureGrid">
-          <option v-for="stage in stages" :key="stage.stageId" :value="stage.stageId">
-            {{ stage.name }} の下
-          </option>
-        </select>
-      </label>
-
-      <label class="field">
-        <span>担当・責務</span>
-        <select v-model="selectedLaneId" :disabled="readonly || !hasStructureGrid">
-          <option v-for="lane in lanes" :key="lane.laneId" :value="lane.laneId">
-            {{ lane.name }} に配置
-          </option>
-        </select>
-      </label>
-
-      <Button label="図形を追加" class="full-button" :disabled="readonly || !hasStructureGrid" @click="addNode" />
     </section>
 
     <section>
-      <h2>接続線追加</h2>
+      <h2>設備・場所一覧</h2>
+      <p class="help-text">列の上にドロップすると、その設備・場所に所属します。</p>
+      <div v-if="stages.length === 0" class="empty-message">設備・場所がありません。</div>
+      <ul v-else class="plain-list">
+        <li v-for="stage in stages" :key="stage.stageId">{{ stage.name }}</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>担当・責務一覧</h2>
+      <p class="help-text">行の位置で、担当・責務が決まります。</p>
+      <div v-if="lanes.length === 0" class="empty-message">担当・責務がありません。</div>
+      <ul v-else class="plain-list">
+        <li v-for="lane in lanes" :key="lane.laneId">{{ lane.name }}</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>接続線</h2>
       <p class="help-text">処理順を表す線を追加します。</p>
 
       <label class="field">
@@ -156,7 +132,7 @@ function addLink(): void {
   padding: 16px;
   background: #fff;
   border: 1px solid #dbe3ef;
-  border-radius: 12px;
+  border-radius: 8px;
 }
 
 .operation-panel section + section {
@@ -180,24 +156,22 @@ h2 {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 8px;
-  margin-bottom: 12px;
 }
 
 .sample-button {
-  min-height: 42px;
+  min-height: 44px;
   padding: 6px 8px;
   color: #0f172a;
   background: #fff;
   border: 2px solid #cbd5e1;
-  border-radius: 10px;
+  border-radius: 8px;
   font-size: 12px;
   font-weight: 700;
-  cursor: pointer;
+  cursor: grab;
 }
 
-.sample-button.selected {
-  border-color: #2563eb;
-  box-shadow: 0 0 0 2px rgb(37 99 235 / 18%);
+.sample-button:active {
+  cursor: grabbing;
 }
 
 .sample-button:disabled {
@@ -224,6 +198,30 @@ h2 {
 }
 
 .sample-wait {
+  border-style: dashed;
+}
+
+.plain-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.plain-list li,
+.empty-message {
+  padding: 8px 10px;
+  color: #334155;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.9rem;
+}
+
+.empty-message {
+  color: #64748b;
   border-style: dashed;
 }
 

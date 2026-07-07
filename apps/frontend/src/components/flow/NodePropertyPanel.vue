@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { getNodeTypeLabel, nodeSamples } from '../../constants/nodeSamples'
+import { nodeSamples } from '../../constants/nodeSamples'
 import type { FlowDetail, FlowNode } from '../../types/flow'
 
 const props = defineProps<{
@@ -33,30 +33,25 @@ function deleteSelectedNode(): void {
 </script>
 
 <template>
-  <aside class="node-property-panel">
+  <aside v-if="selectedNode" class="node-property-panel">
     <header class="panel-header">
-      <h2>図形の詳細</h2>
-      <p>選択中の図形情報を編集します。</p>
+      <h2>ノード詳細</h2>
+      <p>選択中のノードを編集します。</p>
     </header>
 
-    <div v-if="!selectedNode" class="empty-state">
-      図形を選択してください。
-    </div>
-
-    <div v-else class="form-grid">
+    <div class="form-grid">
       <label class="field">
-        <span>図形名</span>
+        <span>ノード名</span>
         <input :value="selectedNode.name" :disabled="readonly" @input="updateField('name', ($event.target as HTMLInputElement).value)" />
       </label>
 
       <label class="field">
-        <span>図形種別</span>
+        <span>図形</span>
         <select :value="selectedNode.nodeType" :disabled="readonly" @change="updateField('nodeType', ($event.target as HTMLSelectElement).value)">
           <option v-for="sample in nodeSamples" :key="sample.type" :value="sample.type">
             {{ sample.label }}
           </option>
         </select>
-        <small>{{ getNodeTypeLabel(selectedNode.nodeType) }}として表示されます。</small>
       </label>
 
       <label class="field">
@@ -70,7 +65,7 @@ function deleteSelectedNode(): void {
       </label>
 
       <label class="field">
-        <span>担当</span>
+        <span>担当・責務</span>
         <select :value="selectedNode.laneId ?? ''" :disabled="readonly" @change="updateField('laneId', ($event.target as HTMLSelectElement).value || null)">
           <option value="">未設定</option>
           <option v-for="lane in lanes" :key="lane.laneId" :value="lane.laneId">
@@ -91,7 +86,7 @@ function deleteSelectedNode(): void {
 
       <div class="read-only-grid">
         <div>
-          <span>識別ID</span>
+          <span>ID</span>
           <strong>{{ selectedNode.nodeId }}</strong>
         </div>
         <div>
@@ -101,7 +96,7 @@ function deleteSelectedNode(): void {
       </div>
 
       <button type="button" class="delete-button" :disabled="readonly" @click="deleteSelectedNode">
-        図形削除
+        ノードを削除
       </button>
     </div>
   </aside>
@@ -117,7 +112,7 @@ function deleteSelectedNode(): void {
   padding: 16px;
   background: #ffffff;
   border: 1px solid #dbe3ef;
-  border-radius: 12px;
+  border-radius: 8px;
 }
 
 .panel-header h2 {
@@ -129,15 +124,6 @@ function deleteSelectedNode(): void {
   margin: 4px 0 0;
   color: #64748b;
   font-size: 13px;
-}
-
-.empty-state {
-  padding: 20px;
-  color: #64748b;
-  background: #f8fafc;
-  border: 1px dashed #cbd5e1;
-  border-radius: 10px;
-  text-align: center;
 }
 
 .form-grid {
@@ -153,11 +139,6 @@ function deleteSelectedNode(): void {
   font-size: 13px;
   font-weight: 700;
   color: #334155;
-}
-
-.field small {
-  color: #64748b;
-  font-weight: 400;
 }
 
 .field input,

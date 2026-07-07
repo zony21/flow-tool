@@ -39,28 +39,10 @@ function updateStageName(stage: Stage, name: string): void {
   <aside class="lane-stage-panel">
     <section>
       <div class="section-header">
-        <h2>担当</h2>
-        <Button label="追加" size="small" :disabled="readonly" @click="emit('add-lane')" />
-      </div>
-      <p class="help-text">作業・判断を担当する部署、人、システムを表します。</p>
-      <div v-if="sortedLanes.length === 0" class="empty-message">担当がありません。</div>
-      <div v-for="lane in sortedLanes" :key="lane.laneId" class="item-row">
-        <input
-          :value="lane.name"
-          type="text"
-          :disabled="readonly"
-          @change="updateLaneName(lane, ($event.target as HTMLInputElement).value)"
-        />
-        <Button label="削除" size="small" severity="danger" :disabled="readonly" @click="emit('delete-lane', { laneId: lane.laneId })" />
-      </div>
-    </section>
-
-    <section>
-      <div class="section-header">
         <h2>設備・場所</h2>
         <Button label="追加" size="small" :disabled="readonly" @click="emit('add-stage')" />
       </div>
-      <p class="help-text">包装機、コンベア、倉庫、タブレットなど、図形を配置する横方向の列を表します。</p>
+      <p class="help-text">包装機、コンベア、AGF、WCS、PLCなど、ノードを置く列です。</p>
       <div v-if="sortedStages.length === 0" class="empty-message">設備・場所がありません。</div>
       <div v-for="stage in sortedStages" :key="stage.stageId" class="item-row">
         <input
@@ -72,6 +54,24 @@ function updateStageName(stage: Stage, name: string): void {
         <Button label="削除" size="small" severity="danger" :disabled="readonly" @click="emit('delete-stage', { stageId: stage.stageId })" />
       </div>
     </section>
+
+    <section>
+      <div class="section-header">
+        <h2>担当・責務</h2>
+        <Button label="追加" size="small" :disabled="readonly" @click="emit('add-lane')" />
+      </div>
+      <p class="help-text">作業者、WCS、PLC、AGF、外部システムなど、責務を表す行です。</p>
+      <div v-if="sortedLanes.length === 0" class="empty-message">担当・責務がありません。</div>
+      <div v-for="lane in sortedLanes" :key="lane.laneId" class="item-row">
+        <input
+          :value="lane.name"
+          type="text"
+          :disabled="readonly"
+          @change="updateLaneName(lane, ($event.target as HTMLInputElement).value)"
+        />
+        <Button label="削除" size="small" severity="danger" :disabled="readonly" @click="emit('delete-lane', { laneId: lane.laneId })" />
+      </div>
+    </section>
   </aside>
 </template>
 
@@ -81,7 +81,7 @@ function updateStageName(stage: Stage, name: string): void {
   padding: 16px;
   background: #fff;
   border: 1px solid #dbe3ef;
-  border-radius: 12px;
+  border-radius: 8px;
 }
 
 .lane-stage-panel section + section {
@@ -102,6 +102,7 @@ function updateStageName(stage: Stage, name: string): void {
 
 .help-text {
   margin: 6px 0 10px;
+  color: #64748b;
   font-size: 0.85rem;
 }
 

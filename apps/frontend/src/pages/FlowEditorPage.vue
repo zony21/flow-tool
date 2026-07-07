@@ -165,18 +165,17 @@ async function downloadMermaidExport(): Promise<void> {
   if (!flow.value || editorStore.isDirty) return
 
   const result = await exportMermaid(projectId.value, flow.value.flowId)
-  downloadTextFile(`${flow.value.name || 'flow'}.mmd`, result.content, result.contentType)
+  downloadBlob(new Blob([result.content], { type: 'text/plain;charset=utf-8' }), result.fileName || `${flow.value.name || 'flow'}.mmd`)
 }
 
 async function downloadJsonExport(): Promise<void> {
   if (!flow.value || editorStore.isDirty) return
 
-  const result = await exportJson(projectId.value, flow.value.flowId)
-  downloadTextFile(`${flow.value.name || 'flow'}.json`, result.content, result.contentType)
+  const blob = await exportJson(projectId.value, flow.value.flowId)
+  downloadBlob(blob, `${flow.value.name || 'flow'}.json`)
 }
 
-function downloadTextFile(fileName: string, content: string, contentType: string): void {
-  const blob = new Blob([content], { type: contentType })
+function downloadBlob(blob: Blob, fileName: string): void {
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
   anchor.href = url
@@ -258,6 +257,7 @@ function handleKeydown(event: KeyboardEvent): void {
             :readonly="!canEdit"
             :selected-node-id="editorStore.selectedNodeId"
             :selected-link-id="editorStore.selectedLinkId"
+            @add-node="editorStore.addNode"
             @node-moved="editorStore.moveNode"
             @node-selected="editorStore.selectNode($event.nodeId)"
             @link-selected="editorStore.selectLink($event.linkId)"
@@ -267,7 +267,6 @@ function handleKeydown(event: KeyboardEvent): void {
             <FlowOperationPanel
               :flow="flow"
               :readonly="!canEdit"
-              @add-node="editorStore.addNode"
               @add-link="editorStore.addLink"
             />
             <LaneStagePanel
@@ -281,6 +280,7 @@ function handleKeydown(event: KeyboardEvent): void {
               @delete-stage="editorStore.deleteStage"
             />
             <NodePropertyPanel
+              v-if="editorStore.selectedNodeId"
               :flow="flow"
               :node-id="editorStore.selectedNodeId"
               :readonly="!canEdit"
@@ -288,6 +288,7 @@ function handleKeydown(event: KeyboardEvent): void {
               @delete-node="editorStore.deleteNode"
             />
             <LinkPropertyPanel
+              v-if="editorStore.selectedLinkId"
               :flow="flow"
               :link-id="editorStore.selectedLinkId"
               :readonly="!canEdit"
