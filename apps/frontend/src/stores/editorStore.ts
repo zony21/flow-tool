@@ -32,10 +32,21 @@ type AddLinkPayload = {
 }
 
 const stageWidth = 240
-const nodeOffsetX = 54
+const nodeOffsetX = 42
 const categoryHeight = 132
-const nodeRowOffset = 38
-const nodeSpacingY = 58
+const nodeRowOffset = 28
+const nodeSpacingY = 86
+
+function resolveAvailableY(nodes: FlowNode[], stageId: string | null | undefined, desiredY: number, exceptNodeId?: string): number {
+  let y = Math.max(nodeRowOffset, desiredY)
+  const sameStageNodes = nodes.filter((node) => node.stageId === stageId && node.nodeId !== exceptNodeId)
+
+  while (sameStageNodes.some((node) => Math.abs(node.y - y) < nodeSpacingY)) {
+    y += nodeSpacingY
+  }
+
+  return y
+}
 
 export const useEditorStore = defineStore('editor', {
   state: () => ({
@@ -201,22 +212,11 @@ export const useEditorStore = defineStore('editor', {
       const laneIndex = Math.max(0, lanes.findIndex((lane) => lane.laneId === defaultLane?.laneId))
       const nodeType = payload?.nodeType ?? 'process'
       const sample = getNodeSample(nodeType)
-      const sameBandNodes = flow.nodes.filter(
-        (node) => node.stageId === defaultStage?.stageId && node.laneId === defaultLane?.laneId,
-      )
       const sameStageNodes = flow.nodes.filter((node) => node.stageId === defaultStage?.stageId)
       const nodeId = crypto.randomUUID()
       const x = stageIndex * stageWidth + nodeOffsetX
       const rowBaseY = lanes.length > 0 ? laneIndex * categoryHeight + nodeRowOffset : nodeRowOffset
-      let y = payload?.y ?? rowBaseY
-
-      while (sameBandNodes.some((node) => Math.abs(node.y - y) < nodeSpacingY)) {
-        y += nodeSpacingY
-      }
-
-      if (y < nodeRowOffset) {
-        y = nodeRowOffset
-      }
+      const y = resolveAvailableY(flow.nodes, defaultStage?.stageId, payload?.y ?? rowBaseY)
 
       this.applyFlowChange(
         (currentFlow) => ({
@@ -246,10 +246,11 @@ export const useEditorStore = defineStore('editor', {
           const stages = flow.stages.slice().sort((a, b) => a.sortOrder - b.sortOrder)
           const stageIndex = Math.max(0, stages.findIndex((stage) => stage.stageId === updatedNode.stageId))
           const x = stageIndex * stageWidth + nodeOffsetX
+          const y = resolveAvailableY(flow.nodes, updatedNode.stageId, updatedNode.y, updatedNode.nodeId)
 
           return {
             ...flow,
-            nodes: flow.nodes.map((node) => (node.nodeId === updatedNode.nodeId ? { ...updatedNode, x } : node)),
+            nodes: flow.nodes.map((node) => (node.nodeId === updatedNode.nodeId ? { ...updatedNode, x, y } : node)),
           }
         },
         { actionKey: `node:update:${updatedNode.nodeId}` },
@@ -257,20 +258,28 @@ export const useEditorStore = defineStore('editor', {
     },
     moveNode(payload: MoveNodePayload): void {
       this.applyFlowChange(
-        (flow) => ({
-          ...flow,
-          nodes: flow.nodes.map((node) =>
-            node.nodeId === payload.nodeId
-              ? {
-                  ...node,
-                  x: payload.x,
-                  y: payload.y,
-                  laneId: payload.laneId ?? node.laneId,
-                  stageId: payload.stageId ?? null,
-                }
-              : node,
-          ),
-        }),
+        (flow) => {
+          const targetNode = flow.nodes.find((node) => node.nodeId === payload.nodeId)
+          if (!targetNode) return flow
+
+          const stageId = payload.stageId ?? targetNode.stageId
+          const y = resolveAvailableY(flow.nodes, stageId, payload.y, payload.nodeId)
+
+          return {
+            ...flow,
+            nodes: flow.nodes.map((node) =>
+              node.nodeId === payload.nodeId
+                ? {
+                    ...node,
+                    x: payload.x,
+                    y,
+                    laneId: payload.laneId ?? node.laneId,
+                    stageId: stageId ?? null,
+                  }
+                : node,
+            ),
+          }
+        },
         { actionKey: `node:move:${payload.nodeId}` },
       )
     },
