@@ -17,8 +17,8 @@ const emit = defineEmits<{
   (event: 'delete-stage', payload: { stageId: string }): void
 }>()
 
-const sortedLanes = computed(() => props.flow.lanes.slice().sort((a, b) => a.sortOrder - b.sortOrder))
-const sortedStages = computed(() => props.flow.stages.slice().sort((a, b) => a.sortOrder - b.sortOrder))
+const categories = computed(() => props.flow.lanes.slice().sort((a, b) => a.sortOrder - b.sortOrder))
+const equipment = computed(() => props.flow.stages.slice().sort((a, b) => a.sortOrder - b.sortOrder))
 
 function updateLaneName(lane: Lane, name: string): void {
   emit('update-lane', {
@@ -39,12 +39,12 @@ function updateStageName(stage: Stage, name: string): void {
   <aside class="lane-stage-panel">
     <section>
       <div class="section-header">
-        <h2>設備・場所</h2>
+        <h2>設備</h2>
         <Button label="追加" size="small" :disabled="readonly" @click="emit('add-stage')" />
       </div>
-      <p class="help-text">包装機、コンベア、AGF、WCS、PLCなど、ノードを置く列です。</p>
-      <div v-if="sortedStages.length === 0" class="empty-message">設備・場所がありません。</div>
-      <div v-for="stage in sortedStages" :key="stage.stageId" class="item-row">
+      <p class="help-text">包装機PLC、AGF、WCS、作業者など、ノードを配置する横列です。</p>
+      <div v-if="equipment.length === 0" class="empty-message">設備がありません。</div>
+      <div v-for="stage in equipment" :key="stage.stageId" class="item-row">
         <input
           :value="stage.name"
           type="text"
@@ -57,12 +57,12 @@ function updateStageName(stage: Stage, name: string): void {
 
     <section>
       <div class="section-header">
-        <h2>担当・責務</h2>
+        <h2>工程分類</h2>
         <Button label="追加" size="small" :disabled="readonly" @click="emit('add-lane')" />
       </div>
-      <p class="help-text">作業者、WCS、PLC、AGF、外部システムなど、責務を表す行です。</p>
-      <div v-if="sortedLanes.length === 0" class="empty-message">担当・責務がありません。</div>
-      <div v-for="lane in sortedLanes" :key="lane.laneId" class="item-row">
+      <p class="help-text">RFID読取り、包装開始、搬送処理など、処理の分類情報です。</p>
+      <div v-if="categories.length === 0" class="empty-message">工程分類がありません。</div>
+      <div v-for="lane in categories" :key="lane.laneId" class="item-row">
         <input
           :value="lane.name"
           type="text"

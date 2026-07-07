@@ -15,8 +15,8 @@ const emit = defineEmits<{
 }>()
 
 const selectedNode = computed(() => props.flow.nodes.find((node) => node.nodeId === props.nodeId) ?? null)
-const lanes = computed(() => props.flow.lanes.slice().sort((a, b) => a.sortOrder - b.sortOrder))
-const stages = computed(() => props.flow.stages.slice().sort((a, b) => a.sortOrder - b.sortOrder))
+const categories = computed(() => props.flow.lanes.slice().sort((a, b) => a.sortOrder - b.sortOrder))
+const equipment = computed(() => props.flow.stages.slice().sort((a, b) => a.sortOrder - b.sortOrder))
 
 function updateField<K extends keyof FlowNode>(key: K, value: FlowNode[K]): void {
   if (!selectedNode.value || props.readonly) return
@@ -55,6 +55,26 @@ function deleteSelectedNode(): void {
       </label>
 
       <label class="field">
+        <span>設備</span>
+        <select :value="selectedNode.stageId ?? ''" :disabled="readonly" @change="updateField('stageId', ($event.target as HTMLSelectElement).value || null)">
+          <option value="">未設定</option>
+          <option v-for="stage in equipment" :key="stage.stageId" :value="stage.stageId">
+            {{ stage.name }}
+          </option>
+        </select>
+      </label>
+
+      <label class="field">
+        <span>工程分類</span>
+        <select :value="selectedNode.laneId ?? ''" :disabled="readonly" @change="updateField('laneId', ($event.target as HTMLSelectElement).value || null)">
+          <option value="">未設定</option>
+          <option v-for="lane in categories" :key="lane.laneId" :value="lane.laneId">
+            {{ lane.name }}
+          </option>
+        </select>
+      </label>
+
+      <label class="field">
         <span>説明</span>
         <textarea
           rows="4"
@@ -64,26 +84,6 @@ function deleteSelectedNode(): void {
         />
       </label>
 
-      <label class="field">
-        <span>担当・責務</span>
-        <select :value="selectedNode.laneId ?? ''" :disabled="readonly" @change="updateField('laneId', ($event.target as HTMLSelectElement).value || null)">
-          <option value="">未設定</option>
-          <option v-for="lane in lanes" :key="lane.laneId" :value="lane.laneId">
-            {{ lane.name }}
-          </option>
-        </select>
-      </label>
-
-      <label class="field">
-        <span>設備・場所</span>
-        <select :value="selectedNode.stageId ?? ''" :disabled="readonly" @change="updateField('stageId', ($event.target as HTMLSelectElement).value || null)">
-          <option value="">未設定</option>
-          <option v-for="stage in stages" :key="stage.stageId" :value="stage.stageId">
-            {{ stage.name }}
-          </option>
-        </select>
-      </label>
-
       <div class="read-only-grid">
         <div>
           <span>ID</span>
@@ -91,7 +91,7 @@ function deleteSelectedNode(): void {
         </div>
         <div>
           <span>表示位置</span>
-          <strong>{{ Math.round(selectedNode.x) }} / {{ Math.round(selectedNode.y) }}</strong>
+          <strong>Xは設備から自動算出 / Y {{ Math.round(selectedNode.y) }}</strong>
         </div>
       </div>
 

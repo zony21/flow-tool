@@ -13,8 +13,8 @@ const emit = defineEmits<{
   (event: 'add-link', payload: { sourceNodeId: string; targetNodeId: string }): void
 }>()
 
-const lanes = computed(() => props.flow.lanes.slice().sort((a, b) => a.sortOrder - b.sortOrder))
-const stages = computed(() => props.flow.stages.slice().sort((a, b) => a.sortOrder - b.sortOrder))
+const categories = computed(() => props.flow.lanes.slice().sort((a, b) => a.sortOrder - b.sortOrder))
+const equipment = computed(() => props.flow.stages.slice().sort((a, b) => a.sortOrder - b.sortOrder))
 const nodeOptions = computed(() =>
   props.flow.nodes.map((node) => ({
     nodeId: node.nodeId,
@@ -62,7 +62,7 @@ function addLink(): void {
   <aside class="operation-panel">
     <section>
       <h2>Node Palette</h2>
-      <p class="help-text">図形をCanvasへドラッグして、設備・場所の列に配置します。</p>
+      <p class="help-text">図形を設備列へドラッグして配置します。</p>
 
       <div class="sample-grid">
         <button
@@ -72,7 +72,7 @@ function addLink(): void {
           class="sample-button"
           :class="`sample-${sample.type}`"
           :title="sample.description"
-          :disabled="readonly || stages.length === 0 || lanes.length === 0"
+          :disabled="readonly || equipment.length === 0"
           draggable="true"
           @dragstart="onPaletteDragStart($event, sample.type)"
         >
@@ -82,20 +82,20 @@ function addLink(): void {
     </section>
 
     <section>
-      <h2>設備・場所一覧</h2>
-      <p class="help-text">列の上にドロップすると、その設備・場所に所属します。</p>
-      <div v-if="stages.length === 0" class="empty-message">設備・場所がありません。</div>
+      <h2>設備一覧</h2>
+      <p class="help-text">ノードは必ずいずれかの設備列に所属します。</p>
+      <div v-if="equipment.length === 0" class="empty-message">設備がありません。</div>
       <ul v-else class="plain-list">
-        <li v-for="stage in stages" :key="stage.stageId">{{ stage.name }}</li>
+        <li v-for="stage in equipment" :key="stage.stageId">{{ stage.name }}</li>
       </ul>
     </section>
 
     <section>
-      <h2>担当・責務一覧</h2>
-      <p class="help-text">行の位置で、担当・責務が決まります。</p>
-      <div v-if="lanes.length === 0" class="empty-message">担当・責務がありません。</div>
+      <h2>工程分類</h2>
+      <p class="help-text">分類はノード詳細から必要に応じて設定します。</p>
+      <div v-if="categories.length === 0" class="empty-message">工程分類がありません。</div>
       <ul v-else class="plain-list">
-        <li v-for="lane in lanes" :key="lane.laneId">{{ lane.name }}</li>
+        <li v-for="lane in categories" :key="lane.laneId">{{ lane.name }}</li>
       </ul>
     </section>
 

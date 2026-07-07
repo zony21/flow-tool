@@ -31,12 +31,10 @@ type AddLinkPayload = {
   targetNodeId: string
 }
 
-const laneHeight = 160
 const stageWidth = 260
-const nodeOffsetX = 36
-const nodeOffsetY = 34
-const nodeSpacingX = 36
-const nodeSpacingY = 76
+const nodeOffsetX = 54
+const firstNodeY = 100
+const nodeSpacingY = 120
 
 export const useEditorStore = defineStore('editor', {
   state: () => ({
@@ -114,7 +112,7 @@ export const useEditorStore = defineStore('editor', {
       const lane: Lane = {
         laneId: crypto.randomUUID(),
         flowId: flow.flowId,
-        name: `担当・責務 ${nextSortOrder}`,
+        name: `工程分類 ${nextSortOrder}`,
         sortOrder: nextSortOrder,
       }
 
@@ -156,7 +154,7 @@ export const useEditorStore = defineStore('editor', {
       const stage: Stage = {
         stageId: crypto.randomUUID(),
         flowId: flow.flowId,
-        name: `設備・場所 ${nextSortOrder}`,
+        name: `設備 ${nextSortOrder}`,
         sortOrder: nextSortOrder,
       }
 
@@ -198,28 +196,21 @@ export const useEditorStore = defineStore('editor', {
       const stages = flow.stages.slice().sort((a, b) => a.sortOrder - b.sortOrder)
       const defaultLane = lanes.find((lane) => lane.laneId === payload?.laneId) ?? lanes[0]
       const defaultStage = stages.find((stage) => stage.stageId === payload?.stageId) ?? stages[0]
-      const laneIndex = Math.max(0, lanes.findIndex((lane) => lane.laneId === defaultLane?.laneId))
       const stageIndex = Math.max(0, stages.findIndex((stage) => stage.stageId === defaultStage?.stageId))
       const nodeType = payload?.nodeType ?? 'process'
       const sample = getNodeSample(nodeType)
-      const sameCellNodes = flow.nodes.filter((node) => node.laneId === defaultLane?.laneId && node.stageId === defaultStage?.stageId)
-      const sameCellCount = sameCellNodes.length
+      const sameStageNodes = flow.nodes.filter((node) => node.stageId === defaultStage?.stageId)
+      const sameStageCount = sameStageNodes.length
       const nodeId = crypto.randomUUID()
-      const x = payload?.x ?? stageIndex * stageWidth + nodeOffsetX + (sameCellCount % 3) * nodeSpacingX
-      let y = payload?.y ?? laneIndex * laneHeight + nodeOffsetY + Math.floor(sameCellCount / 3) * nodeSpacingY
-      const rowTop = laneIndex * laneHeight + nodeOffsetY
-      const rowBottom = (laneIndex + 1) * laneHeight - nodeOffsetY
+      const x = stageIndex * stageWidth + nodeOffsetX
+      let y = payload?.y ?? firstNodeY + sameStageCount * nodeSpacingY
 
-      while (sameCellNodes.some((node) => Math.abs(node.y - y) < nodeSpacingY)) {
+      while (sameStageNodes.some((node) => Math.abs(node.y - y) < nodeSpacingY)) {
         y += nodeSpacingY
       }
 
-      if (y < rowTop) {
-        y = rowTop
-      }
-
-      if (y > rowBottom) {
-        y = rowTop + sameCellCount * nodeSpacingY
+      if (y < firstNodeY) {
+        y = firstNodeY
       }
 
       this.applyFlowChange(
@@ -233,7 +224,7 @@ export const useEditorStore = defineStore('editor', {
               laneId: defaultLane?.laneId,
               stageId: defaultStage?.stageId,
               nodeType,
-              name: payload?.name ?? `${sample.defaultName} ${sameCellCount + 1}`,
+              name: payload?.name ?? `${sample.defaultName} ${sameStageCount + 1}`,
               description: null,
               x,
               y,
@@ -263,7 +254,7 @@ export const useEditorStore = defineStore('editor', {
                   ...node,
                   x: payload.x,
                   y: payload.y,
-                  laneId: payload.laneId ?? null,
+                  laneId: payload.laneId ?? node.laneId,
                   stageId: payload.stageId ?? null,
                 }
               : node,
