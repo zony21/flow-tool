@@ -370,9 +370,6 @@ function onEdgeClick(event: EdgeMouseEvent): void {
   background: #fff;
 }
 
-.category-header,
-.equipment-header,
-.category-column,
 .grid-layer,
 .vue-flow {
   position: absolute;
@@ -381,13 +378,14 @@ function onEdgeClick(event: EdgeMouseEvent): void {
 .category-header,
 .equipment-header {
   top: 0;
-  z-index: 5;
   background: #f1f5f9;
   border-bottom: 1px solid #cbd5e1;
 }
 
 .category-header {
+  position: sticky;
   left: 0;
+  z-index: 30;
   overflow: hidden;
   color: #0f172a;
   border-right: 1px solid #cbd5e1;
@@ -431,6 +429,8 @@ function onEdgeClick(event: EdgeMouseEvent): void {
 }
 
 .equipment-header {
+  position: sticky;
+  z-index: 20;
   display: flex;
 }
 
@@ -467,10 +467,13 @@ function onEdgeClick(event: EdgeMouseEvent): void {
 }
 
 .category-column {
+  position: sticky;
   left: 0;
-  z-index: 3;
+  top: unset !important;
+  z-index: 15;
   background: #f8fafc;
   border-right: 1px solid #cbd5e1;
+  transform: translateY(92px);
 }
 
 .category-cell {
