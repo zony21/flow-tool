@@ -1,6 +1,15 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { VueFlow, type Edge, type EdgeMouseEvent, type Node, type NodeDragEvent, type NodeMouseEvent } from '@vue-flow/core'
+import {
+  MarkerType,
+  VueFlow,
+  type Connection,
+  type Edge,
+  type EdgeMouseEvent,
+  type Node,
+  type NodeDragEvent,
+  type NodeMouseEvent,
+} from '@vue-flow/core'
 import FlowShapeNode from './FlowShapeNode.vue'
 import type { FlowDetail } from '../../types/flow'
 import '@vue-flow/core/dist/style.css'
@@ -15,6 +24,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (event: 'add-node', payload: { nodeType: string; stageId?: string; laneId?: string; x: number; y: number }): void
+  (event: 'add-link', payload: { sourceNodeId: string; targetNodeId: string }): void
   (event: 'node-moved', payload: { nodeId: string; x: number; y: number; stageId?: string; laneId?: string }): void
   (event: 'node-selected', payload: { nodeId: string }): void
   (event: 'link-selected', payload: { linkId: string }): void
@@ -57,6 +67,7 @@ const nodes = computed<Node[]>(() =>
       },
       data: flowNode,
       draggable: !props.readonly,
+      connectable: !props.readonly,
       class: flowNode.nodeId === props.selectedNodeId ? 'selected-flow-node' : undefined,
     }
   }),
@@ -69,6 +80,7 @@ const edges = computed<Edge[]>(() =>
     target: link.targetNodeId,
     label: link.condition || link.label || undefined,
     type: 'step',
+    markerEnd: MarkerType.ArrowClosed,
     class: link.linkId === props.selectedLinkId ? 'selected-flow-link' : undefined,
   })),
 )
@@ -162,6 +174,14 @@ function onNodeDragStop(event: NodeDragEvent): void {
   })
 }
 
+function onConnect(connection: Connection): void {
+  if (props.readonly || !connection.source || !connection.target || connection.source === connection.target) return
+  emit('add-link', {
+    sourceNodeId: connection.source,
+    targetNodeId: connection.target,
+  })
+}
+
 function onNodeClick(event: NodeMouseEvent): void {
   emit('node-selected', { nodeId: event.node.id })
 }
@@ -216,6 +236,7 @@ function onEdgeClick(event: EdgeMouseEvent): void {
         :pan-on-drag="false"
         :pan-on-scroll="false"
         :prevent-scrolling="false"
+        @connect="onConnect"
         @node-drag="onNodeDrag"
         @node-drag-stop="onNodeDragStop"
         @node-click="onNodeClick"
@@ -402,6 +423,11 @@ function onEdgeClick(event: EdgeMouseEvent): void {
 :deep(.selected-flow-link path) {
   stroke: #dc2626;
   stroke-width: 3;
+}
+
+:deep(.vue-flow__edge-path) {
+  stroke: #334155;
+  stroke-width: 2;
 }
 
 .canvas-guidance {
