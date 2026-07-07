@@ -77,8 +77,14 @@ watch(
 const equipmentWidth = computed(() => Math.max(stages.value.length * stageWidth, stageWidth))
 const rowLayouts = computed<RowLayout[]>(() => {
   let top = 0
+  const fallbackLaneId = lanes.value[0]?.laneId
+  const validLaneIds = new Set(lanes.value.map((lane) => lane.laneId))
+
   return lanes.value.map((lane) => {
-    const laneNodes = props.flow.nodes.filter((node) => node.laneId === lane.laneId)
+    const laneNodes = props.flow.nodes.filter((node) => {
+      const resolvedLaneId = node.laneId && validLaneIds.has(node.laneId) ? node.laneId : fallbackLaneId
+      return resolvedLaneId === lane.laneId
+    })
     const maxNodeBottom = Math.max(
       0,
       ...laneNodes.map((node) => (Number.isFinite(node.y) ? node.y : nodeY) + nodeVisualHeight),
