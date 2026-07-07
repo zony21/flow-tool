@@ -29,6 +29,7 @@ const nodeX = 42
 const nodeY = 28
 const ySnap = 20
 const minBodyHeight = 1200
+const fixedViewport = { x: 0, y: 0, zoom: 1 }
 
 const stages = computed(() => props.flow.stages.slice().sort((a, b) => a.sortOrder - b.sortOrder))
 const lanes = computed(() => props.flow.lanes.slice().sort((a, b) => a.sortOrder - b.sortOrder))
@@ -201,13 +202,20 @@ function onEdgeClick(event: EdgeMouseEvent): void {
 
       <VueFlow
         class="vue-flow"
+        :style="{ width: `${equipmentWidth}px`, height: `${bodyHeight}px` }"
         :nodes="nodes"
         :edges="edges"
         :fit-view-on-init="false"
+        :default-viewport="fixedViewport"
+        :viewport="fixedViewport"
+        :min-zoom="1"
+        :max-zoom="1"
         :zoom-on-scroll="false"
         :zoom-on-pinch="false"
+        :zoom-on-double-click="false"
         :pan-on-drag="false"
         :pan-on-scroll="false"
+        :prevent-scrolling="false"
         @node-drag="onNodeDrag"
         @node-drag-stop="onNodeDragStop"
         @node-click="onNodeClick"
@@ -368,14 +376,15 @@ function onEdgeClick(event: EdgeMouseEvent): void {
   top: 92px;
   left: 156px;
   z-index: 2;
-  width: calc(100% - 156px);
-  height: calc(100% - 92px);
-  min-height: 1200px;
   background: transparent;
 }
 
 .vue-flow :deep(.vue-flow__pane) {
   background: transparent;
+}
+
+.vue-flow :deep(.vue-flow__viewport) {
+  transform: translate(0px, 0px) scale(1) !important;
 }
 
 :deep(.flow-node-shell) {
