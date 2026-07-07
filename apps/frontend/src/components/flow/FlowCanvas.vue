@@ -38,7 +38,8 @@ const minRowHeight = 132
 const nodeX = 42
 const nodeY = 28
 const ySnap = 20
-const rowPaddingBottom = 80
+const nodeVisualHeight = 100
+const rowPaddingBottom = 56
 const minBodyHeight = 1200
 const fixedViewport = { x: 0, y: 0, zoom: 1 }
 
@@ -59,8 +60,11 @@ const rowLayouts = computed<RowLayout[]>(() => {
   let top = 0
   return lanes.value.map((lane) => {
     const laneNodes = props.flow.nodes.filter((node) => node.laneId === lane.laneId)
-    const maxNodeY = Math.max(0, ...laneNodes.map((node) => (Number.isFinite(node.y) ? node.y : nodeY)))
-    const height = Math.max(minRowHeight, maxNodeY + rowPaddingBottom)
+    const maxNodeBottom = Math.max(
+      0,
+      ...laneNodes.map((node) => (Number.isFinite(node.y) ? node.y : nodeY) + nodeVisualHeight),
+    )
+    const height = Math.max(minRowHeight, maxNodeBottom + rowPaddingBottom)
     const layout = { laneId: lane.laneId, top, height }
     top += height
     return layout
@@ -129,7 +133,9 @@ function rowIndexFromAbsoluteY(y: number): number {
 
 function relativeYFromAbsoluteY(rowIndex: number, y: number): number {
   const row = rowLayouts.value[rowIndex]
-  return snapY(y - (row?.top ?? 0))
+  const relativeY = snapY(y - (row?.top ?? 0))
+  const maxY = Math.max(nodeY, (row?.height ?? minRowHeight) - nodeVisualHeight - rowPaddingBottom)
+  return Math.min(relativeY, maxY)
 }
 
 function getPoint(event: DragEvent): { stageIndex: number; laneIndex: number; y: number } | null {
