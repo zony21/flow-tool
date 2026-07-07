@@ -35,6 +35,12 @@ function onPaletteDragStart(event: DragEvent, nodeType: string): void {
         draggable="true"
         @dragstart="onPaletteDragStart($event, sample.type)"
       >
+        <svg v-if="sample.type === 'decision'" class="sample-svg" viewBox="0 0 96 64" aria-hidden="true">
+          <polygon points="48,4 92,32 48,60 4,32" />
+        </svg>
+        <svg v-else-if="sample.type === 'preparation'" class="sample-svg" viewBox="0 0 96 64" aria-hidden="true">
+          <polygon points="24,4 72,4 92,32 72,60 24,60 4,32" />
+        </svg>
         <span>{{ sample.label }}</span>
       </button>
     </div>
@@ -107,6 +113,23 @@ h2 {
   cursor: not-allowed;
 }
 
+.sample-svg {
+  position: absolute;
+  inset: 2px 6px;
+  width: calc(100% - 12px);
+  height: calc(100% - 4px);
+  overflow: visible;
+  pointer-events: none;
+}
+
+.sample-svg polygon {
+  fill: #ffffff;
+  stroke: #475569;
+  stroke-width: 2.5;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 4px 5px rgb(15 23 42 / 10%));
+}
+
 .sample-start,
 .sample-end {
   border-radius: 999px;
@@ -118,31 +141,9 @@ h2 {
 
 .sample-decision,
 .sample-preparation {
-  width: 76px;
-  height: 58px;
-  min-height: 58px;
-  justify-self: center;
   border: 0;
   background: transparent;
   box-shadow: none;
-}
-
-.sample-decision::before,
-.sample-preparation::before {
-  position: absolute;
-  inset: 4px;
-  content: '';
-  background: #ffffff;
-  border: 2px solid #475569;
-  box-shadow: 0 4px 10px rgb(15 23 42 / 8%);
-}
-
-.sample-decision::before {
-  transform: rotate(45deg) scale(0.78);
-}
-
-.sample-preparation::before {
-  clip-path: polygon(24% 0, 76% 0, 100% 50%, 76% 100%, 24% 100%, 0 50%);
 }
 
 .sample-decision span {
