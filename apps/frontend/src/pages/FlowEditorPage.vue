@@ -15,7 +15,7 @@ import { useFlowStore } from '../stores/flowStore'
 import { useProjectPermissionStore } from '../stores/projectPermissionStore'
 import { useUndoRedoStore } from '../stores/undoRedoStore'
 import { PermissionCodes } from '../types/permission'
-import { exportJson, exportMermaid } from '../api/exportApi'
+import { exportAiDsl, exportJson, exportMermaid } from '../api/exportApi'
 
 const route = useRoute()
 const router = useRouter()
@@ -128,6 +128,30 @@ async function saveCurrentStructure(): Promise<void> {
   }
 }
 
+async function saveBeforeExportIfNeeded(): Promise<boolean> {
+  if (!editorStore.isDirty) {
+    return true
+  }
+
+  const request = buildSaveRequest(false)
+  if (!request || flowStore.loading) {
+    return false
+  }
+
+  saveMessage.value = '出力前に保存しています...'
+  saveError.value = null
+  try {
+    await flowStore.saveStructure(projectId.value, request)
+    editorStore.markSaved()
+    saveMessage.value = null
+    return true
+  } catch (error) {
+    saveMessage.value = null
+    saveError.value = flowStore.lastError ?? getErrorMessage(error)
+    return false
+  }
+}
+
 async function createVersionFromCurrentFlow(): Promise<void> {
   if (!flow.value || flowStore.loading) return
 
@@ -157,8 +181,23 @@ async function downloadMermaidExport(): Promise<void> {
   saveMessage.value = null
   saveError.value = null
   try {
+    if (!(await saveBeforeExportIfNeeded()) || !flow.value) return
     const result = await exportMermaid(projectId.value, flow.value.flowId)
     downloadBlob(new Blob([result.content], { type: 'text/plain;charset=utf-8' }), result.fileName || `${flow.value.name || 'flow'}.mmd`)
+  } catch (error) {
+    saveError.value = getErrorMessage(error)
+  }
+}
+
+async function downloadAiDslExport(): Promise<void> {
+  if (!flow.value || flowStore.loading) return
+
+  saveMessage.value = null
+  saveError.value = null
+  try {
+    if (!(await saveBeforeExportIfNeeded()) || !flow.value) return
+    const result = await exportAiDsl(projectId.value, flow.value.flowId)
+    downloadBlob(new Blob([result.content], { type: 'text/plain;charset=utf-8' }), result.fileName || `${flow.value.name || 'flow'}_ai.flowdsl.txt`)
   } catch (error) {
     saveError.value = getErrorMessage(error)
   }
@@ -170,6 +209,7 @@ async function downloadJsonExport(): Promise<void> {
   saveMessage.value = null
   saveError.value = null
   try {
+    if (!(await saveBeforeExportIfNeeded()) || !flow.value) return
     const blob = await exportJson(projectId.value, flow.value.flowId)
     downloadBlob(blob, `${flow.value.name || 'flow'}.json`)
   } catch (error) {
@@ -262,6 +302,7 @@ function handleKeydown(event: KeyboardEvent): void {
             <Button label="バージョン作成" severity="secondary" :disabled="!canCreateVersion" @click="createVersionFromCurrentFlow" />
             <Button label="Mermaid出力" icon="pi pi-download" severity="secondary" :disabled="!canExport" @click="downloadMermaidExport" />
             <Button label="JSON出力" icon="pi pi-download" severity="secondary" :disabled="!canExport" @click="downloadJsonExport" />
+            <Button label="AI用出力" icon="pi pi-download" severity="secondary" :disabled="!canExport" @click="downloadAiDslExport" />
             <Button label="元に戻す" severity="secondary" :disabled="!canEdit || !undoRedoStore.canUndo" @click="editorStore.undo" />
             <Button label="やり直す" severity="secondary" :disabled="!canEdit || !undoRedoStore.canRedo" @click="editorStore.redo" />
             <Button :label="flowStore.loading ? '保存中...' : '保存'" :disabled="!canSaveStructure" @click="saveCurrentStructure" />
@@ -335,10 +376,7 @@ function handleKeydown(event: KeyboardEvent): void {
 .flow-editor-page {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  width: 100%;
-  min-width: 0;
-  min-height: calc(100vh - 76px);
+  gap: 16px;
 }
 
 .flow-editor-header {
@@ -346,114 +384,26 @@ function handleKeydown(event: KeyboardEvent): void {
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-  width: 100%;
-  min-width: 0;
-}
-
-.flow-title {
-  flex: 0 0 auto;
-  min-width: 220px;
 }
 
 .flow-title h1 {
   margin: 0;
-  color: #0f172a;
-  font-size: 1.35rem;
-  line-height: 1.2;
-  white-space: nowrap;
 }
 
 .flow-title p {
-  margin: 4px 0 0;
+  margin: 6px 0 0;
   color: #64748b;
 }
 
-.header-actions {
-  display: flex;
-  flex: 1 1 auto;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  min-width: 0;
-}
-
-.status-message {
-  margin: 0;
-  padding: 8px 10px;
-  border-radius: 8px;
-  font-size: 0.86rem;
-  font-weight: 700;
-}
-
-.status-message.success {
-  color: #065f46;
-  background: #d1fae5;
-  border: 1px solid #a7f3d0;
-}
-
-.status-message.error {
-  color: #991b1b;
-  background: #fee2e2;
-  border: 1px solid #fecaca;
-}
-
-.editor-workspace {
-  display: grid;
-  grid-template-columns: 240px minmax(0, 1fr);
-  gap: 12px;
-  width: 100%;
-  min-width: 0;
-  flex: 1 1 auto;
-  min-height: 0;
-}
-
-.editor-workspace.details-open {
-  grid-template-columns: 240px minmax(0, 1fr) 340px;
-}
-
-.palette-column {
-  min-width: 0;
-  max-height: calc(100vh - 148px);
-  overflow: auto;
-}
-
-.canvas-column {
-  min-width: 0;
-  overflow: hidden;
-}
-
-.canvas-column :deep(.flow-canvas) {
-  width: 100%;
-  height: calc(100vh - 148px);
-  min-height: 640px;
-}
-
-.detail-drawer {
-  min-width: 0;
-  max-height: calc(100vh - 148px);
-  overflow: auto;
-}
-
-.detail-drawer :deep(.node-property-panel),
-.detail-drawer :deep(.link-property-panel),
-.palette-column :deep(.operation-panel) {
-  width: 100%;
-  min-width: 0;
-  box-sizing: border-box;
-}
-
 .viewer-badge {
-  margin-top: 8px;
-  color: #92400e;
-  font-size: 12px;
+  color: #92400e !important;
   font-weight: 700;
 }
 
 .dirty-badge {
-  display: inline-flex;
+  display: inline-block;
   margin-left: 8px;
-  padding: 2px 6px;
+  padding: 2px 8px;
   color: #92400e;
   background: #fef3c7;
   border-radius: 999px;
@@ -461,31 +411,52 @@ function handleKeydown(event: KeyboardEvent): void {
   font-weight: 700;
 }
 
-.loading-text {
-  margin: 0;
-  color: #64748b;
+.header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
-@media (max-width: 1100px) {
-  .flow-editor-header {
-    align-items: stretch;
-    flex-direction: column;
-  }
+.status-message {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
 
-  .header-actions {
-    justify-content: flex-start;
-  }
+.status-message.success {
+  color: #166534;
+  background: #dcfce7;
+}
 
-  .editor-workspace,
-  .editor-workspace.details-open {
-    grid-template-columns: 1fr;
-  }
+.status-message.error {
+  color: #991b1b;
+  background: #fee2e2;
+}
 
-  .palette-column,
-  .detail-drawer,
-  .canvas-column :deep(.flow-canvas) {
-    max-height: none;
-    height: auto;
-  }
+.editor-workspace {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 16px;
+  min-height: 680px;
+}
+
+.editor-workspace.details-open {
+  grid-template-columns: 220px minmax(0, 1fr) 340px;
+}
+
+.palette-column,
+.detail-drawer {
+  min-width: 0;
+}
+
+.canvas-column {
+  min-width: 0;
+}
+
+.loading-text {
+  color: #64748b;
 }
 </style>
