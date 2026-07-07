@@ -27,7 +27,6 @@ const headerHeight = 92
 const rowHeight = 132
 const nodeX = 42
 const nodeY = 28
-const nodeGap = 86
 const ySnap = 20
 const minBodyHeight = 1200
 
@@ -82,6 +81,14 @@ function snapY(value: number): number {
   return Math.max(nodeY, Math.round(value / ySnap) * ySnap)
 }
 
+function stageIndexFromNodeX(x: number): number {
+  return clamp(Math.round((x - nodeX) / stageWidth), stages.value.length)
+}
+
+function nodeXFromStageIndex(stageIndex: number): number {
+  return stageIndex * stageWidth + nodeX
+}
+
 function laneIndexFromY(y: number): number {
   return lanes.value.length === 0 ? 0 : clamp(Math.floor(y / rowHeight), lanes.value.length)
 }
@@ -90,7 +97,7 @@ function getPoint(event: DragEvent): { stageIndex: number; laneIndex: number; y:
   const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
   const x = event.clientX - rect.left - categoryWidth
   const y = event.clientY - rect.top - headerHeight
-  if (x < 0 || y < 0 || stages.value.length === 0) return null
+  if (x < 0 || y < 0 || x >= equipmentWidth.value || stages.value.length === 0) return null
   return {
     stageIndex: clamp(Math.floor(x / stageWidth), stages.value.length),
     laneIndex: laneIndexFromY(y),
@@ -120,7 +127,7 @@ function onDrop(event: DragEvent): void {
     nodeType,
     stageId: stages.value[point.stageIndex]?.stageId,
     laneId: lanes.value[point.laneIndex]?.laneId,
-    x: point.stageIndex * stageWidth + nodeX,
+    x: nodeXFromStageIndex(point.stageIndex),
     y: point.y,
   })
 }
@@ -134,14 +141,20 @@ function onDragLeave(event: DragEvent): void {
   }
 }
 
+function onNodeDrag(event: NodeDragEvent): void {
+  if (props.readonly) return
+  const stageIndex = stageIndexFromNodeX(event.node.position.x)
+  event.node.position.x = nodeXFromStageIndex(stageIndex)
+}
+
 function onNodeDragStop(event: NodeDragEvent): void {
   if (props.readonly) return
-  const stageIndex = clamp(Math.floor(event.node.position.x / stageWidth), stages.value.length)
+  const stageIndex = stageIndexFromNodeX(event.node.position.x)
   const y = snapY(event.node.position.y)
   const laneIndex = laneIndexFromY(y)
   emit('node-moved', {
     nodeId: event.node.id,
-    x: stageIndex * stageWidth + nodeX,
+    x: nodeXFromStageIndex(stageIndex),
     y,
     stageId: stages.value[stageIndex]?.stageId,
     laneId: lanes.value[laneIndex]?.laneId,
@@ -164,7 +177,7 @@ function onEdgeClick(event: EdgeMouseEvent): void {
       <p>設備/分類設定から設備を追加してください。</p>
     </div>
 
-    <div class="flow-table" :style="{ width: `${tableWidth}px`, minHeight: `${headerHeight + bodyHeight}px` }">
+    <div class="flow-table" :style="{ width: `max(100%, ${tableWidth}px)`, minWidth: `${tableWidth}px`, minHeight: `${headerHeight + bodyHeight}px` }">
       <div class="category-header" :style="{ width: `${categoryWidth}px`, height: `${headerHeight}px` }">工程分類</div>
       <div class="equipment-header" :style="{ left: `${categoryWidth}px`, width: `${equipmentWidth}px`, height: `${headerHeight}px` }">
         <div v-for="stage in stages" :key="stage.stageId" class="equipment-cell" :style="{ width: `${stageWidth}px` }">
@@ -195,6 +208,7 @@ function onEdgeClick(event: EdgeMouseEvent): void {
         :zoom-on-pinch="false"
         :pan-on-drag="false"
         :pan-on-scroll="false"
+        @node-drag="onNodeDrag"
         @node-drag-stop="onNodeDragStop"
         @node-click="onNodeClick"
         @edge-click="onEdgeClick"
