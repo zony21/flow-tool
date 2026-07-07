@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import {
   MarkerType,
   VueFlow,
@@ -54,6 +54,15 @@ const lanes = computed(() => props.flow.lanes.slice().sort((a, b) => a.sortOrder
 const hasEquipment = computed(() => stages.value.length > 0)
 const activeStageId = ref<string | null>(null)
 const activeLaneId = ref<string | null>(null)
+const columnHeaderLabel = ref('機器')
+const rowHeaderLabel = ref('動作')
+const headerStorageKey = computed(() => `flow-canvas-header:${props.flow.flowId}`)
+
+watch(
+  () => props.flow.flowId,
+  () => loadHeaderLabels(),
+  { immediate: true },
+)
 
 const equipmentWidth = computed(() => Math.max(stages.value.length * stageWidth, stageWidth))
 const rowLayouts = computed<RowLayout[]>(() => {
@@ -107,6 +116,50 @@ const edges = computed<Edge[]>(() =>
     class: link.linkId === props.selectedLinkId ? 'selected-flow-link' : undefined,
   })),
 )
+
+function loadHeaderLabels(): void {
+  try {
+    const raw = window.localStorage.getItem(headerStorageKey.value)
+    if (!raw) {
+      columnHeaderLabel.value = '機器'
+      rowHeaderLabel.value = '動作'
+      return
+    }
+
+    const value = JSON.parse(raw) as { column?: string; row?: string }
+    columnHeaderLabel.value = value.column?.trim() || '機器'
+    rowHeaderLabel.value = value.row?.trim() || '動作'
+  } catch {
+    columnHeaderLabel.value = '機器'
+    rowHeaderLabel.value = '動作'
+  }
+}
+
+function saveHeaderLabels(): void {
+  window.localStorage.setItem(
+    headerStorageKey.value,
+    JSON.stringify({ column: columnHeaderLabel.value, row: rowHeaderLabel.value }),
+  )
+}
+
+function commitHeaderLabel(kind: 'column' | 'row', event: Event): void {
+  const element = event.target as HTMLElement
+  const value = element.innerText.trim()
+  if (kind === 'column') {
+    columnHeaderLabel.value = value || '機器'
+    element.innerText = columnHeaderLabel.value
+  } else {
+    rowHeaderLabel.value = value || '動作'
+    element.innerText = rowHeaderLabel.value
+  }
+  saveHeaderLabels()
+}
+
+function stopHeaderEdit(event: KeyboardEvent): void {
+  if (event.key !== 'Enter') return
+  event.preventDefault()
+  ;(event.target as HTMLElement).blur()
+}
 
 function clamp(index: number, max: number): number {
   if (max <= 0) return 0
@@ -229,7 +282,25 @@ function onEdgeClick(event: EdgeMouseEvent): void {
     </div>
 
     <div class="flow-table" :style="{ width: `max(100%, ${tableWidth}px)`, minWidth: `${tableWidth}px`, minHeight: `${headerHeight + bodyHeight}px` }">
-      <div class="category-header" :style="{ width: `${categoryWidth}px`, height: `${headerHeight}px` }">工程分類</div>
+      <div class="category-header" :style="{ width: `${categoryWidth}px`, height: `${headerHeight}px` }">
+        <span class="diagonal-line" />
+        <span
+          class="corner-label column-label"
+          contenteditable="true"
+          spellcheck="false"
+          title="クリックして列側の名称を変更"
+          @blur="commitHeaderLabel('column', $event)"
+          @keydown="stopHeaderEdit"
+        >{{ columnHeaderLabel }}</span>
+        <span
+          class="corner-label row-label"
+          contenteditable="true"
+          spellcheck="false"
+          title="クリックして行側の名称を変更"
+          @blur="commitHeaderLabel('row', $event)"
+          @keydown="stopHeaderEdit"
+        >{{ rowHeaderLabel }}</span>
+      </div>
       <div class="equipment-header" :style="{ left: `${categoryWidth}px`, width: `${equipmentWidth}px`, height: `${headerHeight}px` }">
         <div v-for="stage in stages" :key="stage.stageId" class="equipment-cell" :style="{ width: `${stageWidth}px` }">
           <div class="equipment-icon">{{ stage.name.slice(0, 1) }}</div>
@@ -315,12 +386,46 @@ function onEdgeClick(event: EdgeMouseEvent): void {
 
 .category-header {
   left: 0;
-  display: grid;
-  place-items: center;
-  color: #334155;
+  overflow: hidden;
+  color: #0f172a;
   border-right: 1px solid #cbd5e1;
   font-size: 0.9rem;
   font-weight: 800;
+}
+
+.diagonal-line {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top right, transparent calc(50% - 0.75px), #334155 50%, transparent calc(50% + 0.75px));
+  pointer-events: none;
+}
+
+.corner-label {
+  position: absolute;
+  z-index: 1;
+  min-width: 38px;
+  max-width: 72px;
+  padding: 2px 4px;
+  outline: none;
+  border-radius: 4px;
+  line-height: 1.2;
+  cursor: text;
+}
+
+.corner-label:focus {
+  background: #ffffff;
+  box-shadow: 0 0 0 2px rgb(37 99 235 / 22%);
+}
+
+.column-label {
+  top: 14px;
+  right: 10px;
+  text-align: right;
+}
+
+.row-label {
+  bottom: 12px;
+  left: 10px;
 }
 
 .equipment-header {
