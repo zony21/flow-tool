@@ -187,6 +187,15 @@ function downloadBlob(blob: Blob, fileName: string): void {
   URL.revokeObjectURL(url)
 }
 
+function goBack(): void {
+  if (window.history.length > 1) {
+    router.back()
+    return
+  }
+
+  router.push({ name: 'project-detail', params: { projectId: projectId.value } })
+}
+
 function handleKeydown(event: KeyboardEvent): void {
   if (!canEdit.value) return
 
@@ -243,6 +252,7 @@ function handleKeydown(event: KeyboardEvent): void {
             <p v-if="!canEdit" class="viewer-badge">閲覧モード：編集は無効です</p>
           </div>
           <div class="header-actions">
+            <Button label="戻る" icon="pi pi-arrow-left" severity="secondary" @click="goBack" />
             <Button label="設備/分類設定" severity="secondary" :disabled="!flow" @click="settingsDialogVisible = true" />
             <Button label="バージョン管理" severity="secondary" @click="router.push({ name: 'flow-versions', params: { projectId, flowId } })" />
             <Button label="バージョン作成" severity="secondary" :disabled="!flow || flowStore.loading || !canSaveStructure || !canCreateVersion" @click="createVersionFromCurrentFlow" />
