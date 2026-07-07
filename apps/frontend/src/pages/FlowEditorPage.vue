@@ -37,6 +37,8 @@ const canCreateVersion = computed(() => Boolean(flow.value) && !flowStore.loadin
 const canExport = computed(() => Boolean(flow.value) && !flowStore.loading)
 const hasDetailPanel = computed(() => Boolean(editorStore.selectedNodeId || editorStore.selectedLinkId))
 const settingsDialogVisible = ref(false)
+const saveMessage = ref<string | null>(null)
+const saveError = ref<string | null>(null)
 
 onMounted(async () => {
   editorStore.reset()
@@ -65,10 +67,10 @@ watch(flow, (currentFlow) => {
   )
 })
 
-async function saveCurrentStructure(): Promise<void> {
-  if (!flow.value || flowStore.loading) return
+function buildSaveRequest(createVersion: boolean, changeSummary: string | null = null) {
+  if (!flow.value) return null
 
-  await flowStore.saveStructure(projectId.value, {
+  return {
     flowId: flow.value.flowId,
     clientRevision: flow.value.currentRevision,
     lanes: flow.value.lanes.map((lane) => ({
@@ -105,10 +107,25 @@ async function saveCurrentStructure(): Promise<void> {
       x: comment.x,
       y: comment.y,
     })),
-    createVersion: false,
-    changeSummary: null,
-  })
-  editorStore.markSaved()
+    createVersion,
+    changeSummary,
+  }
+}
+
+async function saveCurrentStructure(): Promise<void> {
+  const request = buildSaveRequest(false)
+  if (!request || flowStore.loading) return
+
+  saveMessage.value = '保存中です...'
+  saveError.value = null
+  try {
+    await flowStore.saveStructure(projectId.value, request)
+    editorStore.markSaved()
+    saveMessage.value = '保存しました。'
+  } catch (error) {
+    saveMessage.value = null
+    saveError.value = flowStore.lastError ?? getErrorMessage(error)
+  }
 }
 
 async function createVersionFromCurrentFlow(): Promise<void> {
@@ -119,61 +136,45 @@ async function createVersionFromCurrentFlow(): Promise<void> {
     return
   }
 
-  await flowStore.saveStructure(projectId.value, {
-    flowId: flow.value.flowId,
-    clientRevision: flow.value.currentRevision,
-    lanes: flow.value.lanes.map((lane) => ({
-      laneId: lane.laneId,
-      name: lane.name,
-      sortOrder: lane.sortOrder,
-    })),
-    stages: flow.value.stages.map((stage) => ({
-      stageId: stage.stageId,
-      name: stage.name,
-      sortOrder: stage.sortOrder,
-    })),
-    nodes: flow.value.nodes.map((node) => ({
-      nodeId: node.nodeId,
-      laneId: node.laneId,
-      stageId: node.stageId,
-      nodeType: node.nodeType,
-      name: node.name,
-      description: node.description,
-      x: node.x,
-      y: node.y,
-    })),
-    links: flow.value.links.map((link) => ({
-      linkId: link.linkId,
-      sourceNodeId: link.sourceNodeId,
-      targetNodeId: link.targetNodeId,
-      label: link.label,
-      condition: link.condition,
-    })),
-    comments: flow.value.comments.map((comment) => ({
-      commentId: comment.commentId,
-      nodeId: comment.nodeId,
-      text: comment.text,
-      x: comment.x,
-      y: comment.y,
-    })),
-    createVersion: true,
-    changeSummary: changeSummary || null,
-  })
-  editorStore.markSaved()
+  const request = buildSaveRequest(true, changeSummary || null)
+  if (!request) return
+
+  saveMessage.value = 'バージョンを作成中です...'
+  saveError.value = null
+  try {
+    await flowStore.saveStructure(projectId.value, request)
+    editorStore.markSaved()
+    saveMessage.value = 'バージョンを作成しました。'
+  } catch (error) {
+    saveMessage.value = null
+    saveError.value = flowStore.lastError ?? getErrorMessage(error)
+  }
 }
 
 async function downloadMermaidExport(): Promise<void> {
   if (!flow.value || flowStore.loading) return
 
-  const result = await exportMermaid(projectId.value, flow.value.flowId)
-  downloadBlob(new Blob([result.content], { type: 'text/plain;charset=utf-8' }), result.fileName || `${flow.value.name || 'flow'}.mmd`)
+  saveMessage.value = null
+  saveError.value = null
+  try {
+    const result = await exportMermaid(projectId.value, flow.value.flowId)
+    downloadBlob(new Blob([result.content], { type: 'text/plain;charset=utf-8' }), result.fileName || `${flow.value.name || 'flow'}.mmd`)
+  } catch (error) {
+    saveError.value = getErrorMessage(error)
+  }
 }
 
 async function downloadJsonExport(): Promise<void> {
   if (!flow.value || flowStore.loading) return
 
-  const blob = await exportJson(projectId.value, flow.value.flowId)
-  downloadBlob(blob, `${flow.value.name || 'flow'}.json`)
+  saveMessage.value = null
+  saveError.value = null
+  try {
+    const blob = await exportJson(projectId.value, flow.value.flowId)
+    downloadBlob(blob, `${flow.value.name || 'flow'}.json`)
+  } catch (error) {
+    saveError.value = getErrorMessage(error)
+  }
 }
 
 function downloadBlob(blob: Blob, fileName: string): void {
@@ -183,6 +184,11 @@ function downloadBlob(blob: Blob, fileName: string): void {
   anchor.download = fileName
   anchor.click()
   URL.revokeObjectURL(url)
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message
+  return '処理に失敗しました。'
 }
 
 function goBack(): void {
@@ -258,9 +264,12 @@ function handleKeydown(event: KeyboardEvent): void {
             <Button label="JSON出力" icon="pi pi-download" severity="secondary" :disabled="!canExport" @click="downloadJsonExport" />
             <Button label="元に戻す" severity="secondary" :disabled="!canEdit || !undoRedoStore.canUndo" @click="editorStore.undo" />
             <Button label="やり直す" severity="secondary" :disabled="!canEdit || !undoRedoStore.canRedo" @click="editorStore.redo" />
-            <Button label="保存" :disabled="!canSaveStructure" @click="saveCurrentStructure" />
+            <Button :label="flowStore.loading ? '保存中...' : '保存'" :disabled="!canSaveStructure" @click="saveCurrentStructure" />
           </div>
         </div>
+
+        <p v-if="saveMessage" class="status-message success">{{ saveMessage }}</p>
+        <p v-if="saveError" class="status-message error">{{ saveError }}</p>
 
         <p v-if="flowStore.loading" class="loading-text">読み込み中...</p>
         <div v-else-if="flow" class="editor-workspace" :class="{ 'details-open': hasDetailPanel }">
@@ -367,6 +376,26 @@ function handleKeydown(event: KeyboardEvent): void {
   justify-content: flex-end;
   gap: 8px;
   min-width: 0;
+}
+
+.status-message {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.status-message.success {
+  color: #065f46;
+  background: #d1fae5;
+  border: 1px solid #a7f3d0;
+}
+
+.status-message.error {
+  color: #991b1b;
+  background: #fee2e2;
+  border: 1px solid #fecaca;
 }
 
 .editor-workspace {
