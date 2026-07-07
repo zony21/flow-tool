@@ -21,6 +21,9 @@ public sealed class FlowsController(
     ICurrentUserService currentUserService,
     IPermissionService permissionService) : ControllerBase
 {
+    private const double StageWidth = 240;
+    private const double NodeOffsetX = 42;
+
     private static readonly JsonSerializerOptions SnapshotJsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -175,7 +178,7 @@ public sealed class FlowsController(
 
         var lanes = (request.Lanes ?? Array.Empty<SaveLaneRequest>()).ToList();
         var stages = (request.Stages ?? Array.Empty<SaveStageRequest>()).ToList();
-        var nodes = (request.Nodes ?? Array.Empty<SaveNodeRequest>()).ToList();
+        var nodes = NormalizeNodeAssignments((request.Nodes ?? Array.Empty<SaveNodeRequest>()).ToList(), lanes, stages);
         var links = (request.Links ?? Array.Empty<SaveLinkRequest>()).ToList();
         var comments = (request.Comments ?? Array.Empty<SaveCommentRequest>()).ToList();
 
@@ -269,7 +272,7 @@ public sealed class FlowsController(
                 links,
                 comments,
                 request.ChangeSummary,
-            }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+            }, SnapshotJsonOptions);
 
             dbContext.Versions.Add(new FlowVersion
             {
@@ -348,6 +351,7 @@ public sealed class FlowsController(
 
         var laneIdMap = sourceLanes.ToDictionary(x => x.LaneId, _ => Guid.NewGuid());
         var stageIdMap = sourceStages.ToDictionary(x => x.StageId, _ => Guid.NewGuid());
+        var nodeIdMap = sourceNodes.ToDictionary(x => x.NodeId, _ => Guid.NewGuid());
 
         duplicateFlow.Revision = sourceFlow.Revision;
         dbContext.Flows.Add(duplicateFlow);
@@ -367,7 +371,7 @@ public sealed class FlowsController(
         }));
         dbContext.Nodes.AddRange(sourceNodes.Select(node => new FlowNode
         {
-            NodeId = Guid.NewGuid(),
+            NodeId = nodeIdMap[node.NodeId],
             FlowId = duplicateFlow.FlowId,
             LaneId = node.LaneId.HasValue && laneIdMap.ContainsKey(node.LaneId.Value) ? laneIdMap[node.LaneId.Value] : null,
             StageId = node.StageId.HasValue && stageIdMap.ContainsKey(node.StageId.Value) ? stageIdMap[node.StageId.Value] : null,
@@ -376,6 +380,31 @@ public sealed class FlowsController(
             Description = node.Description,
             X = node.X,
             Y = node.Y,
+        }));
+        dbContext.Links.AddRange(sourceLinks.Where(link => nodeIdMap.ContainsKey(link.SourceNodeId) && nodeIdMap.ContainsKey(link.TargetNodeId)).Select(link => new FlowLink
+        {
+            LinkId = Guid.NewGuid(),
+            FlowId = duplicateFlow.FlowId,
+            SourceNodeId = nodeIdMap[link.SourceNodeId],
+            TargetNodeId = nodeIdMap[link.TargetNodeId],
+            Label = link.Label,
+            Condition = link.Condition,
+        }));
+        dbContext.Comments.AddRange(sourceComments.Select(comment => new FlowComment
+        {
+            CommentId = Guid.NewGuid(),
+            FlowId = duplicateFlow.FlowId,
+            NodeId = comment.NodeId.HasValue && nodeIdMap.ContainsKey(comment.NodeId.Value) ? nodeIdMap[comment.NodeId.Value] : null,
+            Text = comment.Text,
+            X = comment.X,
+            Y = comment.Y,
+        }));
+        dbContext.MetadataItems.AddRange(sourceMetadata.Select(metadata => new FlowMetadata
+        {
+            MetadataId = Guid.NewGuid(),
+            FlowId = duplicateFlow.FlowId,
+            MetaKey = metadata.MetaKey,
+            MetaValue = metadata.MetaValue,
         }));
 
         await dbContext.SaveChangesAsync(cancellationToken);
@@ -416,6 +445,46 @@ public sealed class FlowsController(
         }
 
         return $"{baseName} {suffix}";
+    }
+
+    private static IReadOnlyList<SaveNodeRequest> NormalizeNodeAssignments(
+        IReadOnlyList<SaveNodeRequest> nodes,
+        IReadOnlyList<SaveLaneRequest> lanes,
+        IReadOnlyList<SaveStageRequest> stages)
+    {
+        var sortedLanes = lanes.OrderBy(lane => lane.SortOrder).ToList();
+        var sortedStages = stages.OrderBy(stage => stage.SortOrder).ToList();
+        var laneIds = sortedLanes.Select(lane => lane.LaneId).ToHashSet();
+        var stageIds = sortedStages.Select(stage => stage.StageId).ToHashSet();
+
+        return nodes.Select(node =>
+        {
+            var laneId = node.LaneId.HasValue && laneIds.Contains(node.LaneId.Value)
+                ? node.LaneId
+                : sortedLanes.FirstOrDefault()?.LaneId;
+
+            var stageId = node.StageId.HasValue && stageIds.Contains(node.StageId.Value)
+                ? node.StageId
+                : ResolveStageIdByX(node.X, sortedStages);
+
+            return node with
+            {
+                LaneId = laneId,
+                StageId = stageId,
+            };
+        }).ToList();
+    }
+
+    private static Guid? ResolveStageIdByX(double x, IReadOnlyList<SaveStageRequest> sortedStages)
+    {
+        if (sortedStages.Count == 0)
+        {
+            return null;
+        }
+
+        var index = (int)Math.Round((x - NodeOffsetX) / StageWidth);
+        index = Math.Max(0, Math.Min(index, sortedStages.Count - 1));
+        return sortedStages[index].StageId;
     }
 
     private static string? ValidateStructure(
