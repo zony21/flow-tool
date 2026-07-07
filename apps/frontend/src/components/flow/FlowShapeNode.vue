@@ -9,6 +9,13 @@ defineProps<{
 
 <template>
   <div class="flow-shape-node" :class="`shape-${node.nodeType}`">
+    <svg v-if="node.nodeType === 'decision'" class="shape-svg" viewBox="0 0 140 100" aria-hidden="true">
+      <polygon points="70,4 136,50 70,96 4,50" />
+    </svg>
+    <svg v-else-if="node.nodeType === 'preparation'" class="shape-svg" viewBox="0 0 140 100" aria-hidden="true">
+      <polygon points="34,4 106,4 136,50 106,96 34,96 4,50" />
+    </svg>
+
     <Handle type="target" :position="Position.Top" class="node-handle handle-top" />
     <Handle type="source" :position="Position.Bottom" class="node-handle handle-bottom" />
     <Handle type="target" :position="Position.Left" class="node-handle handle-left" />
@@ -46,6 +53,23 @@ defineProps<{
   pointer-events: none;
 }
 
+.shape-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.shape-svg polygon {
+  fill: #ffffff;
+  stroke: #475569;
+  stroke-width: 2.5;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 8px 8px rgb(15 23 42 / 12%));
+}
+
 .shape-start,
 .shape-end {
   border-radius: 999px;
@@ -57,9 +81,9 @@ defineProps<{
 
 .shape-decision,
 .shape-preparation {
-  width: 120px;
+  width: 132px;
   height: 92px;
-  min-width: 120px;
+  min-width: 132px;
   min-height: 92px;
   padding: 0;
   border: 0;
@@ -67,30 +91,12 @@ defineProps<{
   box-shadow: none;
 }
 
-.shape-decision::before,
-.shape-preparation::before {
-  position: absolute;
-  inset: 8px;
-  content: '';
-  background: #ffffff;
-  border: 2px solid #475569;
-  box-shadow: 0 8px 18px rgb(15 23 42 / 12%);
-}
-
-.shape-decision::before {
-  transform: rotate(45deg) scale(0.78);
-}
-
 .shape-decision .shape-content {
-  max-width: 70px;
-}
-
-.shape-preparation::before {
-  clip-path: polygon(24% 0, 76% 0, 100% 50%, 76% 100%, 24% 100%, 0 50%);
+  max-width: 78px;
 }
 
 .shape-preparation .shape-content {
-  max-width: 88px;
+  max-width: 94px;
 }
 
 .shape-document {
