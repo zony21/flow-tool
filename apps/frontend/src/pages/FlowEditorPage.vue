@@ -299,7 +299,7 @@ function handleKeydown(event: KeyboardEvent): void {
     <EditorLayout>
       <section class="flow-editor-page">
         <div class="flow-editor-header">
-          <div class="title-area">
+          <div class="flow-heading">
             <Button label="戻る" icon="pi pi-arrow-left" severity="secondary" class="back-button" @click="goBack" />
             <div class="flow-title">
               <h1>フローエディタ</h1>
@@ -401,15 +401,16 @@ function handleKeydown(event: KeyboardEvent): void {
   gap: 16px;
 }
 
-.title-area {
+.flow-heading {
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  min-width: 260px;
+  min-width: 280px;
 }
 
 .back-button {
   flex: 0 0 auto;
+  margin-top: 2px;
 }
 
 .flow-title h1 {
