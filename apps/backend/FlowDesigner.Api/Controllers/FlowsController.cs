@@ -417,7 +417,8 @@ public sealed class FlowsController(
         var flow = await dbContext.Flows.AsNoTracking().FirstAsync(x => x.ProjectId == projectId && x.FlowId == flowId, cancellationToken);
         var lanes = await dbContext.Lanes.AsNoTracking().Where(x => x.FlowId == flowId).OrderBy(x => x.SortOrder).Select(x => new LaneDto(x.LaneId, x.FlowId, x.Name, x.SortOrder)).ToListAsync(cancellationToken);
         var stages = await dbContext.Stages.AsNoTracking().Where(x => x.FlowId == flowId).OrderBy(x => x.SortOrder).Select(x => new StageDto(x.StageId, x.FlowId, x.Name, x.SortOrder)).ToListAsync(cancellationToken);
-        var nodes = await dbContext.Nodes.AsNoTracking().Where(x => x.FlowId == flowId).OrderBy(x => x.Name).Select(x => new NodeDto(x.NodeId, x.FlowId, x.LaneId, x.StageId, x.NodeType, x.Name, x.Description, x.X, x.Y)).ToListAsync(cancellationToken);
+        var rawNodes = await dbContext.Nodes.AsNoTracking().Where(x => x.FlowId == flowId).OrderBy(x => x.Name).Select(x => new NodeDto(x.NodeId, x.FlowId, x.LaneId, x.StageId, x.NodeType, x.Name, x.Description, x.X, x.Y)).ToListAsync(cancellationToken);
+        var nodes = NormalizeNodeDetailDtos(rawNodes, lanes, stages);
         var links = await dbContext.Links.AsNoTracking().Where(x => x.FlowId == flowId).Select(x => new LinkDto(x.LinkId, x.FlowId, x.SourceNodeId, x.TargetNodeId, x.Label, x.Condition)).ToListAsync(cancellationToken);
         var comments = await dbContext.Comments.AsNoTracking().Where(x => x.FlowId == flowId).Select(x => new CommentDto(x.CommentId, x.FlowId, x.NodeId, x.Text, x.X, x.Y)).ToListAsync(cancellationToken);
         var metadata = await dbContext.MetadataItems.AsNoTracking().Where(x => x.FlowId == flowId).Select(x => new MetadataDto(x.MetadataId, x.FlowId, x.MetaKey, x.MetaValue)).ToListAsync(cancellationToken);
@@ -445,6 +446,34 @@ public sealed class FlowsController(
         }
 
         return $"{baseName} {suffix}";
+    }
+
+    private static IReadOnlyList<NodeDto> NormalizeNodeDetailDtos(
+        IReadOnlyList<NodeDto> nodes,
+        IReadOnlyList<LaneDto> lanes,
+        IReadOnlyList<StageDto> stages)
+    {
+        var sortedLanes = lanes.OrderBy(lane => lane.SortOrder).ToList();
+        var sortedStages = stages.OrderBy(stage => stage.SortOrder).ToList();
+        var laneIds = sortedLanes.Select(lane => lane.LaneId).ToHashSet();
+        var stageIds = sortedStages.Select(stage => stage.StageId).ToHashSet();
+
+        return nodes.Select(node =>
+        {
+            var laneId = node.LaneId.HasValue && laneIds.Contains(node.LaneId.Value)
+                ? node.LaneId
+                : sortedLanes.FirstOrDefault()?.LaneId;
+
+            var stageId = node.StageId.HasValue && stageIds.Contains(node.StageId.Value)
+                ? node.StageId
+                : ResolveStageIdByX(node.X, sortedStages);
+
+            return node with
+            {
+                LaneId = laneId,
+                StageId = stageId,
+            };
+        }).ToList();
     }
 
     private static IReadOnlyList<SaveNodeRequest> NormalizeNodeAssignments(
@@ -476,6 +505,18 @@ public sealed class FlowsController(
     }
 
     private static Guid? ResolveStageIdByX(double x, IReadOnlyList<SaveStageRequest> sortedStages)
+    {
+        if (sortedStages.Count == 0)
+        {
+            return null;
+        }
+
+        var index = (int)Math.Round((x - NodeOffsetX) / StageWidth);
+        index = Math.Max(0, Math.Min(index, sortedStages.Count - 1));
+        return sortedStages[index].StageId;
+    }
+
+    private static Guid? ResolveStageIdByX(double x, IReadOnlyList<StageDto> sortedStages)
     {
         if (sortedStages.Count == 0)
         {
