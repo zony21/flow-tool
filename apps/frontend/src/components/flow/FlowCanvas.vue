@@ -8,7 +8,6 @@ import {
   type NodeDragEvent,
   type NodeMouseEvent,
 } from '@vue-flow/core'
-import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
 import FlowShapeNode from './FlowShapeNode.vue'
 import type { FlowDetail } from '../../types/flow'
@@ -34,8 +33,9 @@ const categoryWidth = 156
 const stageWidth = 240
 const headerHeight = 92
 const categoryHeight = 132
-const nodeColumnOffset = 54
-const nodeRowOffset = 38
+const nodeColumnOffset = 42
+const nodeRowOffset = 28
+const nodeVerticalGap = 86
 const fallbackCanvasHeight = 1200
 
 const stageColumns = computed(() => props.flow.stages.slice().sort((a, b) => a.sortOrder - b.sortOrder))
@@ -44,12 +44,29 @@ const hasEquipment = computed(() => stageColumns.value.length > 0)
 const activeStageId = ref<string | null>(null)
 const activeLaneId = ref<string | null>(null)
 
-const bodyHeight = computed(() => Math.max(categoryRows.value.length * categoryHeight, fallbackCanvasHeight))
+const maxNodesInCell = computed(() => {
+  const counts = new Map<string, number>()
+
+  props.flow.nodes.forEach((flowNode) => {
+    const key = `${flowNode.stageId ?? 'none'}:${flowNode.laneId ?? 'none'}`
+    counts.set(key, (counts.get(key) ?? 0) + 1)
+  })
+
+  return Math.max(1, ...counts.values())
+})
+const requiredLaneHeight = computed(() => Math.max(categoryHeight, nodeRowOffset + maxNodesInCell.value * nodeVerticalGap))
+const bodyHeight = computed(() => Math.max(categoryRows.value.length * requiredLaneHeight.value, fallbackCanvasHeight))
 const canvasWidth = computed(() => Math.max(categoryWidth + stageColumns.value.length * stageWidth, categoryWidth + stageWidth))
 
-const nodes = computed<Node[]>(() =>
-  props.flow.nodes.map((flowNode) => {
+const nodes = computed<Node[]>(() => {
+  const cellIndexes = new Map<string, number>()
+
+  return props.flow.nodes.map((flowNode) => {
     const stageIndex = Math.max(0, stageColumns.value.findIndex((stage) => stage.stageId === flowNode.stageId))
+    const laneIndex = Math.max(0, categoryRows.value.findIndex((lane) => lane.laneId === flowNode.laneId))
+    const cellKey = `${flowNode.stageId ?? 'none'}:${flowNode.laneId ?? 'none'}`
+    const nodeIndexInCell = cellIndexes.get(cellKey) ?? 0
+    cellIndexes.set(cellKey, nodeIndexInCell + 1)
     const selectedClass = flowNode.nodeId === props.selectedNodeId ? ' selected-flow-node' : ''
 
     return {
@@ -57,14 +74,14 @@ const nodes = computed<Node[]>(() =>
       type: 'flowShape',
       position: {
         x: stageIndex * stageWidth + nodeColumnOffset,
-        y: Number.isFinite(flowNode.y) ? flowNode.y : nodeRowOffset,
+        y: laneIndex * requiredLaneHeight.value + nodeRowOffset + nodeIndexInCell * nodeVerticalGap,
       },
       data: flowNode,
       draggable: !props.readonly,
       class: `flow-node-shell${selectedClass}`,
     }
-  }),
-)
+  })
+})
 
 const edges = computed<Edge[]>(() =>
   props.flow.links.map((link) => ({
@@ -86,7 +103,7 @@ function clampIndex(index: number, max: number): number {
 
 function resolveLaneIndex(y: number): number {
   if (categoryRows.value.length === 0) return 0
-  return clampIndex(Math.floor(y / categoryHeight), categoryRows.value.length)
+  return clampIndex(Math.floor(y / requiredLaneHeight.value), categoryRows.value.length)
 }
 
 function getCanvasPoint(event: DragEvent): { y: number; stageIndex: number; laneIndex: number } | null {
@@ -129,7 +146,7 @@ function onDrop(event: DragEvent): void {
     stageId: stageColumns.value[point.stageIndex]?.stageId,
     laneId: categoryRows.value[point.laneIndex]?.laneId,
     x: point.stageIndex * stageWidth + nodeColumnOffset,
-    y: Math.max(0, point.y),
+    y: point.laneIndex * requiredLaneHeight.value + nodeRowOffset,
   })
 }
 
@@ -195,7 +212,7 @@ function onPaneClick(_: unknown): void {
           :key="lane.laneId"
           class="category-cell"
           :class="{ active: activeLaneId === lane.laneId }"
-          :style="{ height: `${categoryHeight}px` }"
+          :style="{ height: `${requiredLaneHeight}px` }"
         >
           {{ lane.name }}
         </div>
@@ -214,16 +231,15 @@ function onPaneClick(_: unknown): void {
             :key="`${stage.stageId}-${lane.laneId}`"
             class="category-band"
             :class="{ active: activeLaneId === lane.laneId && activeStageId === stage.stageId }"
-            :style="{ height: `${categoryHeight}px` }"
+            :style="{ height: `${requiredLaneHeight}px` }"
           />
         </div>
       </div>
 
-      <VueFlow class="vue-flow" :nodes="nodes" :edges="edges" :fit-view-on-init="true" @node-drag-stop="onNodeDragStop" @node-click="onNodeClick" @edge-click="onEdgeClick" @pane-click="onPaneClick">
+      <VueFlow class="vue-flow" :nodes="nodes" :edges="edges" :fit-view-on-init="false" @node-drag-stop="onNodeDragStop" @node-click="onNodeClick" @edge-click="onEdgeClick" @pane-click="onPaneClick">
         <template #node-flowShape="{ data }">
           <FlowShapeNode :node="data" />
         </template>
-        <Background />
         <Controls />
       </VueFlow>
     </div>
@@ -378,15 +394,11 @@ function onPaneClick(_: unknown): void {
 
 .category-band {
   border-bottom: 1px solid #dbe3ef;
-  background:
-    linear-gradient(to right, rgb(148 163 184 / 14%) 1px, transparent 1px) 0 0 / 40px 100%,
-    rgb(255 255 255 / 64%);
+  background: rgb(255 255 255 / 64%);
 }
 
 .equipment-lane:nth-child(even) .category-band {
-  background:
-    linear-gradient(to right, rgb(148 163 184 / 14%) 1px, transparent 1px) 0 0 / 40px 100%,
-    rgb(248 250 252 / 80%);
+  background: rgb(248 250 252 / 80%);
 }
 
 .category-band.active {
@@ -402,6 +414,10 @@ function onPaneClick(_: unknown): void {
   min-width: calc(100% - 156px);
   height: calc(100% - 92px);
   min-height: 1200px;
+  background: transparent;
+}
+
+.vue-flow :deep(.vue-flow__pane) {
   background: transparent;
 }
 
