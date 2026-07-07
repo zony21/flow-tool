@@ -42,7 +42,7 @@ function updateStageName(stage: Stage, name: string): void {
         <h2>設備</h2>
         <Button label="追加" size="small" :disabled="readonly" @click="emit('add-stage')" />
       </div>
-      <p class="help-text">包装機PLC、AGF、WCS、作業者など、ノードを配置する横列です。</p>
+      <p class="help-text">包装機PLC、AGF、WCS、作業者など、横方向の設備列です。</p>
       <div v-if="equipment.length === 0" class="empty-message">設備がありません。</div>
       <div v-for="stage in equipment" :key="stage.stageId" class="item-row">
         <input
@@ -60,7 +60,7 @@ function updateStageName(stage: Stage, name: string): void {
         <h2>工程分類</h2>
         <Button label="追加" size="small" :disabled="readonly" @click="emit('add-lane')" />
       </div>
-      <p class="help-text">RFID読取り、包装開始、搬送処理など、処理の分類情報です。</p>
+      <p class="help-text">RFID読取り、包装開始、搬送処理など、縦方向の区切りです。</p>
       <div v-if="categories.length === 0" class="empty-message">工程分類がありません。</div>
       <div v-for="lane in categories" :key="lane.laneId" class="item-row">
         <input

@@ -36,6 +36,8 @@ const canSaveStructure = computed(
 const canEdit = computed(() => canUpdateFlow.value)
 const canCreateVersion = computed(() => permissionStore.can(PermissionCodes.VersionCreate))
 const canExport = computed(() => permissionStore.can(PermissionCodes.ExportExecute))
+const hasSelection = computed(() => Boolean(editorStore.selectedNodeId || editorStore.selectedLinkId))
+const needsSetupPanel = computed(() => Boolean(flow.value && !hasSelection.value && (flow.value.stages.length === 0 || flow.value.lanes.length === 0)))
 
 onMounted(async () => {
   editorStore.reset()
@@ -113,7 +115,7 @@ async function saveCurrentStructure(): Promise<void> {
 async function createVersionFromCurrentFlow(): Promise<void> {
   if (!flow.value || !canSaveStructure.value || !canCreateVersion.value) return
 
-  const changeSummary = window.prompt('Versionコメントを入力してください（任意）', '')
+  const changeSummary = window.prompt('バージョンコメントを入力してください（任意）', '')
   if (changeSummary === null) {
     return
   }
@@ -265,11 +267,12 @@ function handleKeydown(event: KeyboardEvent): void {
           />
           <div class="property-panels">
             <FlowOperationPanel
+              v-if="!hasSelection"
               :flow="flow"
               :readonly="!canEdit"
-              @add-link="editorStore.addLink"
             />
             <LaneStagePanel
+              v-if="needsSetupPanel"
               :flow="flow"
               :readonly="!canEdit"
               @add-lane="editorStore.addLane"
@@ -350,10 +353,10 @@ function handleKeydown(event: KeyboardEvent): void {
 
 .header-actions {
   display: flex;
-  align-items: center;
-  gap: 8px;
   flex-wrap: wrap;
+  align-items: center;
   justify-content: flex-end;
+  gap: 8px;
 }
 
 .dirty-badge {

@@ -108,9 +108,9 @@ function deleteSelectedLink(): void {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  color: #334155;
   font-size: 13px;
   font-weight: 700;
-  color: #334155;
 }
 
 .field input,

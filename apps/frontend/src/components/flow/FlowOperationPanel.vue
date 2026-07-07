@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
-import Button from 'primevue/button'
+import { computed } from 'vue'
 import { nodeSamples } from '../../constants/nodeSamples'
 import type { FlowDetail } from '../../types/flow'
 
@@ -9,35 +8,7 @@ const props = defineProps<{
   readonly?: boolean
 }>()
 
-const emit = defineEmits<{
-  (event: 'add-link', payload: { sourceNodeId: string; targetNodeId: string }): void
-}>()
-
-const categories = computed(() => props.flow.lanes.slice().sort((a, b) => a.sortOrder - b.sortOrder))
 const equipment = computed(() => props.flow.stages.slice().sort((a, b) => a.sortOrder - b.sortOrder))
-const nodeOptions = computed(() =>
-  props.flow.nodes.map((node) => ({
-    nodeId: node.nodeId,
-    label: node.name,
-  })),
-)
-
-const selectedSourceNodeId = ref('')
-const selectedTargetNodeId = ref('')
-
-watch(
-  nodeOptions,
-  (options) => {
-    if (!options.some((option) => option.nodeId === selectedSourceNodeId.value)) {
-      selectedSourceNodeId.value = options[0]?.nodeId ?? ''
-    }
-
-    if (!options.some((option) => option.nodeId === selectedTargetNodeId.value)) {
-      selectedTargetNodeId.value = options[1]?.nodeId ?? options[0]?.nodeId ?? ''
-    }
-  },
-  { immediate: true },
-)
 
 function onPaletteDragStart(event: DragEvent, nodeType: string): void {
   if (props.readonly || !event.dataTransfer) return
@@ -46,22 +17,12 @@ function onPaletteDragStart(event: DragEvent, nodeType: string): void {
   event.dataTransfer.setData('application/x-flow-node-type', nodeType)
   event.dataTransfer.setData('text/plain', nodeType)
 }
-
-function addLink(): void {
-  if (props.readonly) return
-  if (!selectedSourceNodeId.value || !selectedTargetNodeId.value) return
-
-  emit('add-link', {
-    sourceNodeId: selectedSourceNodeId.value,
-    targetNodeId: selectedTargetNodeId.value,
-  })
-}
 </script>
 
 <template>
   <aside class="operation-panel">
     <section>
-      <h2>Node Palette</h2>
+      <h2>図形パレット</h2>
       <p class="help-text">図形を設備列へドラッグして配置します。</p>
 
       <div class="sample-grid">
@@ -79,49 +40,10 @@ function addLink(): void {
           <span>{{ sample.label }}</span>
         </button>
       </div>
-    </section>
 
-    <section>
-      <h2>設備一覧</h2>
-      <p class="help-text">ノードは必ずいずれかの設備列に所属します。</p>
-      <div v-if="equipment.length === 0" class="empty-message">設備がありません。</div>
-      <ul v-else class="plain-list">
-        <li v-for="stage in equipment" :key="stage.stageId">{{ stage.name }}</li>
-      </ul>
-    </section>
-
-    <section>
-      <h2>工程分類</h2>
-      <p class="help-text">分類はノード詳細から必要に応じて設定します。</p>
-      <div v-if="categories.length === 0" class="empty-message">工程分類がありません。</div>
-      <ul v-else class="plain-list">
-        <li v-for="lane in categories" :key="lane.laneId">{{ lane.name }}</li>
-      </ul>
-    </section>
-
-    <section>
-      <h2>接続線</h2>
-      <p class="help-text">処理順を表す線を追加します。</p>
-
-      <label class="field">
-        <span>接続元</span>
-        <select v-model="selectedSourceNodeId" :disabled="readonly || flow.nodes.length < 2">
-          <option v-for="option in nodeOptions" :key="`source-${option.nodeId}`" :value="option.nodeId">
-            {{ option.label }}
-          </option>
-        </select>
-      </label>
-
-      <label class="field">
-        <span>接続先</span>
-        <select v-model="selectedTargetNodeId" :disabled="readonly || flow.nodes.length < 2">
-          <option v-for="option in nodeOptions" :key="`target-${option.nodeId}`" :value="option.nodeId">
-            {{ option.label }}
-          </option>
-        </select>
-      </label>
-
-      <Button label="接続線を追加" class="full-button" severity="secondary" :disabled="readonly || flow.nodes.length < 2 || !selectedSourceNodeId || !selectedTargetNodeId" @click="addLink" />
+      <p v-if="equipment.length === 0" class="empty-message">
+        先に設備を追加すると、図形を配置できます。
+      </p>
     </section>
   </aside>
 </template>
@@ -133,12 +55,6 @@ function addLink(): void {
   background: #fff;
   border: 1px solid #dbe3ef;
   border-radius: 8px;
-}
-
-.operation-panel section + section {
-  margin-top: 20px;
-  padding-top: 16px;
-  border-top: 1px solid #e2e8f0;
 }
 
 h2 {
@@ -154,12 +70,12 @@ h2 {
 
 .sample-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
 
 .sample-button {
-  min-height: 44px;
+  min-height: 46px;
   padding: 6px 8px;
   color: #0f172a;
   background: #fff;
@@ -185,12 +101,8 @@ h2 {
 }
 
 .sample-decision {
-  transform: skew(-8deg);
-}
-
-.sample-decision span {
-  display: inline-block;
-  transform: skew(8deg);
+  border-radius: 4px;
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
 }
 
 .sample-document {
@@ -201,53 +113,13 @@ h2 {
   border-style: dashed;
 }
 
-.plain-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 0;
-  margin: 0;
-  list-style: none;
-}
-
-.plain-list li,
 .empty-message {
-  padding: 8px 10px;
-  color: #334155;
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  color: #64748b;
   background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  border: 1px dashed #cbd5e1;
   border-radius: 8px;
   font-size: 0.9rem;
-}
-
-.empty-message {
-  color: #64748b;
-  border-style: dashed;
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: 10px;
-  color: #334155;
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.field select {
-  width: 100%;
-  padding: 8px 10px;
-  color: #0f172a;
-  background: #fff;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  font: inherit;
-  font-weight: 400;
-}
-
-.full-button {
-  width: 100%;
-  margin-top: 12px;
 }
 </style>

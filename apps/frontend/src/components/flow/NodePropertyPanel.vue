@@ -35,8 +35,8 @@ function deleteSelectedNode(): void {
 <template>
   <aside v-if="selectedNode" class="node-property-panel">
     <header class="panel-header">
-      <h2>ノード詳細</h2>
-      <p>選択中のノードを編集します。</p>
+      <h2>図形詳細</h2>
+      <p>選択中の図形を編集します。</p>
     </header>
 
     <div class="form-grid">
@@ -96,7 +96,7 @@ function deleteSelectedNode(): void {
       </div>
 
       <button type="button" class="delete-button" :disabled="readonly" @click="deleteSelectedNode">
-        ノードを削除
+        図形を削除
       </button>
     </div>
   </aside>
@@ -136,9 +136,9 @@ function deleteSelectedNode(): void {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  color: #334155;
   font-size: 13px;
   font-weight: 700;
-  color: #334155;
 }
 
 .field input,
