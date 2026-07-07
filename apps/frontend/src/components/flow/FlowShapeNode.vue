@@ -1,19 +1,32 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { Handle, Position } from '@vue-flow/core'
 import type { FlowNode } from '../../types/flow'
 
-defineProps<{
+const props = defineProps<{
   node: FlowNode
 }>()
+
+const polygonPoints = computed(() => {
+  switch (props.node.nodeType) {
+    case 'decision':
+      return '70,4 136,50 70,96 4,50'
+    case 'preparation':
+      return '34,4 106,4 136,50 106,96 34,96 4,50'
+    case 'document':
+      return '8,8 132,8 132,74 114,90 96,82 78,90 60,82 42,90 24,82 8,90'
+    default:
+      return '8,8 132,8 132,92 8,92'
+  }
+})
 </script>
 
 <template>
   <div class="flow-shape-node" :class="`shape-${node.nodeType}`">
-    <svg v-if="node.nodeType === 'decision'" class="shape-svg" viewBox="0 0 140 100" aria-hidden="true">
-      <polygon points="70,4 136,50 70,96 4,50" />
-    </svg>
-    <svg v-else-if="node.nodeType === 'preparation'" class="shape-svg" viewBox="0 0 140 100" aria-hidden="true">
-      <polygon points="34,4 106,4 136,50 106,96 34,96 4,50" />
+    <svg class="shape-svg" viewBox="0 0 140 100" aria-hidden="true">
+      <rect v-if="node.nodeType === 'start' || node.nodeType === 'end'" x="6" y="16" width="128" height="68" rx="34" ry="34" />
+      <rect v-else-if="node.nodeType === 'wait'" x="8" y="14" width="124" height="72" rx="6" ry="6" class="dashed" />
+      <polygon v-else :points="polygonPoints" />
     </svg>
 
     <Handle type="target" :position="Position.Top" class="node-handle handle-top" />
@@ -31,14 +44,13 @@ defineProps<{
 .flow-shape-node {
   position: relative;
   display: grid;
+  width: 140px;
+  height: 100px;
   place-items: center;
-  min-width: 132px;
-  min-height: 52px;
-  padding: 10px 14px;
   color: #0f172a;
-  background: #ffffff;
-  border: 2px solid #475569;
-  box-shadow: 0 8px 18px rgb(15 23 42 / 12%);
+  background: transparent;
+  border: 0;
+  box-shadow: none;
   font-size: 13px;
   font-weight: 700;
   line-height: 1.35;
@@ -48,9 +60,17 @@ defineProps<{
 .shape-content {
   position: relative;
   z-index: 1;
-  max-width: 132px;
+  max-width: 96px;
   overflow-wrap: anywhere;
   pointer-events: none;
+}
+
+.shape-decision .shape-content {
+  max-width: 76px;
+}
+
+.shape-preparation .shape-content {
+  max-width: 94px;
 }
 
 .shape-svg {
@@ -62,6 +82,7 @@ defineProps<{
   pointer-events: none;
 }
 
+.shape-svg rect,
 .shape-svg polygon {
   fill: #ffffff;
   stroke: #475569;
@@ -70,42 +91,8 @@ defineProps<{
   filter: drop-shadow(0 8px 8px rgb(15 23 42 / 12%));
 }
 
-.shape-start,
-.shape-end {
-  border-radius: 999px;
-}
-
-.shape-process {
-  border-radius: 4px;
-}
-
-.shape-decision,
-.shape-preparation {
-  width: 132px;
-  height: 92px;
-  min-width: 132px;
-  min-height: 92px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  box-shadow: none;
-}
-
-.shape-decision .shape-content {
-  max-width: 78px;
-}
-
-.shape-preparation .shape-content {
-  max-width: 94px;
-}
-
-.shape-document {
-  border-radius: 4px 4px 18px 18px;
-}
-
-.shape-wait {
-  border-style: dashed;
-  border-radius: 4px;
+.shape-svg .dashed {
+  stroke-dasharray: 8 6;
 }
 
 .node-handle {
