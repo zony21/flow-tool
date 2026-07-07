@@ -71,6 +71,22 @@ public sealed class ExportsController(AppDbContext dbContext) : ControllerBase
             content));
     }
 
+    [HttpPost("ai-dsl")]
+    [RequirePermission(PermissionCodes.ExportExecute)]
+    public async Task<ActionResult<TextExportResponse>> ExportAiDsl(Guid projectId, Guid flowId, CancellationToken cancellationToken)
+    {
+        var snapshot = await BuildSnapshotAsync(projectId, flowId, cancellationToken);
+        if (snapshot is null)
+        {
+            return ApiError.NotFound<TextExportResponse>(this, "Flow was not found.");
+        }
+
+        var content = BuildAiDsl(snapshot);
+        return Ok(new TextExportResponse(
+            $"{BuildFileName(snapshot.ProjectName, snapshot.FlowName, "ai_dsl")}.flowdsl.txt",
+            content));
+    }
+
     private async Task<FlowSnapshot?> BuildSnapshotAsync(Guid projectId, Guid flowId, CancellationToken cancellationToken)
     {
         var flow = await dbContext.Flows
@@ -180,6 +196,7 @@ public sealed class ExportsController(AppDbContext dbContext) : ControllerBase
             .OrderBy(x => x.LaneId is Guid laneId && laneSort.TryGetValue(laneId, out var laneOrder) ? laneOrder : int.MaxValue)
             .ThenBy(x => x.Y)
             .ThenBy(x => x.StageId is Guid stageId && stageSort.TryGetValue(stageId, out var stageOrder) ? stageOrder : int.MaxValue)
+            .ThenBy(x => x.X)
             .ThenBy(x => x.Name)
             .ToList();
 
@@ -211,13 +228,7 @@ public sealed class ExportsController(AppDbContext dbContext) : ControllerBase
         builder.AppendLine($"%% Flow: {EscapeMermaidComment(snapshot.Flow.Name)}");
         builder.AppendLine("%% Columns are generated from Stage. Process categories are generated from Lane.");
 
-        var nodeIds = new Dictionary<Guid, string>();
-        var index = 1;
-        foreach (var node in snapshot.Nodes)
-        {
-            nodeIds[node.NodeId] = $"N{index++}";
-        }
-
+        var nodeIds = BuildNodeKeys(snapshot.Nodes);
         var lanesById = snapshot.Lanes.ToDictionary(x => x.LaneId, x => x);
         var renderedNodeIds = new HashSet<Guid>();
         var stageIndex = 1;
@@ -228,6 +239,7 @@ public sealed class ExportsController(AppDbContext dbContext) : ControllerBase
                 .Where(x => x.StageId == stage.StageId)
                 .OrderBy(x => x.LaneId is Guid laneId && lanesById.TryGetValue(laneId, out var lane) ? lane.SortOrder : int.MaxValue)
                 .ThenBy(x => x.Y)
+                .ThenBy(x => x.X)
                 .ThenBy(x => x.Name)
                 .ToList();
 
@@ -295,6 +307,171 @@ public sealed class ExportsController(AppDbContext dbContext) : ControllerBase
         }
 
         return builder.ToString().TrimEnd();
+    }
+
+    private static string BuildAiDsl(FlowSnapshot snapshot)
+    {
+        var builder = new StringBuilder();
+        var nodeKeys = BuildNodeKeys(snapshot.Nodes);
+        var lanesById = snapshot.Lanes.ToDictionary(x => x.LaneId, x => x);
+        var stagesById = snapshot.Stages.ToDictionary(x => x.StageId, x => x);
+        var outgoing = snapshot.Links.GroupBy(x => x.SourceNodeId).ToDictionary(x => x.Key, x => x.ToList());
+        var incoming = snapshot.Links.GroupBy(x => x.TargetNodeId).ToDictionary(x => x.Key, x => x.ToList());
+
+        builder.AppendLine("AI_FLOW_DSL_VERSION: 1");
+        builder.AppendLine("PURPOSE: This file is optimized for AI understanding. Nodes, links, lanes, stages, and visual order are all explicit.");
+        builder.AppendLine();
+        builder.AppendLine("FLOW:");
+        builder.AppendLine($"  project_name: {DslValue(snapshot.Project.Name)}");
+        builder.AppendLine($"  flow_name: {DslValue(snapshot.Flow.Name)}");
+        builder.AppendLine($"  flow_description: {DslValue(snapshot.Flow.Description)}");
+        builder.AppendLine($"  revision: {snapshot.Flow.CurrentRevision}");
+        builder.AppendLine($"  exported_at_utc: {snapshot.ExportedAtUtc:O}");
+        builder.AppendLine();
+
+        builder.AppendLine("LANES_PROCESS_CATEGORIES:");
+        foreach (var lane in snapshot.Lanes.OrderBy(x => x.SortOrder))
+        {
+            builder.AppendLine($"  - lane_id: {lane.LaneId}");
+            builder.AppendLine($"    name: {DslValue(lane.Name)}");
+            builder.AppendLine($"    sort_order: {lane.SortOrder}");
+        }
+        builder.AppendLine();
+
+        builder.AppendLine("STAGES_COLUMNS_OWNERS:");
+        foreach (var stage in snapshot.Stages.OrderBy(x => x.SortOrder))
+        {
+            builder.AppendLine($"  - stage_id: {stage.StageId}");
+            builder.AppendLine($"    name: {DslValue(stage.Name)}");
+            builder.AppendLine($"    sort_order: {stage.SortOrder}");
+        }
+        builder.AppendLine();
+
+        builder.AppendLine("NODES:");
+        foreach (var node in snapshot.Nodes)
+        {
+            var laneName = node.LaneId is Guid laneId && lanesById.TryGetValue(laneId, out var lane) ? lane.Name : "未設定";
+            var stageName = node.StageId is Guid stageId && stagesById.TryGetValue(stageId, out var stage) ? stage.Name : "未設定";
+            var nextLinks = outgoing.TryGetValue(node.NodeId, out var next) ? next : [];
+            var previousLinks = incoming.TryGetValue(node.NodeId, out var previous) ? previous : [];
+
+            builder.AppendLine($"  - key: {nodeKeys[node.NodeId]}");
+            builder.AppendLine($"    node_id: {node.NodeId}");
+            builder.AppendLine($"    name: {DslValue(node.Name)}");
+            builder.AppendLine($"    type: {DslValue(node.NodeType)}");
+            builder.AppendLine($"    lane_process_category: {DslValue(laneName)}");
+            builder.AppendLine($"    stage_owner_column: {DslValue(stageName)}");
+            builder.AppendLine($"    description: {DslValue(node.Description)}");
+            builder.AppendLine($"    position: x={node.X}, y={node.Y}");
+            builder.AppendLine("    previous:");
+            if (previousLinks.Count == 0)
+            {
+                builder.AppendLine("      - none");
+            }
+            else
+            {
+                foreach (var link in previousLinks)
+                {
+                    builder.AppendLine($"      - from: {nodeKeys.GetValueOrDefault(link.SourceNodeId, link.SourceNodeId.ToString())}");
+                    builder.AppendLine($"        label: {DslValue(ChooseLinkLabel(link))}");
+                }
+            }
+            builder.AppendLine("    next:");
+            if (nextLinks.Count == 0)
+            {
+                builder.AppendLine("      - none");
+            }
+            else
+            {
+                foreach (var link in nextLinks)
+                {
+                    builder.AppendLine($"      - to: {nodeKeys.GetValueOrDefault(link.TargetNodeId, link.TargetNodeId.ToString())}");
+                    builder.AppendLine($"        label: {DslValue(ChooseLinkLabel(link))}");
+                }
+            }
+        }
+        builder.AppendLine();
+
+        builder.AppendLine("VISUAL_ORDER_BY_LANE:");
+        foreach (var lane in snapshot.Lanes.OrderBy(x => x.SortOrder))
+        {
+            var laneNodes = snapshot.Nodes
+                .Where(x => x.LaneId == lane.LaneId)
+                .OrderBy(x => x.Y)
+                .ThenBy(x => x.X)
+                .ThenBy(x => x.Name)
+                .ToList();
+            builder.AppendLine($"  - lane: {DslValue(lane.Name)}");
+            builder.AppendLine("    nodes:");
+            if (laneNodes.Count == 0)
+            {
+                builder.AppendLine("      - none");
+            }
+            else
+            {
+                foreach (var node in laneNodes)
+                {
+                    builder.AppendLine($"      - {nodeKeys[node.NodeId]}: {DslValue(node.Name)}");
+                }
+            }
+        }
+        builder.AppendLine();
+
+        builder.AppendLine("LINKS_PROCESS_FLOW:");
+        if (snapshot.Links.Count == 0)
+        {
+            builder.AppendLine("  - none");
+        }
+        else
+        {
+            foreach (var link in snapshot.Links)
+            {
+                builder.AppendLine($"  - from: {nodeKeys.GetValueOrDefault(link.SourceNodeId, link.SourceNodeId.ToString())}");
+                builder.AppendLine($"    to: {nodeKeys.GetValueOrDefault(link.TargetNodeId, link.TargetNodeId.ToString())}");
+                builder.AppendLine($"    label: {DslValue(ChooseLinkLabel(link))}");
+            }
+        }
+
+        if (snapshot.Comments.Count > 0)
+        {
+            builder.AppendLine();
+            builder.AppendLine("COMMENTS:");
+            foreach (var comment in snapshot.Comments)
+            {
+                builder.AppendLine($"  - node: {(comment.NodeId is Guid nodeId ? nodeKeys.GetValueOrDefault(nodeId, nodeId.ToString()) : "none")}");
+                builder.AppendLine($"    text: {DslValue(comment.Text)}");
+                builder.AppendLine($"    position: x={comment.X}, y={comment.Y}");
+            }
+        }
+
+        return builder.ToString().TrimEnd();
+    }
+
+    private static Dictionary<Guid, string> BuildNodeKeys(IReadOnlyList<ExportNode> nodes)
+    {
+        var keys = new Dictionary<Guid, string>();
+        var index = 1;
+        foreach (var node in nodes)
+        {
+            keys[node.NodeId] = $"N{index++}";
+        }
+
+        return keys;
+    }
+
+    private static string? ChooseLinkLabel(ExportLink link)
+    {
+        return !string.IsNullOrWhiteSpace(link.Condition) ? link.Condition : link.Label;
+    }
+
+    private static string DslValue(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "null";
+        }
+
+        return $"\"{value.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal).Replace("\r", " ", StringComparison.Ordinal).Replace("\n", " ", StringComparison.Ordinal)}\"";
     }
 
     private static string BuildMermaidNodeDeclaration(string nodeKey, ExportNode node)
