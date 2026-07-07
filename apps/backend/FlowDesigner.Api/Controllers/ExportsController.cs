@@ -16,6 +16,9 @@ namespace FlowDesigner.Api.Controllers;
 [Authorize]
 public sealed class ExportsController(AppDbContext dbContext) : ControllerBase
 {
+    private const double StageWidth = 240;
+    private const double NodeOffsetX = 42;
+
     private static readonly JsonSerializerOptions ExportJsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -33,10 +36,7 @@ public sealed class ExportsController(AppDbContext dbContext) : ControllerBase
         }
 
         var json = JsonSerializer.Serialize(BuildJsonExport(snapshot), ExportJsonOptions);
-        return File(
-            Encoding.UTF8.GetBytes(json),
-            "application/json",
-            $"{BuildFileName(snapshot.ProjectName, snapshot.FlowName, "json")}.json");
+        return File(Encoding.UTF8.GetBytes(json), "application/json", $"{BuildFileName(snapshot.ProjectName, snapshot.FlowName, "json")}.json");
     }
 
     [HttpPost("mermaid")]
@@ -66,9 +66,7 @@ public sealed class ExportsController(AppDbContext dbContext) : ControllerBase
         }
 
         var content = BuildMermaidFlowchart(snapshot, direction, request?.IncludeComments ?? true);
-        return Ok(new TextExportResponse(
-            $"{BuildFileName(snapshot.ProjectName, snapshot.FlowName, "flowchart")}.mmd",
-            content));
+        return Ok(new TextExportResponse($"{BuildFileName(snapshot.ProjectName, snapshot.FlowName, "flowchart")}.mmd", content));
     }
 
     [HttpPost("ai-dsl")]
@@ -82,9 +80,7 @@ public sealed class ExportsController(AppDbContext dbContext) : ControllerBase
         }
 
         var content = BuildAiDsl(snapshot);
-        return Ok(new TextExportResponse(
-            $"{BuildFileName(snapshot.ProjectName, snapshot.FlowName, "ai_dsl")}.flowdsl.txt",
-            content));
+        return Ok(new TextExportResponse($"{BuildFileName(snapshot.ProjectName, snapshot.FlowName, "ai_dsl")}.flowdsl.txt", content));
     }
 
     private async Task<FlowSnapshot?> BuildSnapshotAsync(Guid projectId, Guid flowId, CancellationToken cancellationToken)
@@ -114,85 +110,24 @@ public sealed class ExportsController(AppDbContext dbContext) : ControllerBase
         var lanes = await dbContext.Lanes.AsNoTracking()
             .Where(x => x.FlowId == flowId)
             .OrderBy(x => x.SortOrder)
-            .Select(x => new
-            {
-                x.LaneId,
-                x.FlowId,
-                x.Name,
-                x.SortOrder,
-            })
+            .Select(x => new ExportLane(x.LaneId, x.FlowId, x.Name, x.SortOrder))
             .ToListAsync(cancellationToken);
 
         var stages = await dbContext.Stages.AsNoTracking()
             .Where(x => x.FlowId == flowId)
             .OrderBy(x => x.SortOrder)
-            .Select(x => new
-            {
-                x.StageId,
-                x.FlowId,
-                x.Name,
-                x.SortOrder,
-            })
+            .Select(x => new ExportStage(x.StageId, x.FlowId, x.Name, x.SortOrder))
             .ToListAsync(cancellationToken);
 
-        var nodes = await dbContext.Nodes.AsNoTracking()
+        var rawNodes = await dbContext.Nodes.AsNoTracking()
             .Where(x => x.FlowId == flowId)
-            .Select(x => new
-            {
-                x.NodeId,
-                x.FlowId,
-                x.LaneId,
-                x.StageId,
-                x.NodeType,
-                x.Name,
-                x.Description,
-                x.X,
-                x.Y,
-            })
+            .Select(x => new ExportNode(x.NodeId, x.FlowId, x.LaneId, x.StageId, x.NodeType, x.Name, x.Description, x.X, x.Y))
             .ToListAsync(cancellationToken);
 
-        var links = await dbContext.Links.AsNoTracking()
-            .Where(x => x.FlowId == flowId)
-            .Select(x => new
-            {
-                x.LinkId,
-                x.FlowId,
-                x.SourceNodeId,
-                x.TargetNodeId,
-                x.Label,
-                x.Condition,
-            })
-            .ToListAsync(cancellationToken);
-
-        var comments = await dbContext.Comments.AsNoTracking()
-            .Where(x => x.FlowId == flowId)
-            .Select(x => new
-            {
-                x.CommentId,
-                x.FlowId,
-                x.NodeId,
-                x.Text,
-                x.X,
-                x.Y,
-            })
-            .ToListAsync(cancellationToken);
-
-        var metadata = await dbContext.MetadataItems.AsNoTracking()
-            .Where(x => x.FlowId == flowId)
-            .Select(x => new
-            {
-                x.MetadataId,
-                x.FlowId,
-                x.MetaKey,
-                x.MetaValue,
-            })
-            .ToListAsync(cancellationToken);
-
+        var nodes = NormalizeExportNodes(rawNodes, lanes, stages);
         var laneSort = lanes.ToDictionary(x => x.LaneId, x => x.SortOrder);
         var stageSort = stages.ToDictionary(x => x.StageId, x => x.SortOrder);
-
-        var exportNodes = nodes
-            .Select(x => new ExportNode(x.NodeId, x.FlowId, x.LaneId, x.StageId, x.NodeType, x.Name, x.Description, x.X, x.Y))
+        nodes = nodes
             .OrderBy(x => x.LaneId is Guid laneId && laneSort.TryGetValue(laneId, out var laneOrder) ? laneOrder : int.MaxValue)
             .ThenBy(x => x.Y)
             .ThenBy(x => x.StageId is Guid stageId && stageSort.TryGetValue(stageId, out var stageOrder) ? stageOrder : int.MaxValue)
@@ -200,25 +135,32 @@ public sealed class ExportsController(AppDbContext dbContext) : ControllerBase
             .ThenBy(x => x.Name)
             .ToList();
 
+        var links = await dbContext.Links.AsNoTracking()
+            .Where(x => x.FlowId == flowId)
+            .Select(x => new ExportLink(x.LinkId, x.FlowId, x.SourceNodeId, x.TargetNodeId, x.Label, x.Condition))
+            .ToListAsync(cancellationToken);
+
+        var comments = await dbContext.Comments.AsNoTracking()
+            .Where(x => x.FlowId == flowId)
+            .Select(x => new ExportComment(x.CommentId, x.FlowId, x.NodeId, x.Text, x.X, x.Y))
+            .ToListAsync(cancellationToken);
+
+        var metadata = await dbContext.MetadataItems.AsNoTracking()
+            .Where(x => x.FlowId == flowId)
+            .Select(x => new ExportMetadata(x.MetadataId, x.FlowId, x.MetaKey, x.MetaValue))
+            .ToListAsync(cancellationToken);
+
         return new FlowSnapshot(
             1,
             DateTime.UtcNow,
             new ExportProject(flow.ProjectId, flow.ProjectName),
-            new ExportFlow(
-                flow.FlowId,
-                flow.ProjectId,
-                flow.FlowName,
-                flow.Description,
-                flow.SortOrder,
-                flow.Revision,
-                flow.CreatedAtUtc,
-                flow.UpdatedAtUtc),
-            lanes.Select(x => new ExportLane(x.LaneId, x.FlowId, x.Name, x.SortOrder)).ToList(),
-            stages.Select(x => new ExportStage(x.StageId, x.FlowId, x.Name, x.SortOrder)).ToList(),
-            exportNodes,
-            links.Select(x => new ExportLink(x.LinkId, x.FlowId, x.SourceNodeId, x.TargetNodeId, x.Label, x.Condition)).ToList(),
-            comments.Select(x => new ExportComment(x.CommentId, x.FlowId, x.NodeId, x.Text, x.X, x.Y)).ToList(),
-            metadata.Select(x => new ExportMetadata(x.MetadataId, x.FlowId, x.MetaKey, x.MetaValue)).ToList());
+            new ExportFlow(flow.FlowId, flow.ProjectId, flow.FlowName, flow.Description, flow.SortOrder, flow.Revision, flow.CreatedAtUtc, flow.UpdatedAtUtc),
+            lanes,
+            stages,
+            nodes,
+            links,
+            comments,
+            metadata);
     }
 
     private static object BuildJsonExport(FlowSnapshot snapshot)
@@ -240,11 +182,7 @@ public sealed class ExportsController(AppDbContext dbContext) : ControllerBase
             laneName = GetLaneName(node, lanesById),
             node.StageId,
             stageName = GetStageName(node, stagesById),
-            responsibility = new
-            {
-                action = GetLaneName(node, lanesById),
-                owner = GetStageName(node, stagesById),
-            },
+            responsibility = new { action = GetLaneName(node, lanesById), owner = GetStageName(node, stagesById) },
             node.NodeType,
             node.Name,
             node.Description,
@@ -275,7 +213,6 @@ public sealed class ExportsController(AppDbContext dbContext) : ControllerBase
         {
             nodesById.TryGetValue(link.SourceNodeId, out var sourceNode);
             nodesById.TryGetValue(link.TargetNodeId, out var targetNode);
-
             return new
             {
                 link.LinkId,
@@ -328,30 +265,7 @@ public sealed class ExportsController(AppDbContext dbContext) : ControllerBase
                             : [],
                     })
                     .ToList(),
-            })
-            .Where(ownerGroup => ownerGroup.nodes.Count > 0)
-            .ToList(),
-        }).ToList();
-
-        var visualOrderByLane = snapshot.Lanes.OrderBy(x => x.SortOrder).Select(lane => new
-        {
-            lane.LaneId,
-            lane.Name,
-            nodes = snapshot.Nodes
-                .Where(node => node.LaneId == lane.LaneId)
-                .OrderBy(node => node.Y)
-                .ThenBy(node => node.X)
-                .ThenBy(node => node.Name)
-                .Select(node => new
-                {
-                    key = nodeKeys[node.NodeId],
-                    node.NodeId,
-                    node.Name,
-                    node.StageId,
-                    stageName = GetStageName(node, stagesById),
-                    position = new { node.X, node.Y },
-                })
-                .ToList(),
+            }).Where(ownerGroup => ownerGroup.nodes.Count > 0).ToList(),
         }).ToList();
 
         return new
@@ -362,20 +276,8 @@ public sealed class ExportsController(AppDbContext dbContext) : ControllerBase
             snapshot.Flow,
             snapshot.Lanes,
             snapshot.Stages,
-            raw = new
-            {
-                snapshot.Nodes,
-                snapshot.Links,
-                snapshot.Comments,
-                snapshot.Metadata,
-            },
-            flowGraph = new
-            {
-                nodes = enrichedNodes,
-                links = enrichedLinks,
-                visualOrderByLane,
-                responsibilityMatrix,
-            },
+            raw = new { snapshot.Nodes, snapshot.Links, snapshot.Comments, snapshot.Metadata },
+            flowGraph = new { nodes = enrichedNodes, links = enrichedLinks, responsibilityMatrix },
         };
     }
 
@@ -384,7 +286,7 @@ public sealed class ExportsController(AppDbContext dbContext) : ControllerBase
         var builder = new StringBuilder();
         builder.AppendLine($"flowchart {direction}");
         builder.AppendLine($"%% Flow: {EscapeMermaidComment(snapshot.Flow.Name)}");
-        builder.AppendLine("%% Structure: 動作(Lane) -> 設備/担当(Stage) -> Node. Links below represent the actual process flow.");
+        builder.AppendLine("%% Structure: Lane/Stage names are taken from the flow data. Links below represent the actual process flow.");
 
         var nodeIds = BuildNodeKeys(snapshot.Nodes);
         var renderedNodeIds = new HashSet<Guid>();
@@ -398,7 +300,7 @@ public sealed class ExportsController(AppDbContext dbContext) : ControllerBase
                 continue;
             }
 
-            builder.AppendLine($"    subgraph L{laneIndex}[\"動作: {EscapeMermaidLabel(lane.Name)}\"]");
+            builder.AppendLine($"    subgraph L{laneIndex}[\"{EscapeMermaidLabel(lane.Name)}\"]");
             builder.AppendLine("        direction TD");
 
             var stageIndex = 1;
@@ -416,7 +318,7 @@ public sealed class ExportsController(AppDbContext dbContext) : ControllerBase
                     continue;
                 }
 
-                builder.AppendLine($"        subgraph L{laneIndex}S{stageIndex}[\"設備/担当: {EscapeMermaidLabel(stage.Name)}\"]");
+                builder.AppendLine($"        subgraph L{laneIndex}S{stageIndex}[\"{EscapeMermaidLabel(stage.Name)}\"]");
                 builder.AppendLine("            direction TD");
                 foreach (var node in ownerNodes)
                 {
@@ -428,25 +330,6 @@ public sealed class ExportsController(AppDbContext dbContext) : ControllerBase
                 stageIndex++;
             }
 
-            var laneUnassignedNodes = laneNodes
-                .Where(node => node.StageId is null || snapshot.Stages.All(stage => stage.StageId != node.StageId))
-                .OrderBy(node => node.Y)
-                .ThenBy(node => node.X)
-                .ThenBy(node => node.Name)
-                .ToList();
-            if (laneUnassignedNodes.Count > 0)
-            {
-                builder.AppendLine($"        subgraph L{laneIndex}SU[\"設備/担当: 未設定\"]");
-                builder.AppendLine("            direction TD");
-                foreach (var node in laneUnassignedNodes)
-                {
-                    builder.AppendLine($"            %% responsibility: action={EscapeMermaidComment(lane.Name)} owner=未設定 x={node.X} y={node.Y}");
-                    builder.AppendLine($"            {BuildMermaidNodeDeclaration(nodeIds[node.NodeId], node)}");
-                    renderedNodeIds.Add(node.NodeId);
-                }
-                builder.AppendLine("        end");
-            }
-
             builder.AppendLine("    end");
             laneIndex++;
         }
@@ -454,7 +337,7 @@ public sealed class ExportsController(AppDbContext dbContext) : ControllerBase
         var unassignedNodes = snapshot.Nodes.Where(node => !renderedNodeIds.Contains(node.NodeId)).ToList();
         if (unassignedNodes.Count > 0)
         {
-            builder.AppendLine("    subgraph UNASSIGNED[\"動作: 未設定\"]");
+            builder.AppendLine("    subgraph UNASSIGNED[\"未設定\"]");
             builder.AppendLine("        direction TD");
             foreach (var node in unassignedNodes.OrderBy(node => node.Y).ThenBy(node => node.X).ThenBy(node => node.Name))
             {
@@ -479,9 +362,7 @@ public sealed class ExportsController(AppDbContext dbContext) : ControllerBase
 
             var labelSource = ChooseLinkLabel(link);
             var label = string.IsNullOrWhiteSpace(labelSource) ? null : EscapeMermaidLabel(labelSource);
-            builder.AppendLine(label is null
-                ? $"    {source} --> {target}"
-                : $"    {source} -->|\"{label}\"| {target}");
+            builder.AppendLine(label is null ? $"    {source} --> {target}" : $"    {source} -->|\"{label}\"| {target}");
         }
 
         foreach (var node in snapshot.Nodes.Where(x => string.Equals(x.NodeType, "wait", StringComparison.OrdinalIgnoreCase)))
@@ -553,24 +434,6 @@ public sealed class ExportsController(AppDbContext dbContext) : ControllerBase
             {
                 builder.AppendLine("      - none");
             }
-        }
-        builder.AppendLine();
-
-        builder.AppendLine("LANES_PROCESS_CATEGORIES:");
-        foreach (var lane in snapshot.Lanes.OrderBy(x => x.SortOrder))
-        {
-            builder.AppendLine($"  - lane_id: {lane.LaneId}");
-            builder.AppendLine($"    name: {DslValue(lane.Name)}");
-            builder.AppendLine($"    sort_order: {lane.SortOrder}");
-        }
-        builder.AppendLine();
-
-        builder.AppendLine("STAGES_COLUMNS_OWNERS:");
-        foreach (var stage in snapshot.Stages.OrderBy(x => x.SortOrder))
-        {
-            builder.AppendLine($"  - stage_id: {stage.StageId}");
-            builder.AppendLine($"    name: {DslValue(stage.Name)}");
-            builder.AppendLine($"    sort_order: {stage.SortOrder}");
         }
         builder.AppendLine();
 
@@ -650,6 +513,33 @@ public sealed class ExportsController(AppDbContext dbContext) : ControllerBase
         return builder.ToString().TrimEnd();
     }
 
+    private static IReadOnlyList<ExportNode> NormalizeExportNodes(IReadOnlyList<ExportNode> nodes, IReadOnlyList<ExportLane> lanes, IReadOnlyList<ExportStage> stages)
+    {
+        var sortedLanes = lanes.OrderBy(lane => lane.SortOrder).ToList();
+        var sortedStages = stages.OrderBy(stage => stage.SortOrder).ToList();
+        var laneIds = sortedLanes.Select(lane => lane.LaneId).ToHashSet();
+        var stageIds = sortedStages.Select(stage => stage.StageId).ToHashSet();
+
+        return nodes.Select(node =>
+        {
+            var laneId = node.LaneId.HasValue && laneIds.Contains(node.LaneId.Value) ? node.LaneId : sortedLanes.FirstOrDefault()?.LaneId;
+            var stageId = node.StageId.HasValue && stageIds.Contains(node.StageId.Value) ? node.StageId : ResolveStageIdByX(node.X, sortedStages);
+            return node with { LaneId = laneId, StageId = stageId };
+        }).ToList();
+    }
+
+    private static Guid? ResolveStageIdByX(double x, IReadOnlyList<ExportStage> sortedStages)
+    {
+        if (sortedStages.Count == 0)
+        {
+            return null;
+        }
+
+        var index = (int)Math.Round((x - NodeOffsetX) / StageWidth);
+        index = Math.Max(0, Math.Min(index, sortedStages.Count - 1));
+        return sortedStages[index].StageId;
+    }
+
     private static string GetLaneName(ExportNode node, IReadOnlyDictionary<Guid, ExportLane> lanesById)
     {
         return node.LaneId is Guid laneId && lanesById.TryGetValue(laneId, out var lane) ? lane.Name : "未設定";
@@ -668,7 +558,6 @@ public sealed class ExportsController(AppDbContext dbContext) : ControllerBase
         {
             keys[node.NodeId] = $"N{index++}";
         }
-
         return keys;
     }
 
@@ -710,8 +599,7 @@ public sealed class ExportsController(AppDbContext dbContext) : ControllerBase
 
     private static string EscapeMermaidComment(string value)
     {
-        return value.Replace("\r", " ", StringComparison.Ordinal)
-            .Replace("\n", " ", StringComparison.Ordinal);
+        return value.Replace("\r", " ", StringComparison.Ordinal).Replace("\n", " ", StringComparison.Ordinal);
     }
 
     private static string BuildFileName(string projectName, string flowName, string exportType)
@@ -749,46 +637,17 @@ public sealed class ExportsController(AppDbContext dbContext) : ControllerBase
 
     private sealed record ExportProject(Guid ProjectId, string Name);
 
-    private sealed record ExportFlow(
-        Guid FlowId,
-        Guid ProjectId,
-        string Name,
-        string? Description,
-        int SortOrder,
-        int CurrentRevision,
-        DateTime CreatedAtUtc,
-        DateTime UpdatedAtUtc);
+    private sealed record ExportFlow(Guid FlowId, Guid ProjectId, string Name, string? Description, int SortOrder, int CurrentRevision, DateTime CreatedAtUtc, DateTime UpdatedAtUtc);
 
     private sealed record ExportLane(Guid LaneId, Guid FlowId, string Name, int SortOrder);
 
     private sealed record ExportStage(Guid StageId, Guid FlowId, string Name, int SortOrder);
 
-    private sealed record ExportNode(
-        Guid NodeId,
-        Guid FlowId,
-        Guid? LaneId,
-        Guid? StageId,
-        string NodeType,
-        string Name,
-        string? Description,
-        double X,
-        double Y);
+    private sealed record ExportNode(Guid NodeId, Guid FlowId, Guid? LaneId, Guid? StageId, string NodeType, string Name, string? Description, double X, double Y);
 
-    private sealed record ExportLink(
-        Guid LinkId,
-        Guid FlowId,
-        Guid SourceNodeId,
-        Guid TargetNodeId,
-        string? Label,
-        string? Condition);
+    private sealed record ExportLink(Guid LinkId, Guid FlowId, Guid SourceNodeId, Guid TargetNodeId, string? Label, string? Condition);
 
-    private sealed record ExportComment(
-        Guid CommentId,
-        Guid FlowId,
-        Guid? NodeId,
-        string Text,
-        double X,
-        double Y);
+    private sealed record ExportComment(Guid CommentId, Guid FlowId, Guid? NodeId, string Text, double X, double Y);
 
     private sealed record ExportMetadata(Guid MetadataId, Guid FlowId, string MetaKey, string MetaValue);
 }
