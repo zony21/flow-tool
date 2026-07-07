@@ -29,14 +29,15 @@ const polygonPoints = computed(() => {
       <polygon v-else :points="polygonPoints" />
     </svg>
 
-    <Handle id="target-top" type="target" :position="Position.Top" class="node-handle handle-top" />
-    <Handle id="source-top" type="source" :position="Position.Top" class="node-handle handle-top source-overlap" />
-    <Handle id="target-bottom" type="target" :position="Position.Bottom" class="node-handle handle-bottom" />
-    <Handle id="source-bottom" type="source" :position="Position.Bottom" class="node-handle handle-bottom source-overlap" />
-    <Handle id="target-left" type="target" :position="Position.Left" class="node-handle handle-left" />
-    <Handle id="source-left" type="source" :position="Position.Left" class="node-handle handle-left source-overlap" />
-    <Handle id="target-right" type="target" :position="Position.Right" class="node-handle handle-right" />
-    <Handle id="source-right" type="source" :position="Position.Right" class="node-handle handle-right source-overlap" />
+    <Handle id="source-top" type="source" :position="Position.Top" class="node-handle handle-top" />
+    <Handle id="source-bottom" type="source" :position="Position.Bottom" class="node-handle handle-bottom" />
+    <Handle id="source-left" type="source" :position="Position.Left" class="node-handle handle-left" />
+    <Handle id="source-right" type="source" :position="Position.Right" class="node-handle handle-right" />
+
+    <Handle id="target-top" type="target" :position="Position.Top" class="node-handle target-handle handle-top" />
+    <Handle id="target-bottom" type="target" :position="Position.Bottom" class="node-handle target-handle handle-bottom" />
+    <Handle id="target-left" type="target" :position="Position.Left" class="node-handle target-handle handle-left" />
+    <Handle id="target-right" type="target" :position="Position.Right" class="node-handle target-handle handle-right" />
 
     <div class="shape-content">
       {{ node.name }}
@@ -108,18 +109,22 @@ const polygonPoints = computed(() => {
   transition: opacity 0.12s ease;
 }
 
-.source-overlap {
-  transform: translate(-50%, -50%) scale(1.18);
+.target-handle {
+  width: 16px;
+  height: 16px;
+  background: transparent;
+  border: 0;
 }
 
-.handle-left.source-overlap,
-.handle-right.source-overlap {
-  transform: translateY(-50%) scale(1.18);
-}
-
-.flow-shape-node:hover .node-handle,
-.flow-shape-node:focus-within .node-handle {
+.flow-shape-node:hover .node-handle:not(.target-handle),
+.flow-shape-node:focus-within .node-handle:not(.target-handle) {
   opacity: 1;
+}
+
+.target-handle,
+.flow-shape-node:hover .target-handle,
+.flow-shape-node:focus-within .target-handle {
+  opacity: 0;
 }
 
 .handle-top,
