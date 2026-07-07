@@ -84,7 +84,9 @@ const tableWidth = computed(() => categoryWidth + equipmentWidth.value)
 
 const nodes = computed<Node[]>(() =>
   props.flow.nodes.map((flowNode) => {
-    const stageIndex = Math.max(0, stages.value.findIndex((stage) => stage.stageId === flowNode.stageId))
+    const stageIndexFromStage = stages.value.findIndex((stage) => stage.stageId === flowNode.stageId)
+    const stageIndexFromX = Number.isFinite(flowNode.x) ? stageIndexFromNodeX(flowNode.x) : 0
+    const stageIndex = stageIndexFromStage >= 0 ? stageIndexFromStage : stageIndexFromX
     const laneIndex = Math.max(0, lanes.value.findIndex((lane) => lane.laneId === flowNode.laneId))
     const laneId = lanes.value[laneIndex]?.laneId
     const row = rowLayouts.value.find((layout) => layout.laneId === laneId)
@@ -94,7 +96,7 @@ const nodes = computed<Node[]>(() =>
       id: flowNode.nodeId,
       type: 'flowShape',
       position: {
-        x: stageIndex * stageWidth + nodeX,
+        x: Number.isFinite(flowNode.x) ? flowNode.x : stageIndex * stageWidth + nodeX,
         y: (row?.top ?? laneIndex * minRowHeight) + laneRelativeY,
       },
       data: flowNode,
