@@ -39,6 +39,7 @@ const nodeX = 42
 const nodeY = 28
 const ySnap = 20
 const nodeVisualHeight = 100
+const nodeSnapCenterOffsetY = 44
 const rowPaddingBottom = 80
 const minBodyHeight = 1200
 const snapGuideThreshold = 12
@@ -214,6 +215,10 @@ function getNodePosition(flowNode: FlowNode): NodePosition {
   }
 }
 
+function getNodeCenterY(flowNode: FlowNode): number {
+  return getNodePosition(flowNode).y + nodeSnapCenterOffsetY
+}
+
 function getEdgeHandles(sourceNode: FlowNode, targetNode: FlowNode): { sourceHandle: string; targetHandle: string } {
   const source = getNodePosition(sourceNode)
   const target = getNodePosition(targetNode)
@@ -232,13 +237,14 @@ function getEdgeHandles(sourceNode: FlowNode, targetNode: FlowNode): { sourceHan
 }
 
 function getSnappedAbsoluteY(nodeId: string, desiredY: number): number {
-  const target = props.flow.nodes
+  const desiredCenterY = desiredY + nodeSnapCenterOffsetY
+  const targetCenterY = props.flow.nodes
     .filter((node) => node.nodeId !== nodeId)
-    .map((node) => getNodePosition(node).y)
-    .find((nodeYPosition) => Math.abs(nodeYPosition - desiredY) <= snapGuideThreshold)
+    .map((node) => getNodeCenterY(node))
+    .find((centerY) => Math.abs(centerY - desiredCenterY) <= snapGuideThreshold)
 
-  horizontalGuideY.value = target ?? null
-  return target ?? desiredY
+  horizontalGuideY.value = targetCenterY ?? null
+  return targetCenterY === undefined ? desiredY : targetCenterY - nodeSnapCenterOffsetY
 }
 
 function getPoint(event: DragEvent): { stageIndex: number; laneIndex: number; y: number } | null {
