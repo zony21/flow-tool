@@ -121,7 +121,6 @@ public sealed class ExportsController(AppDbContext dbContext) : ControllerBase
 
         var nodes = await dbContext.Nodes.AsNoTracking()
             .Where(x => x.FlowId == flowId)
-            .OrderBy(x => x.Name)
             .Select(x => new
             {
                 x.NodeId,
@@ -173,6 +172,17 @@ public sealed class ExportsController(AppDbContext dbContext) : ControllerBase
             })
             .ToListAsync(cancellationToken);
 
+        var laneSort = lanes.ToDictionary(x => x.LaneId, x => x.SortOrder);
+        var stageSort = stages.ToDictionary(x => x.StageId, x => x.SortOrder);
+
+        var exportNodes = nodes
+            .Select(x => new ExportNode(x.NodeId, x.FlowId, x.LaneId, x.StageId, x.NodeType, x.Name, x.Description, x.X, x.Y))
+            .OrderBy(x => x.LaneId is Guid laneId && laneSort.TryGetValue(laneId, out var laneOrder) ? laneOrder : int.MaxValue)
+            .ThenBy(x => x.Y)
+            .ThenBy(x => x.StageId is Guid stageId && stageSort.TryGetValue(stageId, out var stageOrder) ? stageOrder : int.MaxValue)
+            .ThenBy(x => x.Name)
+            .ToList();
+
         return new FlowSnapshot(
             1,
             DateTime.UtcNow,
@@ -188,7 +198,7 @@ public sealed class ExportsController(AppDbContext dbContext) : ControllerBase
                 flow.UpdatedAtUtc),
             lanes.Select(x => new ExportLane(x.LaneId, x.FlowId, x.Name, x.SortOrder)).ToList(),
             stages.Select(x => new ExportStage(x.StageId, x.FlowId, x.Name, x.SortOrder)).ToList(),
-            nodes.Select(x => new ExportNode(x.NodeId, x.FlowId, x.LaneId, x.StageId, x.NodeType, x.Name, x.Description, x.X, x.Y)).ToList(),
+            exportNodes,
             links.Select(x => new ExportLink(x.LinkId, x.FlowId, x.SourceNodeId, x.TargetNodeId, x.Label, x.Condition)).ToList(),
             comments.Select(x => new ExportComment(x.CommentId, x.FlowId, x.NodeId, x.Text, x.X, x.Y)).ToList(),
             metadata.Select(x => new ExportMetadata(x.MetadataId, x.FlowId, x.MetaKey, x.MetaValue)).ToList());
@@ -199,14 +209,62 @@ public sealed class ExportsController(AppDbContext dbContext) : ControllerBase
         var builder = new StringBuilder();
         builder.AppendLine($"flowchart {direction}");
         builder.AppendLine($"%% Flow: {EscapeMermaidComment(snapshot.Flow.Name)}");
+        builder.AppendLine("%% Columns are generated from Stage. Process categories are generated from Lane.");
 
         var nodeIds = new Dictionary<Guid, string>();
         var index = 1;
         foreach (var node in snapshot.Nodes)
         {
-            var nodeKey = $"N{index++}";
-            nodeIds[node.NodeId] = nodeKey;
-            builder.AppendLine($"    {nodeKey}[\"{EscapeMermaidLabel(node.Name)}\"]");
+            nodeIds[node.NodeId] = $"N{index++}";
+        }
+
+        var lanesById = snapshot.Lanes.ToDictionary(x => x.LaneId, x => x);
+        var renderedNodeIds = new HashSet<Guid>();
+        var stageIndex = 1;
+
+        foreach (var stage in snapshot.Stages.OrderBy(x => x.SortOrder))
+        {
+            var stageNodes = snapshot.Nodes
+                .Where(x => x.StageId == stage.StageId)
+                .OrderBy(x => x.LaneId is Guid laneId && lanesById.TryGetValue(laneId, out var lane) ? lane.SortOrder : int.MaxValue)
+                .ThenBy(x => x.Y)
+                .ThenBy(x => x.Name)
+                .ToList();
+
+            if (stageNodes.Count == 0)
+            {
+                continue;
+            }
+
+            builder.AppendLine($"    subgraph ST{stageIndex++}[\"{EscapeMermaidLabel(stage.Name)}\"]");
+            builder.AppendLine("        direction TD");
+
+            string? currentLaneName = null;
+            foreach (var node in stageNodes)
+            {
+                if (node.LaneId is Guid laneId && lanesById.TryGetValue(laneId, out var lane) && currentLaneName != lane.Name)
+                {
+                    currentLaneName = lane.Name;
+                    builder.AppendLine($"        %% 工程分類: {EscapeMermaidComment(currentLaneName)}");
+                }
+
+                builder.AppendLine($"        {BuildMermaidNodeDeclaration(nodeIds[node.NodeId], node)}");
+                renderedNodeIds.Add(node.NodeId);
+            }
+
+            builder.AppendLine("    end");
+        }
+
+        var unassignedNodes = snapshot.Nodes.Where(x => !renderedNodeIds.Contains(x.NodeId)).ToList();
+        if (unassignedNodes.Count > 0)
+        {
+            builder.AppendLine("    subgraph UNASSIGNED[\"未分類\"]");
+            builder.AppendLine("        direction TD");
+            foreach (var node in unassignedNodes)
+            {
+                builder.AppendLine($"        {BuildMermaidNodeDeclaration(nodeIds[node.NodeId], node)}");
+            }
+            builder.AppendLine("    end");
         }
 
         foreach (var link in snapshot.Links)
@@ -216,10 +274,16 @@ public sealed class ExportsController(AppDbContext dbContext) : ControllerBase
                 continue;
             }
 
-            var label = string.IsNullOrWhiteSpace(link.Label) ? null : EscapeMermaidLabel(link.Label);
+            var labelSource = !string.IsNullOrWhiteSpace(link.Condition) ? link.Condition : link.Label;
+            var label = string.IsNullOrWhiteSpace(labelSource) ? null : EscapeMermaidLabel(labelSource);
             builder.AppendLine(label is null
                 ? $"    {source} --> {target}"
                 : $"    {source} -->|\"{label}\"| {target}");
+        }
+
+        foreach (var node in snapshot.Nodes.Where(x => string.Equals(x.NodeType, "wait", StringComparison.OrdinalIgnoreCase)))
+        {
+            builder.AppendLine($"    style {nodeIds[node.NodeId]} stroke-dasharray: 6 4");
         }
 
         if (includeComments)
@@ -231,6 +295,19 @@ public sealed class ExportsController(AppDbContext dbContext) : ControllerBase
         }
 
         return builder.ToString().TrimEnd();
+    }
+
+    private static string BuildMermaidNodeDeclaration(string nodeKey, ExportNode node)
+    {
+        var label = EscapeMermaidLabel(node.Name);
+        return node.NodeType.ToLowerInvariant() switch
+        {
+            "start" or "end" => $"{nodeKey}([\"{label}\"])",
+            "decision" => $"{nodeKey}{{\"{label}\"}}",
+            "preparation" => $"{nodeKey}{{{{\"{label}\"}}}}",
+            "document" => $"{nodeKey}[/\"{label}\"/]",
+            _ => $"{nodeKey}[\"{label}\"]",
+        };
     }
 
     private static string EscapeMermaidLabel(string value)
