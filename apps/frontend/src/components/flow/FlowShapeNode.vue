@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Handle, Position } from '@vue-flow/core'
 import type { FlowNode } from '../../types/flow'
 
 defineProps<{
@@ -8,6 +9,11 @@ defineProps<{
 
 <template>
   <div class="flow-shape-node" :class="`shape-${node.nodeType}`">
+    <Handle type="target" :position="Position.Top" class="node-handle handle-top" />
+    <Handle type="source" :position="Position.Bottom" class="node-handle handle-bottom" />
+    <Handle type="target" :position="Position.Left" class="node-handle handle-left" />
+    <Handle type="source" :position="Position.Right" class="node-handle handle-right" />
+
     <div class="shape-content">
       {{ node.name }}
     </div>
@@ -35,6 +41,7 @@ defineProps<{
 .shape-content {
   max-width: 132px;
   overflow-wrap: anywhere;
+  pointer-events: none;
 }
 
 .shape-start,
@@ -43,7 +50,7 @@ defineProps<{
 }
 
 .shape-process {
-  border-radius: 6px;
+  border-radius: 4px;
 }
 
 .shape-decision {
@@ -61,11 +68,35 @@ defineProps<{
 }
 
 .shape-document {
-  border-radius: 6px 6px 22px 6px;
+  border-radius: 4px 4px 18px 18px;
 }
 
 .shape-wait {
   border-style: dashed;
-  border-radius: 6px;
+  border-radius: 4px;
+}
+
+.node-handle {
+  width: 9px;
+  height: 9px;
+  background: #2563eb;
+  border: 2px solid #ffffff;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.flow-shape-node:hover .node-handle,
+.flow-shape-node:focus-within .node-handle {
+  opacity: 1;
+}
+
+.handle-top,
+.handle-bottom {
+  left: 50%;
+}
+
+.handle-left,
+.handle-right {
+  top: 50%;
 }
 </style>
