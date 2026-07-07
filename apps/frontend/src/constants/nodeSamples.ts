@@ -25,6 +25,12 @@ export const nodeSamples: NodeSample[] = [
     description: '条件分岐や判断を表します。',
   },
   {
+    type: 'preparation',
+    label: '準備',
+    defaultName: '準備',
+    description: '準備、初期化、前処理を表す六角形です。',
+  },
+  {
     type: 'document',
     label: '帳票・データ',
     defaultName: '帳票・データ',
