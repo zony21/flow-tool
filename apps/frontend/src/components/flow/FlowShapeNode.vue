@@ -39,6 +39,8 @@ defineProps<{
 }
 
 .shape-content {
+  position: relative;
+  z-index: 1;
   max-width: 132px;
   overflow-wrap: anywhere;
   pointer-events: none;
@@ -53,18 +55,42 @@ defineProps<{
   border-radius: 4px;
 }
 
-.shape-decision {
-  width: 112px;
-  height: 112px;
-  min-width: 112px;
-  min-height: 112px;
+.shape-decision,
+.shape-preparation {
+  width: 120px;
+  height: 92px;
+  min-width: 120px;
+  min-height: 92px;
   padding: 0;
-  border-radius: 4px;
-  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.shape-decision::before,
+.shape-preparation::before {
+  position: absolute;
+  inset: 8px;
+  content: '';
+  background: #ffffff;
+  border: 2px solid #475569;
+  box-shadow: 0 8px 18px rgb(15 23 42 / 12%);
+}
+
+.shape-decision::before {
+  transform: rotate(45deg) scale(0.78);
 }
 
 .shape-decision .shape-content {
-  max-width: 76px;
+  max-width: 70px;
+}
+
+.shape-preparation::before {
+  clip-path: polygon(24% 0, 76% 0, 100% 50%, 76% 100%, 24% 100%, 0 50%);
+}
+
+.shape-preparation .shape-content {
+  max-width: 88px;
 }
 
 .shape-document {
@@ -77,6 +103,7 @@ defineProps<{
 }
 
 .node-handle {
+  z-index: 2;
   width: 9px;
   height: 9px;
   background: #2563eb;
