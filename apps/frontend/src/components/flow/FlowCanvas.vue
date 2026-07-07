@@ -11,7 +11,7 @@ import {
   type NodeMouseEvent,
 } from '@vue-flow/core'
 import FlowShapeNode from './FlowShapeNode.vue'
-import type { FlowDetail } from '../../types/flow'
+import type { FlowDetail, FlowNode } from '../../types/flow'
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 
@@ -41,12 +41,18 @@ const ySnap = 20
 const nodeVisualHeight = 100
 const rowPaddingBottom = 80
 const minBodyHeight = 1200
+const snapGuideThreshold = 12
 const fixedViewport = { x: 0, y: 0, zoom: 1 }
 
 type RowLayout = {
   laneId: string
   top: number
   height: number
+}
+
+type NodePosition = {
+  x: number
+  y: number
 }
 
 const stages = computed(() => props.flow.stages.slice().sort((a, b) => a.sortOrder - b.sortOrder))
@@ -56,6 +62,9 @@ const activeStageId = ref<string | null>(null)
 const activeLaneId = ref<string | null>(null)
 const columnHeaderLabel = ref('機器')
 const rowHeaderLabel = ref('動作')
+const scrollLeft = ref(0)
+const scrollTop = ref(0)
+const horizontalGuideY = ref<number | null>(null)
 const headerStorageKey = computed(() => `flow-canvas-header:${props.flow.flowId}`)
 
 watch(
@@ -84,21 +93,12 @@ const tableWidth = computed(() => categoryWidth + equipmentWidth.value)
 
 const nodes = computed<Node[]>(() =>
   props.flow.nodes.map((flowNode) => {
-    const stageIndexFromStage = stages.value.findIndex((stage) => stage.stageId === flowNode.stageId)
-    const stageIndexFromX = Number.isFinite(flowNode.x) ? stageIndexFromNodeX(flowNode.x) : 0
-    const stageIndex = stageIndexFromStage >= 0 ? stageIndexFromStage : stageIndexFromX
-    const laneIndex = Math.max(0, lanes.value.findIndex((lane) => lane.laneId === flowNode.laneId))
-    const laneId = lanes.value[laneIndex]?.laneId
-    const row = rowLayouts.value.find((layout) => layout.laneId === laneId)
-    const laneRelativeY = Number.isFinite(flowNode.y) ? flowNode.y : nodeY
+    const position = getNodePosition(flowNode)
 
     return {
       id: flowNode.nodeId,
       type: 'flowShape',
-      position: {
-        x: Number.isFinite(flowNode.x) ? flowNode.x : stageIndex * stageWidth + nodeX,
-        y: (row?.top ?? laneIndex * minRowHeight) + laneRelativeY,
-      },
+      position,
       data: flowNode,
       draggable: !props.readonly,
       connectable: !props.readonly,
@@ -108,15 +108,23 @@ const nodes = computed<Node[]>(() =>
 )
 
 const edges = computed<Edge[]>(() =>
-  props.flow.links.map((link) => ({
-    id: link.linkId,
-    source: link.sourceNodeId,
-    target: link.targetNodeId,
-    label: link.condition || link.label || undefined,
-    type: 'step',
-    markerEnd: MarkerType.ArrowClosed,
-    class: link.linkId === props.selectedLinkId ? 'selected-flow-link' : undefined,
-  })),
+  props.flow.links.map((link) => {
+    const sourceNode = props.flow.nodes.find((node) => node.nodeId === link.sourceNodeId)
+    const targetNode = props.flow.nodes.find((node) => node.nodeId === link.targetNodeId)
+    const handles = sourceNode && targetNode ? getEdgeHandles(sourceNode, targetNode) : null
+
+    return {
+      id: link.linkId,
+      source: link.sourceNodeId,
+      target: link.targetNodeId,
+      sourceHandle: handles?.sourceHandle,
+      targetHandle: handles?.targetHandle,
+      label: link.condition || link.label || undefined,
+      type: 'step',
+      markerEnd: MarkerType.ArrowClosed,
+      class: link.linkId === props.selectedLinkId ? 'selected-flow-link' : undefined,
+    }
+  }),
 )
 
 function loadHeaderLabels(): void {
@@ -191,10 +199,52 @@ function relativeYFromAbsoluteY(rowIndex: number, y: number): number {
   return snapY(y - (row?.top ?? 0))
 }
 
+function getNodePosition(flowNode: FlowNode): NodePosition {
+  const stageIndexFromStage = stages.value.findIndex((stage) => stage.stageId === flowNode.stageId)
+  const stageIndexFromX = Number.isFinite(flowNode.x) ? stageIndexFromNodeX(flowNode.x) : 0
+  const stageIndex = stageIndexFromStage >= 0 ? stageIndexFromStage : stageIndexFromX
+  const laneIndex = Math.max(0, lanes.value.findIndex((lane) => lane.laneId === flowNode.laneId))
+  const laneId = lanes.value[laneIndex]?.laneId
+  const row = rowLayouts.value.find((layout) => layout.laneId === laneId)
+  const laneRelativeY = Number.isFinite(flowNode.y) ? flowNode.y : nodeY
+
+  return {
+    x: Number.isFinite(flowNode.x) ? flowNode.x : nodeXFromStageIndex(stageIndex),
+    y: (row?.top ?? laneIndex * minRowHeight) + laneRelativeY,
+  }
+}
+
+function getEdgeHandles(sourceNode: FlowNode, targetNode: FlowNode): { sourceHandle: string; targetHandle: string } {
+  const source = getNodePosition(sourceNode)
+  const target = getNodePosition(targetNode)
+  const dx = target.x - source.x
+  const dy = target.y - source.y
+
+  if (Math.abs(dx) > Math.abs(dy)) {
+    return dx >= 0
+      ? { sourceHandle: 'source-right', targetHandle: 'target-left' }
+      : { sourceHandle: 'source-left', targetHandle: 'target-right' }
+  }
+
+  return dy >= 0
+    ? { sourceHandle: 'source-bottom', targetHandle: 'target-top' }
+    : { sourceHandle: 'source-top', targetHandle: 'target-bottom' }
+}
+
+function getSnappedAbsoluteY(nodeId: string, desiredY: number): number {
+  const target = props.flow.nodes
+    .filter((node) => node.nodeId !== nodeId)
+    .map((node) => getNodePosition(node).y)
+    .find((nodeYPosition) => Math.abs(nodeYPosition - desiredY) <= snapGuideThreshold)
+
+  horizontalGuideY.value = target ?? null
+  return target ?? desiredY
+}
+
 function getPoint(event: DragEvent): { stageIndex: number; laneIndex: number; y: number } | null {
   const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
-  const x = event.clientX - rect.left - categoryWidth
-  const absoluteY = event.clientY - rect.top - headerHeight
+  const x = event.clientX - rect.left + scrollLeft.value - categoryWidth
+  const absoluteY = event.clientY - rect.top + scrollTop.value - headerHeight
   if (x < 0 || absoluteY < 0 || x >= equipmentWidth.value || stages.value.length === 0) return null
   const laneIndex = rowIndexFromAbsoluteY(absoluteY)
   return {
@@ -202,6 +252,12 @@ function getPoint(event: DragEvent): { stageIndex: number; laneIndex: number; y:
     laneIndex,
     y: relativeYFromAbsoluteY(laneIndex, absoluteY),
   }
+}
+
+function onScroll(event: Event): void {
+  const element = event.currentTarget as HTMLElement
+  scrollLeft.value = element.scrollLeft
+  scrollTop.value = element.scrollTop
 }
 
 function onDragOver(event: DragEvent): void {
@@ -244,19 +300,24 @@ function onNodeDrag(event: NodeDragEvent): void {
   if (props.readonly) return
   const stageIndex = stageIndexFromNodeX(event.node.position.x)
   event.node.position.x = nodeXFromStageIndex(stageIndex)
+  event.node.position.y = getSnappedAbsoluteY(event.node.id, event.node.position.y)
 }
 
 function onNodeDragStop(event: NodeDragEvent): void {
   if (props.readonly) return
   const stageIndex = stageIndexFromNodeX(event.node.position.x)
-  const laneIndex = rowIndexFromAbsoluteY(event.node.position.y)
+  const snappedY = getSnappedAbsoluteY(event.node.id, event.node.position.y)
+  const laneIndex = rowIndexFromAbsoluteY(snappedY)
+
   emit('node-moved', {
     nodeId: event.node.id,
     x: nodeXFromStageIndex(stageIndex),
-    y: relativeYFromAbsoluteY(laneIndex, event.node.position.y),
+    y: relativeYFromAbsoluteY(laneIndex, snappedY),
     stageId: stages.value[stageIndex]?.stageId,
     laneId: lanes.value[laneIndex]?.laneId,
   })
+
+  horizontalGuideY.value = null
 }
 
 function onConnect(connection: Connection): void {
@@ -277,14 +338,14 @@ function onEdgeClick(event: EdgeMouseEvent): void {
 </script>
 
 <template>
-  <div class="flow-canvas" @dragover="onDragOver" @drop="onDrop" @dragleave="onDragLeave">
+  <div class="flow-canvas" @scroll="onScroll" @dragover="onDragOver" @drop="onDrop" @dragleave="onDragLeave">
     <div v-if="!hasEquipment" class="canvas-guidance">
       <h2>列が未設定です</h2>
       <p>設備/分類設定から列を追加してください。</p>
     </div>
 
     <div class="flow-table" :style="{ width: `max(100%, ${tableWidth}px)`, minWidth: `${tableWidth}px`, minHeight: `${headerHeight + bodyHeight}px` }">
-      <div class="category-header" :style="{ width: `${categoryWidth}px`, height: `${headerHeight}px` }">
+      <div class="category-header" :style="{ width: `${categoryWidth}px`, height: `${headerHeight}px`, transform: `translate(${scrollLeft}px, ${scrollTop}px)` }">
         <span class="diagonal-line" />
         <span
           class="corner-label column-label"
@@ -303,14 +364,14 @@ function onEdgeClick(event: EdgeMouseEvent): void {
           @keydown="stopHeaderEdit"
         >{{ rowHeaderLabel }}</span>
       </div>
-      <div class="equipment-header" :style="{ left: `${categoryWidth}px`, width: `${equipmentWidth}px`, height: `${headerHeight}px` }">
+      <div class="equipment-header" :style="{ left: `${categoryWidth}px`, width: `${equipmentWidth}px`, height: `${headerHeight}px`, transform: `translateY(${scrollTop}px)` }">
         <div v-for="stage in stages" :key="stage.stageId" class="equipment-cell" :style="{ width: `${stageWidth}px` }">
           <div class="equipment-icon">{{ stage.name.slice(0, 1) }}</div>
           <strong>{{ stage.name }}</strong>
         </div>
       </div>
 
-      <div class="category-column" :style="{ top: `${headerHeight}px`, width: `${categoryWidth}px`, minHeight: `${bodyHeight}px` }">
+      <div class="category-column" :style="{ top: `${headerHeight}px`, width: `${categoryWidth}px`, minHeight: `${bodyHeight}px`, transform: `translateX(${scrollLeft}px)` }">
         <div v-for="row in rowLayouts" :key="row.laneId" class="category-cell" :class="{ active: activeLaneId === row.laneId }" :style="{ height: `${row.height}px` }">
           {{ lanes.find((lane) => lane.laneId === row.laneId)?.name }}
         </div>
@@ -321,6 +382,8 @@ function onEdgeClick(event: EdgeMouseEvent): void {
           <div v-for="row in rowLayouts" :key="`${stage.stageId}-${row.laneId}`" class="category-band" :class="{ active: activeLaneId === row.laneId && activeStageId === stage.stageId }" :style="{ height: `${row.height}px` }" />
         </div>
       </div>
+
+      <div v-if="horizontalGuideY !== null" class="snap-guide-horizontal" :style="{ top: `${headerHeight + horizontalGuideY}px`, left: `${categoryWidth}px`, width: `${equipmentWidth}px` }" />
 
       <VueFlow
         class="vue-flow"
@@ -370,7 +433,11 @@ function onEdgeClick(event: EdgeMouseEvent): void {
   background: #fff;
 }
 
+.category-header,
+.equipment-header,
+.category-column,
 .grid-layer,
+.snap-guide-horizontal,
 .vue-flow {
   position: absolute;
 }
@@ -383,7 +450,6 @@ function onEdgeClick(event: EdgeMouseEvent): void {
 }
 
 .category-header {
-  position: sticky;
   left: 0;
   z-index: 30;
   overflow: hidden;
@@ -391,6 +457,7 @@ function onEdgeClick(event: EdgeMouseEvent): void {
   border-right: 1px solid #cbd5e1;
   font-size: 0.9rem;
   font-weight: 800;
+  will-change: transform;
 }
 
 .diagonal-line {
@@ -429,9 +496,9 @@ function onEdgeClick(event: EdgeMouseEvent): void {
 }
 
 .equipment-header {
-  position: sticky;
   z-index: 20;
   display: flex;
+  will-change: transform;
 }
 
 .equipment-cell {
@@ -467,13 +534,11 @@ function onEdgeClick(event: EdgeMouseEvent): void {
 }
 
 .category-column {
-  position: sticky;
   left: 0;
-  top: unset !important;
   z-index: 15;
   background: #f8fafc;
   border-right: 1px solid #cbd5e1;
-  transform: translateY(92px);
+  will-change: transform;
 }
 
 .category-cell {
@@ -524,6 +589,13 @@ function onEdgeClick(event: EdgeMouseEvent): void {
 
 .category-band.active {
   background: rgb(96 165 250 / 18%);
+}
+
+.snap-guide-horizontal {
+  z-index: 4;
+  height: 0;
+  border-top: 2px dashed #2563eb;
+  pointer-events: none;
 }
 
 .vue-flow {
