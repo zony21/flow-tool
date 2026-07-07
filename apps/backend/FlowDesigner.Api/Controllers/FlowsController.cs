@@ -391,8 +391,9 @@ public sealed class FlowsController(
         var nodes = await dbContext.Nodes.AsNoTracking().Where(x => x.FlowId == flowId).OrderBy(x => x.Name).Select(x => new NodeDto(x.NodeId, x.FlowId, x.LaneId, x.StageId, x.NodeType, x.Name, x.Description, x.X, x.Y)).ToListAsync(cancellationToken);
         var links = await dbContext.Links.AsNoTracking().Where(x => x.FlowId == flowId).Select(x => new LinkDto(x.LinkId, x.FlowId, x.SourceNodeId, x.TargetNodeId, x.Label, x.Condition)).ToListAsync(cancellationToken);
         var comments = await dbContext.Comments.AsNoTracking().Where(x => x.FlowId == flowId).Select(x => new CommentDto(x.CommentId, x.FlowId, x.NodeId, x.Text, x.X, x.Y)).ToListAsync(cancellationToken);
+        var metadata = await dbContext.MetadataItems.AsNoTracking().Where(x => x.FlowId == flowId).Select(x => new MetadataDto(x.MetadataId, x.FlowId, x.MetaKey, x.MetaValue)).ToListAsync(cancellationToken);
 
-        return new FlowDetailDto(flow.FlowId, flow.ProjectId, flow.Name, flow.Description, flow.SortOrder, flow.Revision, lanes, stages, nodes, links, comments);
+        return new FlowDetailDto(flow.FlowId, flow.ProjectId, flow.Name, flow.Description, flow.SortOrder, flow.Revision, lanes, stages, nodes, links, comments, metadata);
     }
 
     private async Task<string> BuildDuplicateFlowNameAsync(Guid projectId, string baseName, CancellationToken cancellationToken)
@@ -459,7 +460,7 @@ public sealed class FlowsController(
 
         if (comments.Any(x => x.NodeId.HasValue && !nodeIds.Contains(x.NodeId.Value)))
         {
-            return "Comment nodeId must reference an existing node.";
+            return "Comment nodeId must reference existing node.";
         }
 
         return null;
