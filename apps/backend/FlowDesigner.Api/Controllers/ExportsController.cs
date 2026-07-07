@@ -32,7 +32,7 @@ public sealed class ExportsController(AppDbContext dbContext) : ControllerBase
             return NotFound(ApiError.Create(HttpContext, ApiErrorCodes.NotFound, "Flow was not found."));
         }
 
-        var json = JsonSerializer.Serialize(snapshot, ExportJsonOptions);
+        var json = JsonSerializer.Serialize(BuildJsonExport(snapshot), ExportJsonOptions);
         return File(
             Encoding.UTF8.GetBytes(json),
             "application/json",
@@ -221,62 +221,134 @@ public sealed class ExportsController(AppDbContext dbContext) : ControllerBase
             metadata.Select(x => new ExportMetadata(x.MetadataId, x.FlowId, x.MetaKey, x.MetaValue)).ToList());
     }
 
+    private static object BuildJsonExport(FlowSnapshot snapshot)
+    {
+        var nodeKeys = BuildNodeKeys(snapshot.Nodes);
+        var nodesById = snapshot.Nodes.ToDictionary(x => x.NodeId, x => x);
+        var lanesById = snapshot.Lanes.ToDictionary(x => x.LaneId, x => x);
+        var stagesById = snapshot.Stages.ToDictionary(x => x.StageId, x => x);
+        var outgoing = snapshot.Links.GroupBy(x => x.SourceNodeId).ToDictionary(x => x.Key, x => x.ToList());
+        var incoming = snapshot.Links.GroupBy(x => x.TargetNodeId).ToDictionary(x => x.Key, x => x.ToList());
+
+        var enrichedNodes = snapshot.Nodes.Select((node, index) => new
+        {
+            key = nodeKeys[node.NodeId],
+            visualOrder = index + 1,
+            node.NodeId,
+            node.FlowId,
+            node.LaneId,
+            laneName = node.LaneId is Guid laneId && lanesById.TryGetValue(laneId, out var lane) ? lane.Name : null,
+            node.StageId,
+            stageName = node.StageId is Guid stageId && stagesById.TryGetValue(stageId, out var stage) ? stage.Name : null,
+            node.NodeType,
+            node.Name,
+            node.Description,
+            position = new { node.X, node.Y },
+            previous = incoming.TryGetValue(node.NodeId, out var previousLinks)
+                ? previousLinks.Select(link => new
+                {
+                    link.LinkId,
+                    fromKey = nodeKeys.GetValueOrDefault(link.SourceNodeId),
+                    fromNodeId = link.SourceNodeId,
+                    fromName = nodesById.TryGetValue(link.SourceNodeId, out var sourceNode) ? sourceNode.Name : null,
+                    label = ChooseLinkLabel(link),
+                }).ToList()
+                : [],
+            next = outgoing.TryGetValue(node.NodeId, out var nextLinks)
+                ? nextLinks.Select(link => new
+                {
+                    link.LinkId,
+                    toKey = nodeKeys.GetValueOrDefault(link.TargetNodeId),
+                    toNodeId = link.TargetNodeId,
+                    toName = nodesById.TryGetValue(link.TargetNodeId, out var targetNode) ? targetNode.Name : null,
+                    label = ChooseLinkLabel(link),
+                }).ToList()
+                : [],
+        }).ToList();
+
+        var enrichedLinks = snapshot.Links.Select(link => new
+        {
+            link.LinkId,
+            link.FlowId,
+            link.SourceNodeId,
+            sourceKey = nodeKeys.GetValueOrDefault(link.SourceNodeId),
+            sourceName = nodesById.TryGetValue(link.SourceNodeId, out var sourceNode) ? sourceNode.Name : null,
+            link.TargetNodeId,
+            targetKey = nodeKeys.GetValueOrDefault(link.TargetNodeId),
+            targetName = nodesById.TryGetValue(link.TargetNodeId, out var targetNode) ? targetNode.Name : null,
+            link.Label,
+            link.Condition,
+            effectiveLabel = ChooseLinkLabel(link),
+        }).ToList();
+
+        var visualOrderByLane = snapshot.Lanes.OrderBy(x => x.SortOrder).Select(lane => new
+        {
+            lane.LaneId,
+            lane.Name,
+            nodes = snapshot.Nodes
+                .Where(node => node.LaneId == lane.LaneId)
+                .OrderBy(node => node.Y)
+                .ThenBy(node => node.X)
+                .ThenBy(node => node.Name)
+                .Select(node => new
+                {
+                    key = nodeKeys[node.NodeId],
+                    node.NodeId,
+                    node.Name,
+                    node.StageId,
+                    stageName = node.StageId is Guid stageId && stagesById.TryGetValue(stageId, out var stage) ? stage.Name : null,
+                    position = new { node.X, node.Y },
+                })
+                .ToList(),
+        }).ToList();
+
+        return new
+        {
+            snapshot.SchemaVersion,
+            snapshot.ExportedAtUtc,
+            snapshot.Project,
+            snapshot.Flow,
+            snapshot.Lanes,
+            snapshot.Stages,
+            raw = new
+            {
+                snapshot.Nodes,
+                snapshot.Links,
+                snapshot.Comments,
+                snapshot.Metadata,
+            },
+            flowGraph = new
+            {
+                nodes = enrichedNodes,
+                links = enrichedLinks,
+                visualOrderByLane,
+            },
+        };
+    }
+
     private static string BuildMermaidFlowchart(FlowSnapshot snapshot, string direction, bool includeComments)
     {
         var builder = new StringBuilder();
         builder.AppendLine($"flowchart {direction}");
         builder.AppendLine($"%% Flow: {EscapeMermaidComment(snapshot.Flow.Name)}");
-        builder.AppendLine("%% Columns are generated from Stage. Process categories are generated from Lane.");
+        builder.AppendLine("%% The actual flow is represented by source -> target links. Lane/Stage are emitted as comments, not as layout authority.");
 
         var nodeIds = BuildNodeKeys(snapshot.Nodes);
         var lanesById = snapshot.Lanes.ToDictionary(x => x.LaneId, x => x);
-        var renderedNodeIds = new HashSet<Guid>();
-        var stageIndex = 1;
+        var stagesById = snapshot.Stages.ToDictionary(x => x.StageId, x => x);
 
-        foreach (var stage in snapshot.Stages.OrderBy(x => x.SortOrder))
+        foreach (var node in snapshot.Nodes)
         {
-            var stageNodes = snapshot.Nodes
-                .Where(x => x.StageId == stage.StageId)
-                .OrderBy(x => x.LaneId is Guid laneId && lanesById.TryGetValue(laneId, out var lane) ? lane.SortOrder : int.MaxValue)
-                .ThenBy(x => x.Y)
-                .ThenBy(x => x.X)
-                .ThenBy(x => x.Name)
-                .ToList();
-
-            if (stageNodes.Count == 0)
-            {
-                continue;
-            }
-
-            builder.AppendLine($"    subgraph ST{stageIndex++}[\"{EscapeMermaidLabel(stage.Name)}\"]");
-            builder.AppendLine("        direction TD");
-
-            string? currentLaneName = null;
-            foreach (var node in stageNodes)
-            {
-                if (node.LaneId is Guid laneId && lanesById.TryGetValue(laneId, out var lane) && currentLaneName != lane.Name)
-                {
-                    currentLaneName = lane.Name;
-                    builder.AppendLine($"        %% 工程分類: {EscapeMermaidComment(currentLaneName)}");
-                }
-
-                builder.AppendLine($"        {BuildMermaidNodeDeclaration(nodeIds[node.NodeId], node)}");
-                renderedNodeIds.Add(node.NodeId);
-            }
-
-            builder.AppendLine("    end");
+            var laneName = node.LaneId is Guid laneId && lanesById.TryGetValue(laneId, out var lane) ? lane.Name : "未設定";
+            var stageName = node.StageId is Guid stageId && stagesById.TryGetValue(stageId, out var stage) ? stage.Name : "未設定";
+            builder.AppendLine($"    %% {nodeIds[node.NodeId]} lane={EscapeMermaidComment(laneName)} stage={EscapeMermaidComment(stageName)} x={node.X} y={node.Y}");
+            builder.AppendLine($"    {BuildMermaidNodeDeclaration(nodeIds[node.NodeId], node)}");
         }
 
-        var unassignedNodes = snapshot.Nodes.Where(x => !renderedNodeIds.Contains(x.NodeId)).ToList();
-        if (unassignedNodes.Count > 0)
+        if (snapshot.Links.Count > 0)
         {
-            builder.AppendLine("    subgraph UNASSIGNED[\"未分類\"]");
-            builder.AppendLine("        direction TD");
-            foreach (var node in unassignedNodes)
-            {
-                builder.AppendLine($"        {BuildMermaidNodeDeclaration(nodeIds[node.NodeId], node)}");
-            }
-            builder.AppendLine("    end");
+            builder.AppendLine();
+            builder.AppendLine("    %% Links");
         }
 
         foreach (var link in snapshot.Links)
@@ -286,7 +358,7 @@ public sealed class ExportsController(AppDbContext dbContext) : ControllerBase
                 continue;
             }
 
-            var labelSource = !string.IsNullOrWhiteSpace(link.Condition) ? link.Condition : link.Label;
+            var labelSource = ChooseLinkLabel(link);
             var label = string.IsNullOrWhiteSpace(labelSource) ? null : EscapeMermaidLabel(labelSource);
             builder.AppendLine(label is null
                 ? $"    {source} --> {target}"
@@ -298,8 +370,9 @@ public sealed class ExportsController(AppDbContext dbContext) : ControllerBase
             builder.AppendLine($"    style {nodeIds[node.NodeId]} stroke-dasharray: 6 4");
         }
 
-        if (includeComments)
+        if (includeComments && snapshot.Comments.Count > 0)
         {
+            builder.AppendLine();
             foreach (var comment in snapshot.Comments)
             {
                 builder.AppendLine($"    %% Comment: {EscapeMermaidComment(comment.Text)}");
