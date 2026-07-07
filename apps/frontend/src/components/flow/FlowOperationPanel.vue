@@ -22,7 +22,7 @@ function onPaletteDragStart(event: DragEvent, nodeType: string): void {
 <template>
   <aside class="operation-panel">
     <h2>図形パレット</h2>
-    <p class="palette-help">図形を設備列へドラッグして配置します。</p>
+    <p class="palette-help">図形を列へドラッグして配置します。</p>
     <div class="sample-grid">
       <button
         v-for="sample in nodeSamples"
@@ -39,7 +39,7 @@ function onPaletteDragStart(event: DragEvent, nodeType: string): void {
       </button>
     </div>
     <p class="connect-help">配置後、図形の端の接続点から別図形へドラッグすると矢印で接続できます。</p>
-    <p v-if="!hasEquipment" class="empty-message">設備/分類設定から設備を追加してください。</p>
+    <p v-if="!hasEquipment" class="empty-message">設備/分類設定から列を追加してください。</p>
   </aside>
 </template>
 
@@ -93,6 +93,11 @@ h2 {
   cursor: grab;
 }
 
+.sample-button span {
+  position: relative;
+  z-index: 1;
+}
+
 .sample-button:active {
   cursor: grabbing;
 }
@@ -111,17 +116,37 @@ h2 {
   border-radius: 4px;
 }
 
-.sample-decision {
-  width: 58px;
+.sample-decision,
+.sample-preparation {
+  width: 76px;
   height: 58px;
   min-height: 58px;
   justify-self: center;
-  padding: 0;
-  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.sample-decision::before,
+.sample-preparation::before {
+  position: absolute;
+  inset: 4px;
+  content: '';
+  background: #ffffff;
+  border: 2px solid #475569;
+  box-shadow: 0 4px 10px rgb(15 23 42 / 8%);
+}
+
+.sample-decision::before {
+  transform: rotate(45deg) scale(0.78);
+}
+
+.sample-preparation::before {
+  clip-path: polygon(24% 0, 76% 0, 100% 50%, 76% 100%, 24% 100%, 0 50%);
 }
 
 .sample-decision span {
-  max-width: 36px;
+  max-width: 38px;
   font-size: 11px;
   line-height: 1.2;
 }
