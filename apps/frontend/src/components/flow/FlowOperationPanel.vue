@@ -8,7 +8,7 @@ const props = defineProps<{
   readonly?: boolean
 }>()
 
-const equipment = computed(() => props.flow.stages.slice().sort((a, b) => a.sortOrder - b.sortOrder))
+const hasEquipment = computed(() => props.flow.stages.length > 0)
 
 function onPaletteDragStart(event: DragEvent, nodeType: string): void {
   if (props.readonly || !event.dataTransfer) return
@@ -21,30 +21,23 @@ function onPaletteDragStart(event: DragEvent, nodeType: string): void {
 
 <template>
   <aside class="operation-panel">
-    <section>
-      <h2>図形パレット</h2>
-      <p class="help-text">図形を設備列へドラッグして配置します。</p>
-
-      <div class="sample-grid">
-        <button
-          v-for="sample in nodeSamples"
-          :key="sample.type"
-          type="button"
-          class="sample-button"
-          :class="`sample-${sample.type}`"
-          :title="sample.description"
-          :disabled="readonly || equipment.length === 0"
-          draggable="true"
-          @dragstart="onPaletteDragStart($event, sample.type)"
-        >
-          <span>{{ sample.label }}</span>
-        </button>
-      </div>
-
-      <p v-if="equipment.length === 0" class="empty-message">
-        先に設備を追加すると、図形を配置できます。
-      </p>
-    </section>
+    <h2>図形パレット</h2>
+    <div class="sample-grid">
+      <button
+        v-for="sample in nodeSamples"
+        :key="sample.type"
+        type="button"
+        class="sample-button"
+        :class="`sample-${sample.type}`"
+        :title="sample.description"
+        :disabled="readonly || !hasEquipment"
+        draggable="true"
+        @dragstart="onPaletteDragStart($event, sample.type)"
+      >
+        <span>{{ sample.label }}</span>
+      </button>
+    </div>
+    <p v-if="!hasEquipment" class="empty-message">設備/分類設定から設備を追加してください。</p>
   </aside>
 </template>
 
@@ -52,21 +45,16 @@ function onPaletteDragStart(event: DragEvent, nodeType: string): void {
 .operation-panel {
   width: 100%;
   box-sizing: border-box;
-  padding: 16px;
-  background: #fff;
+  padding: 12px;
+  background: #ffffff;
   border: 1px solid #dbe3ef;
   border-radius: 8px;
 }
 
 h2 {
-  margin: 0;
-  font-size: 1rem;
-}
-
-.help-text {
-  margin: 6px 0 12px;
-  color: #64748b;
-  font-size: 0.85rem;
+  margin: 0 0 10px;
+  color: #0f172a;
+  font-size: 0.95rem;
 }
 
 .sample-grid {
@@ -76,7 +64,7 @@ h2 {
 }
 
 .sample-button {
-  min-height: 46px;
+  min-height: 42px;
   padding: 6px 8px;
   color: #0f172a;
   background: #fff;
@@ -115,12 +103,12 @@ h2 {
 }
 
 .empty-message {
-  margin: 12px 0 0;
-  padding: 10px 12px;
+  margin: 10px 0 0;
+  padding: 8px 10px;
   color: #64748b;
   background: #f8fafc;
   border: 1px dashed #cbd5e1;
   border-radius: 8px;
-  font-size: 0.9rem;
+  font-size: 0.82rem;
 }
 </style>

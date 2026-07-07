@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import Button from 'primevue/button'
+import Dialog from 'primevue/dialog'
 import MainLayout from '../layouts/MainLayout.vue'
 import EditorLayout from '../layouts/EditorLayout.vue'
 import FlowCanvas from '../components/flow/FlowCanvas.vue'
@@ -37,7 +38,7 @@ const canEdit = computed(() => canUpdateFlow.value)
 const canCreateVersion = computed(() => permissionStore.can(PermissionCodes.VersionCreate))
 const canExport = computed(() => permissionStore.can(PermissionCodes.ExportExecute))
 const hasDetailPanel = computed(() => Boolean(editorStore.selectedNodeId || editorStore.selectedLinkId))
-const paletteCollapsed = ref(false)
+const settingsDialogVisible = ref(false)
 
 onMounted(async () => {
   editorStore.reset()
@@ -232,7 +233,7 @@ function handleKeydown(event: KeyboardEvent): void {
     <EditorLayout>
       <section class="flow-editor-page">
         <div class="flow-editor-header">
-          <div>
+          <div class="flow-title">
             <h1>フローエディタ</h1>
             <p v-if="flow">
               {{ flow.name }} / revision {{ flow.currentRevision }}
@@ -242,6 +243,7 @@ function handleKeydown(event: KeyboardEvent): void {
             <p v-if="!canEdit" class="viewer-badge">閲覧モード：編集は無効です</p>
           </div>
           <div class="header-actions">
+            <Button label="設備/分類設定" severity="secondary" :disabled="!flow" @click="settingsDialogVisible = true" />
             <Button label="バージョン管理" severity="secondary" @click="router.push({ name: 'flow-versions', params: { projectId, flowId } })" />
             <Button label="バージョン作成" severity="secondary" :disabled="!flow || flowStore.loading || !canSaveStructure || !canCreateVersion" @click="createVersionFromCurrentFlow" />
             <Button label="Mermaid出力" icon="pi pi-download" severity="secondary" :disabled="!flow || flowStore.loading || !canExport || editorStore.isDirty" @click="downloadMermaidExport" />
@@ -252,34 +254,8 @@ function handleKeydown(event: KeyboardEvent): void {
           </div>
         </div>
 
-        <p v-if="flowStore.loading">読み込み中...</p>
-        <div
-          v-else-if="flow"
-          class="editor-workspace"
-          :class="{ 'palette-collapsed': paletteCollapsed, 'details-open': hasDetailPanel }"
-        >
-          <aside class="palette-sidebar">
-            <button type="button" class="palette-toggle" @click="paletteCollapsed = !paletteCollapsed">
-              {{ paletteCollapsed ? '図形パレットを開く' : '閉じる' }}
-            </button>
-            <div v-if="!paletteCollapsed" class="palette-content">
-              <FlowOperationPanel
-                :flow="flow"
-                :readonly="!canEdit"
-              />
-              <LaneStagePanel
-                :flow="flow"
-                :readonly="!canEdit"
-                @add-lane="editorStore.addLane"
-                @update-lane="editorStore.updateLane"
-                @delete-lane="editorStore.deleteLane"
-                @add-stage="editorStore.addStage"
-                @update-stage="editorStore.updateStage"
-                @delete-stage="editorStore.deleteStage"
-              />
-            </div>
-          </aside>
-
+        <p v-if="flowStore.loading" class="loading-text">読み込み中...</p>
+        <div v-else-if="flow" class="editor-workspace">
           <FlowCanvas
             :flow="flow"
             :readonly="!canEdit"
@@ -291,7 +267,15 @@ function handleKeydown(event: KeyboardEvent): void {
             @link-selected="editorStore.selectLink($event.linkId)"
             @canvas-cleared="editorStore.clearSelection"
           />
-          <div v-if="hasDetailPanel" class="detail-panels">
+
+          <div class="floating-palette">
+            <FlowOperationPanel
+              :flow="flow"
+              :readonly="!canEdit"
+            />
+          </div>
+
+          <aside v-if="hasDetailPanel" class="detail-drawer">
             <NodePropertyPanel
               v-if="editorStore.selectedNodeId"
               :flow="flow"
@@ -308,9 +292,23 @@ function handleKeydown(event: KeyboardEvent): void {
               @update-link="editorStore.updateLink"
               @delete-link="editorStore.deleteLink"
             />
-          </div>
+          </aside>
         </div>
-        <p v-else>フローを取得できませんでした。</p>
+        <p v-else class="loading-text">フローを取得できませんでした。</p>
+
+        <Dialog v-model:visible="settingsDialogVisible" modal header="設備/分類設定" :style="{ width: 'min(720px, 94vw)' }">
+          <LaneStagePanel
+            v-if="flow"
+            :flow="flow"
+            :readonly="!canEdit"
+            @add-lane="editorStore.addLane"
+            @update-lane="editorStore.updateLane"
+            @delete-lane="editorStore.deleteLane"
+            @add-stage="editorStore.addStage"
+            @update-stage="editorStore.updateStage"
+            @delete-stage="editorStore.deleteStage"
+          />
+        </Dialog>
       </section>
     </EditorLayout>
   </MainLayout>
@@ -320,81 +318,87 @@ function handleKeydown(event: KeyboardEvent): void {
 .flow-editor-page {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
+  min-height: calc(100vh - 76px);
 }
 
 .flow-editor-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
+  min-width: 0;
 }
 
-.flow-editor-header h1 {
+.flow-title {
+  min-width: 220px;
+}
+
+.flow-title h1 {
   margin: 0;
+  color: #0f172a;
+  font-size: 1.35rem;
+  line-height: 1.2;
+  white-space: nowrap;
 }
 
-.flow-editor-header p {
+.flow-title p {
   margin: 4px 0 0;
   color: #64748b;
 }
 
-.editor-workspace {
-  display: grid;
-  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
-  align-items: stretch;
-  gap: 12px;
-  min-height: calc(100vh - 148px);
-}
-
-.editor-workspace.details-open {
-  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr) 320px;
-}
-
-.editor-workspace.palette-collapsed {
-  grid-template-columns: 48px minmax(0, 1fr);
-}
-
-.editor-workspace.palette-collapsed.details-open {
-  grid-template-columns: 48px minmax(0, 1fr) 320px;
-}
-
-.palette-sidebar {
-  min-width: 0;
-}
-
-.palette-content {
+.header-actions {
   display: flex;
-  flex-direction: column;
-  gap: 12px;
-  max-height: calc(100vh - 148px);
-  overflow: auto;
-}
-
-.palette-toggle {
-  width: 100%;
-  min-height: 36px;
-  margin-bottom: 8px;
-  padding: 8px 10px;
-  color: #334155;
-  background: #ffffff;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.palette-collapsed .palette-toggle {
-  writing-mode: vertical-rl;
-  min-height: 180px;
-  margin-bottom: 0;
-}
-
-.detail-panels {
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
   min-width: 0;
-  max-height: calc(100vh - 148px);
+}
+
+.editor-workspace {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.editor-workspace :deep(.flow-canvas) {
+  width: 100%;
+  height: calc(100vh - 148px);
+  min-height: 640px;
+}
+
+.floating-palette {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 10;
+  width: clamp(184px, 18vw, 248px);
+  max-width: calc(100% - 32px);
+}
+
+.detail-drawer {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  bottom: 16px;
+  z-index: 11;
+  width: min(340px, calc(100% - 32px));
   overflow: auto;
+  pointer-events: auto;
+}
+
+.detail-drawer :deep(.node-property-panel),
+.detail-drawer :deep(.link-property-panel) {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  box-shadow: 0 18px 45px rgb(15 23 42 / 18%);
+}
+
+.floating-palette :deep(.operation-panel) {
+  box-shadow: 0 18px 45px rgb(15 23 42 / 16%);
 }
 
 .viewer-badge {
@@ -402,14 +406,6 @@ function handleKeydown(event: KeyboardEvent): void {
   color: #92400e;
   font-size: 12px;
   font-weight: 700;
-}
-
-.header-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
 }
 
 .dirty-badge {
@@ -423,29 +419,36 @@ function handleKeydown(event: KeyboardEvent): void {
   font-weight: 700;
 }
 
-.editor-workspace :deep(.flow-canvas) {
-  min-width: 0;
+.loading-text {
+  margin: 0;
+  color: #64748b;
 }
 
-.editor-workspace :deep(.operation-panel),
-.editor-workspace :deep(.lane-stage-panel),
-.editor-workspace :deep(.node-property-panel),
-.editor-workspace :deep(.link-property-panel) {
-  width: auto;
-  min-width: 0;
-}
-
-@media (max-width: 1100px) {
-  .editor-workspace,
-  .editor-workspace.details-open,
-  .editor-workspace.palette-collapsed,
-  .editor-workspace.palette-collapsed.details-open {
-    grid-template-columns: 1fr;
+@media (max-width: 900px) {
+  .flow-editor-header {
+    align-items: stretch;
+    flex-direction: column;
   }
 
-  .palette-collapsed .palette-toggle {
-    writing-mode: horizontal-tb;
-    min-height: 36px;
+  .header-actions {
+    justify-content: flex-start;
+  }
+
+  .floating-palette {
+    position: static;
+    width: 100%;
+    margin-bottom: 8px;
+  }
+
+  .editor-workspace {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .detail-drawer {
+    position: static;
+    width: 100%;
+    margin-top: 8px;
   }
 }
 </style>
