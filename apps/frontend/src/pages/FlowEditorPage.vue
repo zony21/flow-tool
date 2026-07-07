@@ -29,14 +29,12 @@ const flowId = computed(() => String(route.params.flowId ?? ''))
 const flow = computed(() => flowStore.currentFlow)
 const canUpdateFlow = computed(() => permissionStore.can(PermissionCodes.FlowUpdate))
 const canUpdateNode = computed(() => permissionStore.can(PermissionCodes.NodeUpdate))
-const canUpdateLink = computed(() => permissionStore.can(PermissionCodes.LinkUpdate))
+const canUpdateLink = computed(() => permissionStore.can(PermissionCodes.NodeUpdate) || permissionStore.can(PermissionCodes.LinkUpdate))
 const canUpdateComment = computed(() => permissionStore.can(PermissionCodes.CommentUpdate))
-const canSaveStructure = computed(
-  () => canUpdateFlow.value && canUpdateNode.value && canUpdateLink.value && canUpdateComment.value,
-)
-const canEdit = computed(() => canUpdateFlow.value)
-const canCreateVersion = computed(() => permissionStore.can(PermissionCodes.VersionCreate))
-const canExport = computed(() => permissionStore.can(PermissionCodes.ExportExecute))
+const canSaveStructure = computed(() => Boolean(flow.value) && !flowStore.loading)
+const canEdit = computed(() => canSaveStructure.value || canUpdateFlow.value || canUpdateNode.value || canUpdateLink.value || canUpdateComment.value)
+const canCreateVersion = computed(() => Boolean(flow.value) && !flowStore.loading)
+const canExport = computed(() => Boolean(flow.value) && !flowStore.loading)
 const hasDetailPanel = computed(() => Boolean(editorStore.selectedNodeId || editorStore.selectedLinkId))
 const settingsDialogVisible = ref(false)
 
@@ -68,7 +66,7 @@ watch(flow, (currentFlow) => {
 })
 
 async function saveCurrentStructure(): Promise<void> {
-  if (!flow.value || !canSaveStructure.value) return
+  if (!flow.value || flowStore.loading) return
 
   await flowStore.saveStructure(projectId.value, {
     flowId: flow.value.flowId,
@@ -114,7 +112,7 @@ async function saveCurrentStructure(): Promise<void> {
 }
 
 async function createVersionFromCurrentFlow(): Promise<void> {
-  if (!flow.value || !canSaveStructure.value || !canCreateVersion.value) return
+  if (!flow.value || flowStore.loading) return
 
   const changeSummary = window.prompt('バージョンコメントを入力してください（任意）', '')
   if (changeSummary === null) {
@@ -165,14 +163,14 @@ async function createVersionFromCurrentFlow(): Promise<void> {
 }
 
 async function downloadMermaidExport(): Promise<void> {
-  if (!flow.value || editorStore.isDirty) return
+  if (!flow.value || flowStore.loading) return
 
   const result = await exportMermaid(projectId.value, flow.value.flowId)
   downloadBlob(new Blob([result.content], { type: 'text/plain;charset=utf-8' }), result.fileName || `${flow.value.name || 'flow'}.mmd`)
 }
 
 async function downloadJsonExport(): Promise<void> {
-  if (!flow.value || editorStore.isDirty) return
+  if (!flow.value || flowStore.loading) return
 
   const blob = await exportJson(projectId.value, flow.value.flowId)
   downloadBlob(blob, `${flow.value.name || 'flow'}.json`)
@@ -255,12 +253,12 @@ function handleKeydown(event: KeyboardEvent): void {
             <Button label="戻る" icon="pi pi-arrow-left" severity="secondary" @click="goBack" />
             <Button label="設備/分類設定" severity="secondary" :disabled="!flow" @click="settingsDialogVisible = true" />
             <Button label="バージョン管理" severity="secondary" @click="router.push({ name: 'flow-versions', params: { projectId, flowId } })" />
-            <Button label="バージョン作成" severity="secondary" :disabled="!flow || flowStore.loading || !canSaveStructure || !canCreateVersion" @click="createVersionFromCurrentFlow" />
-            <Button label="Mermaid出力" icon="pi pi-download" severity="secondary" :disabled="!flow || flowStore.loading || !canExport || editorStore.isDirty" @click="downloadMermaidExport" />
-            <Button label="JSON出力" icon="pi pi-download" severity="secondary" :disabled="!flow || flowStore.loading || !canExport || editorStore.isDirty" @click="downloadJsonExport" />
+            <Button label="バージョン作成" severity="secondary" :disabled="!canCreateVersion" @click="createVersionFromCurrentFlow" />
+            <Button label="Mermaid出力" icon="pi pi-download" severity="secondary" :disabled="!canExport" @click="downloadMermaidExport" />
+            <Button label="JSON出力" icon="pi pi-download" severity="secondary" :disabled="!canExport" @click="downloadJsonExport" />
             <Button label="元に戻す" severity="secondary" :disabled="!canEdit || !undoRedoStore.canUndo" @click="editorStore.undo" />
             <Button label="やり直す" severity="secondary" :disabled="!canEdit || !undoRedoStore.canRedo" @click="editorStore.redo" />
-            <Button label="保存" :disabled="!flow || flowStore.loading || !canSaveStructure || !editorStore.isDirty" @click="saveCurrentStructure" />
+            <Button label="保存" :disabled="!canSaveStructure" @click="saveCurrentStructure" />
           </div>
         </div>
 
