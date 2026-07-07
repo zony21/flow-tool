@@ -39,6 +39,8 @@ const hasDetailPanel = computed(() => Boolean(editorStore.selectedNodeId || edit
 const settingsDialogVisible = ref(false)
 const saveMessage = ref<string | null>(null)
 const saveError = ref<string | null>(null)
+const stageWidth = 240
+const nodeX = 42
 
 onMounted(async () => {
   editorStore.reset()
@@ -70,6 +72,11 @@ watch(flow, (currentFlow) => {
 function buildSaveRequest(createVersion: boolean, changeSummary: string | null = null) {
   if (!flow.value) return null
 
+  const sortedStages = flow.value.stages.slice().sort((a, b) => a.sortOrder - b.sortOrder)
+  const sortedLanes = flow.value.lanes.slice().sort((a, b) => a.sortOrder - b.sortOrder)
+  const validStageIds = new Set(sortedStages.map((stage) => stage.stageId))
+  const validLaneIds = new Set(sortedLanes.map((lane) => lane.laneId))
+
   return {
     flowId: flow.value.flowId,
     clientRevision: flow.value.currentRevision,
@@ -85,8 +92,8 @@ function buildSaveRequest(createVersion: boolean, changeSummary: string | null =
     })),
     nodes: flow.value.nodes.map((node) => ({
       nodeId: node.nodeId,
-      laneId: node.laneId,
-      stageId: node.stageId,
+      laneId: node.laneId && validLaneIds.has(node.laneId) ? node.laneId : sortedLanes[0]?.laneId ?? null,
+      stageId: node.stageId && validStageIds.has(node.stageId) ? node.stageId : resolveStageIdByX(node.x, sortedStages),
       nodeType: node.nodeType,
       name: node.name,
       description: node.description,
@@ -110,6 +117,12 @@ function buildSaveRequest(createVersion: boolean, changeSummary: string | null =
     createVersion,
     changeSummary,
   }
+}
+
+function resolveStageIdByX(x: number, sortedStages: { stageId: string }[]): string | null {
+  if (sortedStages.length === 0) return null
+  const index = Math.max(0, Math.min(Math.round((x - nodeX) / stageWidth), sortedStages.length - 1))
+  return sortedStages[index]?.stageId ?? null
 }
 
 async function saveCurrentStructure(): Promise<void> {
