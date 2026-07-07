@@ -28,6 +28,7 @@ const rowHeight = 132
 const nodeX = 42
 const nodeY = 28
 const nodeGap = 86
+const ySnap = 20
 const minBodyHeight = 1200
 
 const stages = computed(() => props.flow.stages.slice().sort((a, b) => a.sortOrder - b.sortOrder))
@@ -36,40 +37,30 @@ const hasEquipment = computed(() => stages.value.length > 0)
 const activeStageId = ref<string | null>(null)
 const activeLaneId = ref<string | null>(null)
 
-const maxCellCount = computed(() => {
-  const map = new Map<string, number>()
-  props.flow.nodes.forEach((node) => {
-    const key = `${node.stageId ?? ''}:${node.laneId ?? ''}`
-    map.set(key, (map.get(key) ?? 0) + 1)
-  })
-  return Math.max(1, ...map.values())
-})
-const laneHeight = computed(() => Math.max(rowHeight, nodeY + maxCellCount.value * nodeGap))
-const bodyHeight = computed(() => Math.max(lanes.value.length * laneHeight.value, minBodyHeight))
 const equipmentWidth = computed(() => Math.max(stages.value.length * stageWidth, stageWidth))
+const maxNodeY = computed(() => Math.max(0, ...props.flow.nodes.map((node) => Number.isFinite(node.y) ? node.y : 0)))
+const bodyHeight = computed(() => Math.max(lanes.value.length * rowHeight, maxNodeY.value + 240, minBodyHeight))
 const tableWidth = computed(() => categoryWidth + equipmentWidth.value)
 
-const nodes = computed<Node[]>(() => {
-  const cellIndex = new Map<string, number>()
-  return props.flow.nodes.map((flowNode) => {
+const nodes = computed<Node[]>(() =>
+  props.flow.nodes.map((flowNode) => {
     const stageIndex = Math.max(0, stages.value.findIndex((stage) => stage.stageId === flowNode.stageId))
     const laneIndex = Math.max(0, lanes.value.findIndex((lane) => lane.laneId === flowNode.laneId))
-    const key = `${flowNode.stageId ?? ''}:${flowNode.laneId ?? ''}`
-    const index = cellIndex.get(key) ?? 0
-    cellIndex.set(key, index + 1)
+    const fallbackY = laneIndex * rowHeight + nodeY
+
     return {
       id: flowNode.nodeId,
       type: 'flowShape',
       position: {
         x: stageIndex * stageWidth + nodeX,
-        y: laneIndex * laneHeight.value + nodeY + index * nodeGap,
+        y: Number.isFinite(flowNode.y) ? flowNode.y : fallbackY,
       },
       data: flowNode,
       draggable: !props.readonly,
       class: flowNode.nodeId === props.selectedNodeId ? 'selected-flow-node' : undefined,
     }
-  })
-})
+  }),
+)
 
 const edges = computed<Edge[]>(() =>
   props.flow.links.map((link) => ({
@@ -87,11 +78,15 @@ function clamp(index: number, max: number): number {
   return Math.max(0, Math.min(index, max - 1))
 }
 
-function laneIndexFromY(y: number): number {
-  return lanes.value.length === 0 ? 0 : clamp(Math.floor(y / laneHeight.value), lanes.value.length)
+function snapY(value: number): number {
+  return Math.max(nodeY, Math.round(value / ySnap) * ySnap)
 }
 
-function getPoint(event: DragEvent): { stageIndex: number; laneIndex: number } | null {
+function laneIndexFromY(y: number): number {
+  return lanes.value.length === 0 ? 0 : clamp(Math.floor(y / rowHeight), lanes.value.length)
+}
+
+function getPoint(event: DragEvent): { stageIndex: number; laneIndex: number; y: number } | null {
   const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
   const x = event.clientX - rect.left - categoryWidth
   const y = event.clientY - rect.top - headerHeight
@@ -99,6 +94,7 @@ function getPoint(event: DragEvent): { stageIndex: number; laneIndex: number } |
   return {
     stageIndex: clamp(Math.floor(x / stageWidth), stages.value.length),
     laneIndex: laneIndexFromY(y),
+    y: snapY(y),
   }
 }
 
@@ -125,7 +121,7 @@ function onDrop(event: DragEvent): void {
     stageId: stages.value[point.stageIndex]?.stageId,
     laneId: lanes.value[point.laneIndex]?.laneId,
     x: point.stageIndex * stageWidth + nodeX,
-    y: point.laneIndex * laneHeight.value + nodeY,
+    y: point.y,
   })
 }
 
@@ -141,11 +137,12 @@ function onDragLeave(event: DragEvent): void {
 function onNodeDragStop(event: NodeDragEvent): void {
   if (props.readonly) return
   const stageIndex = clamp(Math.floor(event.node.position.x / stageWidth), stages.value.length)
-  const laneIndex = laneIndexFromY(event.node.position.y)
+  const y = snapY(event.node.position.y)
+  const laneIndex = laneIndexFromY(y)
   emit('node-moved', {
     nodeId: event.node.id,
     x: stageIndex * stageWidth + nodeX,
-    y: Math.max(0, event.node.position.y),
+    y,
     stageId: stages.value[stageIndex]?.stageId,
     laneId: lanes.value[laneIndex]?.laneId,
   })
@@ -178,14 +175,14 @@ function onEdgeClick(event: EdgeMouseEvent): void {
       </div>
 
       <div class="category-column" :style="{ top: `${headerHeight}px`, width: `${categoryWidth}px`, minHeight: `${bodyHeight}px` }">
-        <div v-for="lane in lanes" :key="lane.laneId" class="category-cell" :class="{ active: activeLaneId === lane.laneId }" :style="{ height: `${laneHeight}px` }">
+        <div v-for="lane in lanes" :key="lane.laneId" class="category-cell" :class="{ active: activeLaneId === lane.laneId }" :style="{ height: `${rowHeight}px` }">
           {{ lane.name }}
         </div>
       </div>
 
       <div class="grid-layer" :style="{ top: `${headerHeight}px`, left: `${categoryWidth}px`, width: `${equipmentWidth}px`, minHeight: `${bodyHeight}px` }">
         <div v-for="stage in stages" :key="stage.stageId" class="equipment-lane" :class="{ active: activeStageId === stage.stageId }" :style="{ width: `${stageWidth}px` }">
-          <div v-for="lane in lanes" :key="`${stage.stageId}-${lane.laneId}`" class="category-band" :class="{ active: activeLaneId === lane.laneId && activeStageId === stage.stageId }" :style="{ height: `${laneHeight}px` }" />
+          <div v-for="lane in lanes" :key="`${stage.stageId}-${lane.laneId}`" class="category-band" :class="{ active: activeLaneId === lane.laneId && activeStageId === stage.stageId }" :style="{ height: `${rowHeight}px` }" />
         </div>
       </div>
 
