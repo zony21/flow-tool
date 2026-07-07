@@ -255,23 +255,22 @@ function handleKeydown(event: KeyboardEvent): void {
         </div>
 
         <p v-if="flowStore.loading" class="loading-text">読み込み中...</p>
-        <div v-else-if="flow" class="editor-workspace">
-          <FlowCanvas
-            :flow="flow"
-            :readonly="!canEdit"
-            :selected-node-id="editorStore.selectedNodeId"
-            :selected-link-id="editorStore.selectedLinkId"
-            @add-node="editorStore.addNode"
-            @node-moved="editorStore.moveNode"
-            @node-selected="editorStore.selectNode($event.nodeId)"
-            @link-selected="editorStore.selectLink($event.linkId)"
-            @canvas-cleared="editorStore.clearSelection"
-          />
+        <div v-else-if="flow" class="editor-workspace" :class="{ 'details-open': hasDetailPanel }">
+          <aside class="palette-column">
+            <FlowOperationPanel :flow="flow" :readonly="!canEdit" />
+          </aside>
 
-          <div class="floating-palette">
-            <FlowOperationPanel
+          <div class="canvas-column">
+            <FlowCanvas
               :flow="flow"
               :readonly="!canEdit"
+              :selected-node-id="editorStore.selectedNodeId"
+              :selected-link-id="editorStore.selectedLinkId"
+              @add-node="editorStore.addNode"
+              @node-moved="editorStore.moveNode"
+              @node-selected="editorStore.selectNode($event.nodeId)"
+              @link-selected="editorStore.selectLink($event.linkId)"
+              @canvas-cleared="editorStore.clearSelection"
             />
           </div>
 
@@ -319,6 +318,8 @@ function handleKeydown(event: KeyboardEvent): void {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  width: 100%;
+  min-width: 0;
   min-height: calc(100vh - 76px);
 }
 
@@ -327,10 +328,12 @@ function handleKeydown(event: KeyboardEvent): void {
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
+  width: 100%;
   min-width: 0;
 }
 
 .flow-title {
+  flex: 0 0 auto;
   min-width: 220px;
 }
 
@@ -358,47 +361,48 @@ function handleKeydown(event: KeyboardEvent): void {
 }
 
 .editor-workspace {
-  position: relative;
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
   flex: 1 1 auto;
   min-height: 0;
 }
 
-.editor-workspace :deep(.flow-canvas) {
+.editor-workspace.details-open {
+  grid-template-columns: 240px minmax(0, 1fr) 340px;
+}
+
+.palette-column {
+  min-width: 0;
+  max-height: calc(100vh - 148px);
+  overflow: auto;
+}
+
+.canvas-column {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.canvas-column :deep(.flow-canvas) {
   width: 100%;
   height: calc(100vh - 148px);
   min-height: 640px;
 }
 
-.floating-palette {
-  position: absolute;
-  top: 16px;
-  left: 16px;
-  z-index: 10;
-  width: clamp(184px, 18vw, 248px);
-  max-width: calc(100% - 32px);
-}
-
 .detail-drawer {
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  bottom: 16px;
-  z-index: 11;
-  width: min(340px, calc(100% - 32px));
+  min-width: 0;
+  max-height: calc(100vh - 148px);
   overflow: auto;
-  pointer-events: auto;
 }
 
 .detail-drawer :deep(.node-property-panel),
-.detail-drawer :deep(.link-property-panel) {
+.detail-drawer :deep(.link-property-panel),
+.palette-column :deep(.operation-panel) {
   width: 100%;
   min-width: 0;
   box-sizing: border-box;
-  box-shadow: 0 18px 45px rgb(15 23 42 / 18%);
-}
-
-.floating-palette :deep(.operation-panel) {
-  box-shadow: 0 18px 45px rgb(15 23 42 / 16%);
 }
 
 .viewer-badge {
@@ -424,7 +428,7 @@ function handleKeydown(event: KeyboardEvent): void {
   color: #64748b;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1100px) {
   .flow-editor-header {
     align-items: stretch;
     flex-direction: column;
@@ -434,21 +438,16 @@ function handleKeydown(event: KeyboardEvent): void {
     justify-content: flex-start;
   }
 
-  .floating-palette {
-    position: static;
-    width: 100%;
-    margin-bottom: 8px;
+  .editor-workspace,
+  .editor-workspace.details-open {
+    grid-template-columns: 1fr;
   }
 
-  .editor-workspace {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .detail-drawer {
-    position: static;
-    width: 100%;
-    margin-top: 8px;
+  .palette-column,
+  .detail-drawer,
+  .canvas-column :deep(.flow-canvas) {
+    max-height: none;
+    height: auto;
   }
 }
 </style>
