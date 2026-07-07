@@ -10,22 +10,22 @@ const props = defineProps<{
 const polygonPoints = computed(() => {
   switch (props.node.nodeType) {
     case 'decision':
-      return '70,4 136,50 70,96 4,50'
+      return '66,2 130,44 66,86 2,44'
     case 'preparation':
-      return '34,4 106,4 136,50 106,96 34,96 4,50'
+      return '30,2 102,2 130,44 102,86 30,86 2,44'
     case 'document':
-      return '8,8 132,8 132,74 114,90 96,82 78,90 60,82 42,90 24,82 8,90'
+      return '4,4 128,4 128,66 112,84 96,76 80,84 64,76 48,84 32,76 16,84 4,84'
     default:
-      return '8,8 132,8 132,92 8,92'
+      return '4,4 128,4 128,84 4,84'
   }
 })
 </script>
 
 <template>
   <div class="flow-shape-node" :class="`shape-${node.nodeType}`">
-    <svg class="shape-svg" viewBox="0 0 140 100" aria-hidden="true">
-      <rect v-if="node.nodeType === 'start' || node.nodeType === 'end'" x="6" y="16" width="128" height="68" rx="34" ry="34" />
-      <rect v-else-if="node.nodeType === 'wait'" x="8" y="14" width="124" height="72" rx="6" ry="6" class="dashed" />
+    <svg class="shape-svg" viewBox="0 0 132 88" aria-hidden="true">
+      <rect v-if="node.nodeType === 'start' || node.nodeType === 'end'" x="3" y="10" width="126" height="68" rx="34" ry="34" />
+      <rect v-else-if="node.nodeType === 'wait'" x="4" y="8" width="124" height="72" rx="6" ry="6" class="dashed" />
       <polygon v-else :points="polygonPoints" />
     </svg>
 
@@ -44,8 +44,8 @@ const polygonPoints = computed(() => {
 .flow-shape-node {
   position: relative;
   display: grid;
-  width: 140px;
-  height: 100px;
+  width: 132px;
+  height: 88px;
   place-items: center;
   color: #0f172a;
   background: transparent;
@@ -66,11 +66,11 @@ const polygonPoints = computed(() => {
 }
 
 .shape-decision .shape-content {
-  max-width: 76px;
+  max-width: 72px;
 }
 
 .shape-preparation .shape-content {
-  max-width: 94px;
+  max-width: 90px;
 }
 
 .shape-svg {
@@ -88,7 +88,6 @@ const polygonPoints = computed(() => {
   stroke: #475569;
   stroke-width: 2.5;
   vector-effect: non-scaling-stroke;
-  filter: drop-shadow(0 8px 8px rgb(15 23 42 / 12%));
 }
 
 .shape-svg .dashed {
