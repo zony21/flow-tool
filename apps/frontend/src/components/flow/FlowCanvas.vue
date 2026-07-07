@@ -1,14 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import {
-  VueFlow,
-  type Edge,
-  type EdgeMouseEvent,
-  type Node,
-  type NodeDragEvent,
-  type NodeMouseEvent,
-} from '@vue-flow/core'
-import { Controls } from '@vue-flow/controls'
+import { VueFlow, type Edge, type EdgeMouseEvent, type Node, type NodeDragEvent, type NodeMouseEvent } from '@vue-flow/core'
 import FlowShapeNode from './FlowShapeNode.vue'
 import type { FlowDetail } from '../../types/flow'
 import '@vue-flow/core/dist/style.css'
@@ -32,53 +24,49 @@ const emit = defineEmits<{
 const categoryWidth = 156
 const stageWidth = 240
 const headerHeight = 92
-const categoryHeight = 132
-const nodeColumnOffset = 42
-const nodeRowOffset = 28
-const nodeVerticalGap = 86
-const fallbackCanvasHeight = 1200
+const rowHeight = 132
+const nodeX = 42
+const nodeY = 28
+const nodeGap = 86
+const minBodyHeight = 1200
 
-const stageColumns = computed(() => props.flow.stages.slice().sort((a, b) => a.sortOrder - b.sortOrder))
-const categoryRows = computed(() => props.flow.lanes.slice().sort((a, b) => a.sortOrder - b.sortOrder))
-const hasEquipment = computed(() => stageColumns.value.length > 0)
+const stages = computed(() => props.flow.stages.slice().sort((a, b) => a.sortOrder - b.sortOrder))
+const lanes = computed(() => props.flow.lanes.slice().sort((a, b) => a.sortOrder - b.sortOrder))
+const hasEquipment = computed(() => stages.value.length > 0)
 const activeStageId = ref<string | null>(null)
 const activeLaneId = ref<string | null>(null)
 
-const maxNodesInCell = computed(() => {
-  const counts = new Map<string, number>()
-
-  props.flow.nodes.forEach((flowNode) => {
-    const key = `${flowNode.stageId ?? 'none'}:${flowNode.laneId ?? 'none'}`
-    counts.set(key, (counts.get(key) ?? 0) + 1)
+const maxCellCount = computed(() => {
+  const map = new Map<string, number>()
+  props.flow.nodes.forEach((node) => {
+    const key = `${node.stageId ?? ''}:${node.laneId ?? ''}`
+    map.set(key, (map.get(key) ?? 0) + 1)
   })
-
-  return Math.max(1, ...counts.values())
+  return Math.max(1, ...map.values())
 })
-const requiredLaneHeight = computed(() => Math.max(categoryHeight, nodeRowOffset + maxNodesInCell.value * nodeVerticalGap))
-const bodyHeight = computed(() => Math.max(categoryRows.value.length * requiredLaneHeight.value, fallbackCanvasHeight))
-const canvasWidth = computed(() => Math.max(categoryWidth + stageColumns.value.length * stageWidth, categoryWidth + stageWidth))
+const laneHeight = computed(() => Math.max(rowHeight, nodeY + maxCellCount.value * nodeGap))
+const bodyHeight = computed(() => Math.max(lanes.value.length * laneHeight.value, minBodyHeight))
+const equipmentWidth = computed(() => Math.max(stages.value.length * stageWidth, stageWidth))
+const tableWidth = computed(() => categoryWidth + equipmentWidth.value)
 
 const nodes = computed<Node[]>(() => {
-  const cellIndexes = new Map<string, number>()
-
+  const cellIndex = new Map<string, number>()
   return props.flow.nodes.map((flowNode) => {
-    const stageIndex = Math.max(0, stageColumns.value.findIndex((stage) => stage.stageId === flowNode.stageId))
-    const laneIndex = Math.max(0, categoryRows.value.findIndex((lane) => lane.laneId === flowNode.laneId))
-    const cellKey = `${flowNode.stageId ?? 'none'}:${flowNode.laneId ?? 'none'}`
-    const nodeIndexInCell = cellIndexes.get(cellKey) ?? 0
-    cellIndexes.set(cellKey, nodeIndexInCell + 1)
-    const selectedClass = flowNode.nodeId === props.selectedNodeId ? ' selected-flow-node' : ''
-
+    const stageIndex = Math.max(0, stages.value.findIndex((stage) => stage.stageId === flowNode.stageId))
+    const laneIndex = Math.max(0, lanes.value.findIndex((lane) => lane.laneId === flowNode.laneId))
+    const key = `${flowNode.stageId ?? ''}:${flowNode.laneId ?? ''}`
+    const index = cellIndex.get(key) ?? 0
+    cellIndex.set(key, index + 1)
     return {
       id: flowNode.nodeId,
       type: 'flowShape',
       position: {
-        x: stageIndex * stageWidth + nodeColumnOffset,
-        y: laneIndex * requiredLaneHeight.value + nodeRowOffset + nodeIndexInCell * nodeVerticalGap,
+        x: stageIndex * stageWidth + nodeX,
+        y: laneIndex * laneHeight.value + nodeY + index * nodeGap,
       },
       data: flowNode,
       draggable: !props.readonly,
-      class: `flow-node-shell${selectedClass}`,
+      class: flowNode.nodeId === props.selectedNodeId ? 'selected-flow-node' : undefined,
     }
   })
 })
@@ -94,40 +82,32 @@ const edges = computed<Edge[]>(() =>
   })),
 )
 
-function clampIndex(index: number, max: number): number {
+function clamp(index: number, max: number): number {
   if (max <= 0) return 0
-  if (index < 0) return 0
-  if (index >= max) return max - 1
-  return index
+  return Math.max(0, Math.min(index, max - 1))
 }
 
-function resolveLaneIndex(y: number): number {
-  if (categoryRows.value.length === 0) return 0
-  return clampIndex(Math.floor(y / requiredLaneHeight.value), categoryRows.value.length)
+function laneIndexFromY(y: number): number {
+  return lanes.value.length === 0 ? 0 : clamp(Math.floor(y / laneHeight.value), lanes.value.length)
 }
 
-function getCanvasPoint(event: DragEvent): { y: number; stageIndex: number; laneIndex: number } | null {
+function getPoint(event: DragEvent): { stageIndex: number; laneIndex: number } | null {
   const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
   const x = event.clientX - rect.left - categoryWidth
   const y = event.clientY - rect.top - headerHeight
-  if (x < 0 || y < 0 || stageColumns.value.length === 0) {
-    return null
-  }
-
+  if (x < 0 || y < 0 || stages.value.length === 0) return null
   return {
-    y,
-    stageIndex: clampIndex(Math.floor(x / stageWidth), stageColumns.value.length),
-    laneIndex: resolveLaneIndex(y),
+    stageIndex: clamp(Math.floor(x / stageWidth), stages.value.length),
+    laneIndex: laneIndexFromY(y),
   }
 }
 
 function onDragOver(event: DragEvent): void {
   if (props.readonly || !event.dataTransfer) return
-  const point = getCanvasPoint(event)
-  activeStageId.value = point ? stageColumns.value[point.stageIndex]?.stageId ?? null : null
-  activeLaneId.value = point ? categoryRows.value[point.laneIndex]?.laneId ?? null : null
+  const point = getPoint(event)
+  activeStageId.value = point ? stages.value[point.stageIndex]?.stageId ?? null : null
+  activeLaneId.value = point ? lanes.value[point.laneIndex]?.laneId ?? null : null
   if (!point) return
-
   event.preventDefault()
   event.dataTransfer.dropEffect = 'copy'
 }
@@ -135,18 +115,17 @@ function onDragOver(event: DragEvent): void {
 function onDrop(event: DragEvent): void {
   if (props.readonly || !event.dataTransfer) return
   const nodeType = event.dataTransfer.getData('application/x-flow-node-type') || event.dataTransfer.getData('text/plain')
-  const point = getCanvasPoint(event)
+  const point = getPoint(event)
   activeStageId.value = null
   activeLaneId.value = null
   if (!nodeType || !point) return
-
   event.preventDefault()
   emit('add-node', {
     nodeType,
-    stageId: stageColumns.value[point.stageIndex]?.stageId,
-    laneId: categoryRows.value[point.laneIndex]?.laneId,
-    x: point.stageIndex * stageWidth + nodeColumnOffset,
-    y: point.laneIndex * requiredLaneHeight.value + nodeRowOffset,
+    stageId: stages.value[point.stageIndex]?.stageId,
+    laneId: lanes.value[point.laneIndex]?.laneId,
+    x: point.stageIndex * stageWidth + nodeX,
+    y: point.laneIndex * laneHeight.value + nodeY,
   })
 }
 
@@ -161,15 +140,14 @@ function onDragLeave(event: DragEvent): void {
 
 function onNodeDragStop(event: NodeDragEvent): void {
   if (props.readonly) return
-  const node = event.node
-  const stageIndex = clampIndex(Math.floor(node.position.x / stageWidth), stageColumns.value.length)
-  const laneIndex = resolveLaneIndex(node.position.y)
+  const stageIndex = clamp(Math.floor(event.node.position.x / stageWidth), stages.value.length)
+  const laneIndex = laneIndexFromY(event.node.position.y)
   emit('node-moved', {
-    nodeId: node.id,
-    x: stageIndex * stageWidth + nodeColumnOffset,
-    y: Math.max(0, node.position.y),
-    stageId: stageColumns.value[stageIndex]?.stageId,
-    laneId: categoryRows.value[laneIndex]?.laneId,
+    nodeId: event.node.id,
+    x: stageIndex * stageWidth + nodeX,
+    y: Math.max(0, event.node.position.y),
+    stageId: stages.value[stageIndex]?.stageId,
+    laneId: lanes.value[laneIndex]?.laneId,
   })
 }
 
@@ -180,26 +158,19 @@ function onNodeClick(event: NodeMouseEvent): void {
 function onEdgeClick(event: EdgeMouseEvent): void {
   emit('link-selected', { linkId: event.edge.id })
 }
-
-function onPaneClick(_: unknown): void {
-  emit('canvas-cleared')
-}
 </script>
 
 <template>
   <div class="flow-canvas" @dragover="onDragOver" @drop="onDrop" @dragleave="onDragLeave">
     <div v-if="!hasEquipment" class="canvas-guidance">
       <h2>設備が未設定です</h2>
-      <p>右側パネルで設備を追加してください。</p>
-      <p>設備列に図形パレットから図形をドラッグすると、ノードを配置できます。</p>
+      <p>設備/分類設定から設備を追加してください。</p>
     </div>
 
-    <div class="flow-table" :style="{ width: `${canvasWidth}px`, minHeight: `${headerHeight + bodyHeight}px` }">
-      <div class="category-header" :style="{ width: `${categoryWidth}px`, height: `${headerHeight}px` }">
-        工程分類
-      </div>
-      <div class="equipment-header" :style="{ left: `${categoryWidth}px`, height: `${headerHeight}px` }">
-        <div v-for="stage in stageColumns" :key="stage.stageId" class="equipment-cell" :style="{ width: `${stageWidth}px` }">
+    <div class="flow-table" :style="{ width: `${tableWidth}px`, minHeight: `${headerHeight + bodyHeight}px` }">
+      <div class="category-header" :style="{ width: `${categoryWidth}px`, height: `${headerHeight}px` }">工程分類</div>
+      <div class="equipment-header" :style="{ left: `${categoryWidth}px`, width: `${equipmentWidth}px`, height: `${headerHeight}px` }">
+        <div v-for="stage in stages" :key="stage.stageId" class="equipment-cell" :style="{ width: `${stageWidth}px` }">
           <div class="equipment-icon">{{ stage.name.slice(0, 1) }}</div>
           <strong>{{ stage.name }}</strong>
           <span>設備</span>
@@ -207,40 +178,34 @@ function onPaneClick(_: unknown): void {
       </div>
 
       <div class="category-column" :style="{ top: `${headerHeight}px`, width: `${categoryWidth}px`, minHeight: `${bodyHeight}px` }">
-        <div
-          v-for="lane in categoryRows"
-          :key="lane.laneId"
-          class="category-cell"
-          :class="{ active: activeLaneId === lane.laneId }"
-          :style="{ height: `${requiredLaneHeight}px` }"
-        >
+        <div v-for="lane in lanes" :key="lane.laneId" class="category-cell" :class="{ active: activeLaneId === lane.laneId }" :style="{ height: `${laneHeight}px` }">
           {{ lane.name }}
         </div>
       </div>
 
-      <div class="lane-layer" :style="{ top: `${headerHeight}px`, left: `${categoryWidth}px`, width: `${canvasWidth - categoryWidth}px`, minHeight: `${bodyHeight}px` }">
-        <div
-          v-for="stage in stageColumns"
-          :key="stage.stageId"
-          class="equipment-lane"
-          :class="{ active: activeStageId === stage.stageId }"
-          :style="{ width: `${stageWidth}px` }"
-        >
-          <div
-            v-for="lane in categoryRows"
-            :key="`${stage.stageId}-${lane.laneId}`"
-            class="category-band"
-            :class="{ active: activeLaneId === lane.laneId && activeStageId === stage.stageId }"
-            :style="{ height: `${requiredLaneHeight}px` }"
-          />
+      <div class="grid-layer" :style="{ top: `${headerHeight}px`, left: `${categoryWidth}px`, width: `${equipmentWidth}px`, minHeight: `${bodyHeight}px` }">
+        <div v-for="stage in stages" :key="stage.stageId" class="equipment-lane" :class="{ active: activeStageId === stage.stageId }" :style="{ width: `${stageWidth}px` }">
+          <div v-for="lane in lanes" :key="`${stage.stageId}-${lane.laneId}`" class="category-band" :class="{ active: activeLaneId === lane.laneId && activeStageId === stage.stageId }" :style="{ height: `${laneHeight}px` }" />
         </div>
       </div>
 
-      <VueFlow class="vue-flow" :nodes="nodes" :edges="edges" :fit-view-on-init="false" @node-drag-stop="onNodeDragStop" @node-click="onNodeClick" @edge-click="onEdgeClick" @pane-click="onPaneClick">
+      <VueFlow
+        class="vue-flow"
+        :nodes="nodes"
+        :edges="edges"
+        :fit-view-on-init="false"
+        :zoom-on-scroll="false"
+        :zoom-on-pinch="false"
+        :pan-on-drag="false"
+        :pan-on-scroll="false"
+        @node-drag-stop="onNodeDragStop"
+        @node-click="onNodeClick"
+        @edge-click="onEdgeClick"
+        @pane-click="emit('canvas-cleared')"
+      >
         <template #node-flowShape="{ data }">
           <FlowShapeNode :node="data" />
         </template>
-        <Controls />
       </VueFlow>
     </div>
   </div>
@@ -260,37 +225,19 @@ function onPaneClick(_: unknown): void {
 
 .flow-table {
   position: relative;
-  background: #ffffff;
-}
-
-.canvas-guidance {
-  position: absolute;
-  top: 128px;
-  left: 50%;
-  z-index: 8;
-  width: min(520px, calc(100% - 48px));
-  padding: 20px;
-  color: #334155;
   background: #fff;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  box-shadow: 0 12px 32px rgb(15 23 42 / 14%);
-  transform: translateX(-50%);
 }
 
-.canvas-guidance h2 {
-  margin: 0 0 8px;
-  color: #0f172a;
-  font-size: 1rem;
-}
-
-.canvas-guidance p {
-  margin: 6px 0 0;
+.category-header,
+.equipment-header,
+.category-column,
+.grid-layer,
+.vue-flow {
+  position: absolute;
 }
 
 .category-header,
 .equipment-header {
-  position: sticky;
   top: 0;
   z-index: 5;
   background: #f1f5f9;
@@ -316,6 +263,7 @@ function onPaneClick(_: unknown): void {
   grid-template-rows: 26px auto auto;
   place-items: center;
   gap: 3px;
+  box-sizing: border-box;
   padding: 8px 12px;
   color: #1e293b;
   background: #eef2ff;
@@ -327,7 +275,7 @@ function onPaneClick(_: unknown): void {
   width: 26px;
   height: 26px;
   place-items: center;
-  color: #ffffff;
+  color: #fff;
   background: #2563eb;
   border-radius: 6px;
   font-size: 0.78rem;
@@ -349,7 +297,6 @@ function onPaneClick(_: unknown): void {
 }
 
 .category-column {
-  position: absolute;
   left: 0;
   z-index: 3;
   background: #f8fafc;
@@ -359,12 +306,12 @@ function onPaneClick(_: unknown): void {
 .category-cell {
   display: flex;
   align-items: center;
+  box-sizing: border-box;
   padding: 0 14px;
   color: #334155;
   border-bottom: 1px solid #dbe3ef;
   font-size: 0.86rem;
   font-weight: 800;
-  line-height: 1.35;
 }
 
 .category-cell.active {
@@ -372,14 +319,14 @@ function onPaneClick(_: unknown): void {
   color: #1d4ed8;
 }
 
-.lane-layer {
-  position: absolute;
+.grid-layer {
   z-index: 1;
   display: flex;
   pointer-events: none;
 }
 
 .equipment-lane {
+  box-sizing: border-box;
   min-height: 100%;
   border-right: 1px solid #dbe3ef;
 }
@@ -393,6 +340,7 @@ function onPaneClick(_: unknown): void {
 }
 
 .category-band {
+  box-sizing: border-box;
   border-bottom: 1px solid #dbe3ef;
   background: rgb(255 255 255 / 64%);
 }
@@ -406,12 +354,10 @@ function onPaneClick(_: unknown): void {
 }
 
 .vue-flow {
-  position: absolute;
   top: 92px;
   left: 156px;
   z-index: 2;
   width: calc(100% - 156px);
-  min-width: calc(100% - 156px);
   height: calc(100% - 92px);
   min-height: 1200px;
   background: transparent;
@@ -429,7 +375,6 @@ function onPaneClick(_: unknown): void {
 
 :deep(.selected-flow-node .flow-shape-node) {
   outline: 3px solid #2563eb;
-  outline-offset: 3px;
 }
 
 :deep(.selected-flow-link path) {
@@ -437,8 +382,24 @@ function onPaneClick(_: unknown): void {
   stroke-width: 3;
 }
 
-:deep(.vue-flow__edge-path) {
-  stroke: #475569;
-  stroke-width: 2;
+.canvas-guidance {
+  position: absolute;
+  top: 128px;
+  left: 50%;
+  z-index: 8;
+  width: min(520px, calc(100% - 48px));
+  padding: 20px;
+  color: #334155;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  box-shadow: 0 12px 32px rgb(15 23 42 / 14%);
+  transform: translateX(-50%);
+}
+
+.canvas-guidance h2 {
+  margin: 0 0 8px;
+  color: #0f172a;
+  font-size: 1rem;
 }
 </style>
