@@ -29,15 +29,15 @@ const polygonPoints = computed(() => {
       <polygon v-else :points="polygonPoints" />
     </svg>
 
-    <Handle id="source-top" type="source" :position="Position.Top" class="node-handle handle-top" />
-    <Handle id="source-bottom" type="source" :position="Position.Bottom" class="node-handle handle-bottom" />
-    <Handle id="source-left" type="source" :position="Position.Left" class="node-handle handle-left" />
-    <Handle id="source-right" type="source" :position="Position.Right" class="node-handle handle-right" />
-
     <Handle id="target-top" type="target" :position="Position.Top" class="node-handle target-handle handle-top" />
     <Handle id="target-bottom" type="target" :position="Position.Bottom" class="node-handle target-handle handle-bottom" />
     <Handle id="target-left" type="target" :position="Position.Left" class="node-handle target-handle handle-left" />
     <Handle id="target-right" type="target" :position="Position.Right" class="node-handle target-handle handle-right" />
+
+    <Handle id="source-top" type="source" :position="Position.Top" class="node-handle source-handle handle-top" />
+    <Handle id="source-bottom" type="source" :position="Position.Bottom" class="node-handle source-handle handle-bottom" />
+    <Handle id="source-left" type="source" :position="Position.Left" class="node-handle source-handle handle-left" />
+    <Handle id="source-right" type="source" :position="Position.Right" class="node-handle source-handle handle-right" />
 
     <div class="shape-content">
       {{ node.name }}
@@ -100,7 +100,6 @@ const polygonPoints = computed(() => {
 }
 
 .node-handle {
-  z-index: 2;
   width: 9px;
   height: 9px;
   background: #2563eb;
@@ -109,15 +108,20 @@ const polygonPoints = computed(() => {
   transition: opacity 0.12s ease;
 }
 
+.source-handle {
+  z-index: 4;
+}
+
 .target-handle {
-  width: 16px;
-  height: 16px;
+  z-index: 1;
+  width: 14px;
+  height: 14px;
   background: transparent;
   border: 0;
 }
 
-.flow-shape-node:hover .node-handle:not(.target-handle),
-.flow-shape-node:focus-within .node-handle:not(.target-handle) {
+.flow-shape-node:hover .source-handle,
+.flow-shape-node:focus-within .source-handle {
   opacity: 1;
 }
 
