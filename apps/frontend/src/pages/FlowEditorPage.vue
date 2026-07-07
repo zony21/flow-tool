@@ -299,17 +299,14 @@ function handleKeydown(event: KeyboardEvent): void {
     <EditorLayout>
       <section class="flow-editor-page">
         <div class="flow-editor-header">
-          <div class="flow-heading">
-            <Button label="戻る" icon="pi pi-arrow-left" severity="secondary" class="back-button" @click="goBack" />
-            <div class="flow-title">
-              <h1>フローエディタ</h1>
-              <p v-if="flow">
-                {{ flow.name }} / revision {{ flow.currentRevision }}
-                <span v-if="editorStore.isDirty" class="dirty-badge">未保存</span>
-              </p>
-              <p v-else>projectId: {{ projectId }} / flowId: {{ flowId }}</p>
-              <p v-if="!canEdit" class="viewer-badge">閲覧モード：編集は無効です</p>
-            </div>
+          <div class="flow-title">
+            <h1>フローエディタ</h1>
+            <p v-if="flow">
+              {{ flow.name }} / revision {{ flow.currentRevision }}
+              <span v-if="editorStore.isDirty" class="dirty-badge">未保存</span>
+            </p>
+            <p v-else>projectId: {{ projectId }} / flowId: {{ flowId }}</p>
+            <p v-if="!canEdit" class="viewer-badge">閲覧モード：編集は無効です</p>
           </div>
           <div class="header-actions">
             <Button label="設備/分類設定" severity="secondary" :disabled="!flow" @click="settingsDialogVisible = true" />
@@ -369,6 +366,10 @@ function handleKeydown(event: KeyboardEvent): void {
         </div>
         <p v-else class="loading-text">フローを取得できませんでした。</p>
 
+        <div class="footer-actions">
+          <Button label="戻る" icon="pi pi-arrow-left" severity="secondary" @click="goBack" />
+        </div>
+
         <Dialog v-model:visible="settingsDialogVisible" modal header="設備/分類設定" :style="{ width: 'min(720px, 94vw)' }">
           <LaneStagePanel
             v-if="flow"
@@ -399,18 +400,6 @@ function handleKeydown(event: KeyboardEvent): void {
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-}
-
-.flow-heading {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  min-width: 280px;
-}
-
-.back-button {
-  flex: 0 0 auto;
-  margin-top: 2px;
 }
 
 .flow-title h1 {
@@ -481,6 +470,12 @@ function handleKeydown(event: KeyboardEvent): void {
 
 .canvas-column {
   min-width: 0;
+}
+
+.footer-actions {
+  display: flex;
+  justify-content: flex-start;
+  padding-top: 4px;
 }
 
 .loading-text {
