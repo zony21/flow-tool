@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import Button from 'primevue/button'
 import MainLayout from '../layouts/MainLayout.vue'
@@ -36,8 +36,8 @@ const canSaveStructure = computed(
 const canEdit = computed(() => canUpdateFlow.value)
 const canCreateVersion = computed(() => permissionStore.can(PermissionCodes.VersionCreate))
 const canExport = computed(() => permissionStore.can(PermissionCodes.ExportExecute))
-const hasSelection = computed(() => Boolean(editorStore.selectedNodeId || editorStore.selectedLinkId))
-const needsSetupPanel = computed(() => Boolean(flow.value && !hasSelection.value && (flow.value.stages.length === 0 || flow.value.lanes.length === 0)))
+const hasDetailPanel = computed(() => Boolean(editorStore.selectedNodeId || editorStore.selectedLinkId))
+const paletteCollapsed = ref(false)
 
 onMounted(async () => {
   editorStore.reset()
@@ -253,7 +253,33 @@ function handleKeydown(event: KeyboardEvent): void {
         </div>
 
         <p v-if="flowStore.loading">読み込み中...</p>
-        <div v-else-if="flow" class="editor-workspace">
+        <div
+          v-else-if="flow"
+          class="editor-workspace"
+          :class="{ 'palette-collapsed': paletteCollapsed, 'details-open': hasDetailPanel }"
+        >
+          <aside class="palette-sidebar">
+            <button type="button" class="palette-toggle" @click="paletteCollapsed = !paletteCollapsed">
+              {{ paletteCollapsed ? '図形パレットを開く' : '閉じる' }}
+            </button>
+            <div v-if="!paletteCollapsed" class="palette-content">
+              <FlowOperationPanel
+                :flow="flow"
+                :readonly="!canEdit"
+              />
+              <LaneStagePanel
+                :flow="flow"
+                :readonly="!canEdit"
+                @add-lane="editorStore.addLane"
+                @update-lane="editorStore.updateLane"
+                @delete-lane="editorStore.deleteLane"
+                @add-stage="editorStore.addStage"
+                @update-stage="editorStore.updateStage"
+                @delete-stage="editorStore.deleteStage"
+              />
+            </div>
+          </aside>
+
           <FlowCanvas
             :flow="flow"
             :readonly="!canEdit"
@@ -265,23 +291,7 @@ function handleKeydown(event: KeyboardEvent): void {
             @link-selected="editorStore.selectLink($event.linkId)"
             @canvas-cleared="editorStore.clearSelection"
           />
-          <div class="property-panels">
-            <FlowOperationPanel
-              v-if="!hasSelection"
-              :flow="flow"
-              :readonly="!canEdit"
-            />
-            <LaneStagePanel
-              v-if="needsSetupPanel"
-              :flow="flow"
-              :readonly="!canEdit"
-              @add-lane="editorStore.addLane"
-              @update-lane="editorStore.updateLane"
-              @delete-lane="editorStore.deleteLane"
-              @add-stage="editorStore.addStage"
-              @update-stage="editorStore.updateStage"
-              @delete-stage="editorStore.deleteStage"
-            />
+          <div v-if="hasDetailPanel" class="detail-panels">
             <NodePropertyPanel
               v-if="editorStore.selectedNodeId"
               :flow="flow"
@@ -330,17 +340,60 @@ function handleKeydown(event: KeyboardEvent): void {
 }
 
 .editor-workspace {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
   align-items: stretch;
-  gap: 16px;
+  gap: 12px;
+  min-height: calc(100vh - 148px);
 }
 
-.property-panels {
+.editor-workspace.details-open {
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr) 320px;
+}
+
+.editor-workspace.palette-collapsed {
+  grid-template-columns: 48px minmax(0, 1fr);
+}
+
+.editor-workspace.palette-collapsed.details-open {
+  grid-template-columns: 48px minmax(0, 1fr) 320px;
+}
+
+.palette-sidebar {
+  min-width: 0;
+}
+
+.palette-content {
   display: flex;
-  flex: 0 0 320px;
   flex-direction: column;
-  gap: 16px;
-  max-height: calc(100vh - 160px);
+  gap: 12px;
+  max-height: calc(100vh - 148px);
+  overflow: auto;
+}
+
+.palette-toggle {
+  width: 100%;
+  min-height: 36px;
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  color: #334155;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.palette-collapsed .palette-toggle {
+  writing-mode: vertical-rl;
+  min-height: 180px;
+  margin-bottom: 0;
+}
+
+.detail-panels {
+  min-width: 0;
+  max-height: calc(100vh - 148px);
   overflow: auto;
 }
 
@@ -371,6 +424,28 @@ function handleKeydown(event: KeyboardEvent): void {
 }
 
 .editor-workspace :deep(.flow-canvas) {
-  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.editor-workspace :deep(.operation-panel),
+.editor-workspace :deep(.lane-stage-panel),
+.editor-workspace :deep(.node-property-panel),
+.editor-workspace :deep(.link-property-panel) {
+  width: auto;
+  min-width: 0;
+}
+
+@media (max-width: 1100px) {
+  .editor-workspace,
+  .editor-workspace.details-open,
+  .editor-workspace.palette-collapsed,
+  .editor-workspace.palette-collapsed.details-open {
+    grid-template-columns: 1fr;
+  }
+
+  .palette-collapsed .palette-toggle {
+    writing-mode: horizontal-tb;
+    min-height: 36px;
+  }
 }
 </style>

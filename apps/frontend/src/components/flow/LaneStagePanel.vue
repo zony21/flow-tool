@@ -77,7 +77,8 @@ function updateStageName(stage: Stage, name: string): void {
 
 <style scoped>
 .lane-stage-panel {
-  width: 320px;
+  width: 100%;
+  box-sizing: border-box;
   padding: 16px;
   background: #fff;
   border: 1px solid #dbe3ef;

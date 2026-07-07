@@ -32,7 +32,7 @@ type AddLinkPayload = {
 }
 
 const stageWidth = 240
-const nodeOffsetX = 50
+const nodeOffsetX = 54
 const categoryHeight = 132
 const nodeRowOffset = 38
 const nodeSpacingY = 58
@@ -244,15 +244,12 @@ export const useEditorStore = defineStore('editor', {
       this.applyFlowChange(
         (flow) => {
           const stages = flow.stages.slice().sort((a, b) => a.sortOrder - b.sortOrder)
-          const lanes = flow.lanes.slice().sort((a, b) => a.sortOrder - b.sortOrder)
           const stageIndex = Math.max(0, stages.findIndex((stage) => stage.stageId === updatedNode.stageId))
-          const laneIndex = Math.max(0, lanes.findIndex((lane) => lane.laneId === updatedNode.laneId))
           const x = stageIndex * stageWidth + nodeOffsetX
-          const y = updatedNode.laneId ? laneIndex * categoryHeight + nodeRowOffset : updatedNode.y
 
           return {
             ...flow,
-            nodes: flow.nodes.map((node) => (node.nodeId === updatedNode.nodeId ? { ...updatedNode, x, y } : node)),
+            nodes: flow.nodes.map((node) => (node.nodeId === updatedNode.nodeId ? { ...updatedNode, x } : node)),
           }
         },
         { actionKey: `node:update:${updatedNode.nodeId}` },

@@ -50,7 +50,8 @@ function onPaletteDragStart(event: DragEvent, nodeType: string): void {
 
 <style scoped>
 .operation-panel {
-  width: 320px;
+  width: 100%;
+  box-sizing: border-box;
   padding: 16px;
   background: #fff;
   border: 1px solid #dbe3ef;

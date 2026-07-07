@@ -34,7 +34,7 @@ const categoryWidth = 156
 const stageWidth = 240
 const headerHeight = 92
 const categoryHeight = 132
-const nodeColumnOffset = 50
+const nodeColumnOffset = 54
 const nodeRowOffset = 38
 const fallbackCanvasHeight = 1200
 
@@ -89,11 +89,6 @@ function resolveLaneIndex(y: number): number {
   return clampIndex(Math.floor(y / categoryHeight), categoryRows.value.length)
 }
 
-function snapYToLane(y: number): number {
-  if (categoryRows.value.length === 0) return Math.max(nodeRowOffset, y)
-  return resolveLaneIndex(y) * categoryHeight + nodeRowOffset
-}
-
 function getCanvasPoint(event: DragEvent): { y: number; stageIndex: number; laneIndex: number } | null {
   const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
   const x = event.clientX - rect.left - categoryWidth
@@ -134,7 +129,7 @@ function onDrop(event: DragEvent): void {
     stageId: stageColumns.value[point.stageIndex]?.stageId,
     laneId: categoryRows.value[point.laneIndex]?.laneId,
     x: point.stageIndex * stageWidth + nodeColumnOffset,
-    y: snapYToLane(point.y),
+    y: Math.max(0, point.y),
   })
 }
 
@@ -155,7 +150,7 @@ function onNodeDragStop(event: NodeDragEvent): void {
   emit('node-moved', {
     nodeId: node.id,
     x: stageIndex * stageWidth + nodeColumnOffset,
-    y: snapYToLane(node.position.y),
+    y: Math.max(0, node.position.y),
     stageId: stageColumns.value[stageIndex]?.stageId,
     laneId: categoryRows.value[laneIndex]?.laneId,
   })
