@@ -39,7 +39,7 @@ const nodeX = 42
 const nodeY = 28
 const ySnap = 20
 const nodeVisualHeight = 100
-const rowPaddingBottom = 56
+const rowPaddingBottom = 80
 const minBodyHeight = 1200
 const fixedViewport = { x: 0, y: 0, zoom: 1 }
 
@@ -133,9 +133,7 @@ function rowIndexFromAbsoluteY(y: number): number {
 
 function relativeYFromAbsoluteY(rowIndex: number, y: number): number {
   const row = rowLayouts.value[rowIndex]
-  const relativeY = snapY(y - (row?.top ?? 0))
-  const maxY = Math.max(nodeY, (row?.height ?? minRowHeight) - nodeVisualHeight - rowPaddingBottom)
-  return Math.min(relativeY, maxY)
+  return snapY(y - (row?.top ?? 0))
 }
 
 function getPoint(event: DragEvent): { stageIndex: number; laneIndex: number; y: number } | null {
@@ -428,11 +426,6 @@ function onEdgeClick(event: EdgeMouseEvent): void {
 
 .vue-flow :deep(.vue-flow__pane) {
   background: transparent;
-}
-
-.vue-flow :deep(.vue-flow__viewport),
-.vue-flow :deep(.vue-flow__transformationpane) {
-  transform: translate(0px, 0px) scale(1) !important;
 }
 
 :deep(.flow-node-shell) {
