@@ -32,3 +32,8 @@ export async function exportAiDsl(projectId: string, flowId: string): Promise<Te
   const response = await httpClient.post<TextExportResponse>(`/api/projects/${projectId}/flows/${flowId}/export/ai-dsl`)
   return response.data
 }
+
+export async function exportDesignDocument(projectId: string, flowId: string): Promise<TextExportResponse> {
+  const response = await httpClient.post<TextExportResponse>(`/api/projects/${projectId}/flows/${flowId}/export/design-doc`)
+  return response.data
+}
