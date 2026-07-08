@@ -123,12 +123,12 @@ public sealed record MetadataDto(
 public sealed record CreateFlowRequest(
     string Name,
     string? Description,
-    string? FlowType);
+    string? FlowType = null);
 
 public sealed record UpdateFlowRequest(
     string Name,
     string? Description,
-    string? FlowType);
+    string? FlowType = null);
 
 public sealed record DuplicateFlowRequest(
     string? Name);
