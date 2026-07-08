@@ -37,6 +37,7 @@ const canCreateVersion = computed(() => Boolean(flow.value) && !flowStore.loadin
 const canExport = computed(() => Boolean(flow.value) && !flowStore.loading)
 const hasDetailPanel = computed(() => Boolean(editorStore.selectedNodeId || editorStore.selectedLinkId))
 const settingsDialogVisible = ref(false)
+const exportDialogVisible = ref(false)
 const saveMessage = ref<string | null>(null)
 const saveError = ref<string | null>(null)
 const stageWidth = 240
@@ -217,6 +218,7 @@ async function downloadMermaidExport(): Promise<void> {
     if (!(await saveBeforeExportIfNeeded()) || !flow.value) return
     const result = await exportMermaid(projectId.value, flow.value.flowId)
     downloadBlob(new Blob([result.content], { type: 'text/plain;charset=utf-8' }), result.fileName || `${flow.value.name || 'flow'}.mmd`)
+    exportDialogVisible.value = false
   } catch (error) {
     saveError.value = getErrorMessage(error)
   }
@@ -231,6 +233,7 @@ async function downloadAiDslExport(): Promise<void> {
     if (!(await saveBeforeExportIfNeeded()) || !flow.value) return
     const result = await exportAiDsl(projectId.value, flow.value.flowId)
     downloadBlob(new Blob([result.content], { type: 'text/plain;charset=utf-8' }), result.fileName || `${flow.value.name || 'flow'}_ai.flowdsl.txt`)
+    exportDialogVisible.value = false
   } catch (error) {
     saveError.value = getErrorMessage(error)
   }
@@ -245,6 +248,7 @@ async function downloadDesignDocumentExport(): Promise<void> {
     if (!(await saveBeforeExportIfNeeded()) || !flow.value) return
     const result = await exportDesignDocument(projectId.value, flow.value.flowId)
     downloadBlob(new Blob([result.content], { type: 'text/markdown;charset=utf-8' }), result.fileName || `${flow.value.name || 'flow'}_design.md`)
+    exportDialogVisible.value = false
   } catch (error) {
     saveError.value = getErrorMessage(error)
   }
@@ -259,6 +263,7 @@ async function downloadApiSpecificationExport(): Promise<void> {
     if (!(await saveBeforeExportIfNeeded()) || !flow.value) return
     const result = await exportApiSpecification(projectId.value, flow.value.flowId)
     downloadBlob(new Blob([result.content], { type: 'text/markdown;charset=utf-8' }), result.fileName || `${flow.value.name || 'flow'}_api_spec.md`)
+    exportDialogVisible.value = false
   } catch (error) {
     saveError.value = getErrorMessage(error)
   }
@@ -273,6 +278,7 @@ async function downloadJsonExport(): Promise<void> {
     if (!(await saveBeforeExportIfNeeded()) || !flow.value) return
     const blob = await exportJson(projectId.value, flow.value.flowId)
     downloadBlob(blob, `${flow.value.name || 'flow'}.json`)
+    exportDialogVisible.value = false
   } catch (error) {
     saveError.value = getErrorMessage(error)
   }
@@ -360,11 +366,7 @@ function handleKeydown(event: KeyboardEvent): void {
             <Button label="設備/分類設定" severity="secondary" :disabled="!flow" @click="settingsDialogVisible = true" />
             <Button label="バージョン管理" severity="secondary" @click="router.push({ name: 'flow-versions', params: { projectId, flowId } })" />
             <Button label="バージョン作成" severity="secondary" :disabled="!canCreateVersion" @click="createVersionFromCurrentFlow" />
-            <Button label="Mermaid出力" icon="pi pi-download" severity="secondary" :disabled="!canExport" @click="downloadMermaidExport" />
-            <Button label="JSON出力" icon="pi pi-download" severity="secondary" :disabled="!canExport" @click="downloadJsonExport" />
-            <Button label="AI用出力" icon="pi pi-download" severity="secondary" :disabled="!canExport" @click="downloadAiDslExport" />
-            <Button label="設計書出力" icon="pi pi-download" severity="secondary" :disabled="!canExport" @click="downloadDesignDocumentExport" />
-            <Button label="API仕様出力" icon="pi pi-download" severity="secondary" :disabled="!canExport" @click="downloadApiSpecificationExport" />
+            <Button label="出力" icon="pi pi-download" severity="secondary" :disabled="!canExport" @click="exportDialogVisible = true" />
             <Button label="元に戻す" severity="secondary" :disabled="!canEdit || !undoRedoStore.canUndo" @click="editorStore.undo" />
             <Button label="やり直す" severity="secondary" :disabled="!canEdit || !undoRedoStore.canRedo" @click="editorStore.redo" />
             <Button :label="flowStore.loading ? '保存中...' : '保存'" :disabled="!canSaveStructure" @click="saveCurrentStructure" />
@@ -438,6 +440,31 @@ function handleKeydown(event: KeyboardEvent): void {
             @update-stage="editorStore.updateStage"
             @delete-stage="editorStore.deleteStage"
           />
+        </Dialog>
+
+        <Dialog v-model:visible="exportDialogVisible" modal header="出力" :style="{ width: 'min(560px, 94vw)' }">
+          <div class="export-options">
+            <button type="button" class="export-option" :disabled="!canExport" @click="downloadMermaidExport">
+              <strong>Mermaid出力</strong>
+              <span>フロー図をMermaid形式で出力します。</span>
+            </button>
+            <button type="button" class="export-option" :disabled="!canExport" @click="downloadJsonExport">
+              <strong>JSON出力</strong>
+              <span>構造データをJSON形式で出力します。</span>
+            </button>
+            <button type="button" class="export-option" :disabled="!canExport" @click="downloadAiDslExport">
+              <strong>AI用出力</strong>
+              <span>AI解析向けDSL v2形式で出力します。</span>
+            </button>
+            <button type="button" class="export-option" :disabled="!canExport" @click="downloadDesignDocumentExport">
+              <strong>設計書出力</strong>
+              <span>フロー概要・工程一覧・入出力関係をMarkdownで出力します。</span>
+            </button>
+            <button type="button" class="export-option" :disabled="!canExport" @click="downloadApiSpecificationExport">
+              <strong>API仕様出力</strong>
+              <span>設備間通信候補をAPI・通信仕様書として出力します。</span>
+            </button>
+          </div>
         </Dialog>
       </section>
     </EditorLayout>
@@ -573,6 +600,45 @@ function handleKeydown(event: KeyboardEvent): void {
 
 .loading-text {
   color: #64748b;
+}
+
+.export-options {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.export-option {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  padding: 12px 14px;
+  text-align: left;
+  background: #ffffff;
+  border: 1px solid #dbe3ef;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.export-option:hover:not(:disabled) {
+  background: #f8fafc;
+  border-color: #94a3b8;
+}
+
+.export-option:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.export-option strong {
+  color: #0f172a;
+  font-size: 0.95rem;
+}
+
+.export-option span {
+  color: #64748b;
+  font-size: 0.83rem;
 }
 
 @media (max-height: 820px) {
