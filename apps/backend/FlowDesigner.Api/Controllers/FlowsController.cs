@@ -290,6 +290,14 @@ public sealed class FlowsController(
         flow.UpdatedAtUtc = DateTime.UtcNow;
 
         await dbContext.SaveChangesAsync(cancellationToken);
+
+        foreach (var node in nodes.Where(node => node.LaneId.HasValue))
+        {
+            await dbContext.Database.ExecuteSqlInterpolatedAsync(
+                $"UPDATE NODE SET LaneId = {node.LaneId} WHERE NodeId = {node.NodeId} AND FlowId = {flowId}",
+                cancellationToken);
+        }
+
         await transaction.CommitAsync(cancellationToken);
 
         return Ok(new SaveFlowStructureResponse(flow.FlowId, flow.Revision, flow.UpdatedAtUtc));
