@@ -1,7 +1,10 @@
+export type FlowType = 'NORMAL' | 'TRANSPORT'
+
 export type FlowSummary = {
   flowId: string
   projectId: string
   name: string
+  flowType: FlowType
   description?: string | null
   sortOrder: number
   createdAtUtc: string
