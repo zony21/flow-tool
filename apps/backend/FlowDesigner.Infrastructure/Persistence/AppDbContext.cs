@@ -1,6 +1,7 @@
 using FlowDesigner.Domain.Entities.Auth;
 using FlowDesigner.Domain.Entities.Core;
 using FlowDesigner.Domain.Entities.Settings;
+using FlowDesigner.Domain.Entities.Transport;
 using Microsoft.EntityFrameworkCore;
 
 namespace FlowDesigner.Infrastructure.Persistence;
@@ -17,6 +18,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<FlowImage> Images => Set<FlowImage>();
     public DbSet<FlowVersion> Versions => Set<FlowVersion>();
     public DbSet<FlowMetadata> MetadataItems => Set<FlowMetadata>();
+
+    public DbSet<TransportManufacturer> TransportManufacturers => Set<TransportManufacturer>();
+    public DbSet<TransportCommand> TransportCommands => Set<TransportCommand>();
+    public DbSet<TransportLocation> TransportLocations => Set<TransportLocation>();
+    public DbSet<TransportEquipment> TransportEquipments => Set<TransportEquipment>();
 
     public DbSet<User> Users => Set<User>();
     public DbSet<ProjectMember> ProjectMembers => Set<ProjectMember>();
@@ -49,7 +55,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.ToTable("FLOW");
             entity.HasKey(x => x.FlowId);
             entity.HasIndex(x => new { x.ProjectId, x.Name }).IsUnique();
+            entity.HasIndex(x => new { x.ProjectId, x.FlowType });
             entity.Property(x => x.Name).HasMaxLength(200).IsRequired();
+            entity.Property(x => x.FlowType).HasMaxLength(40).HasDefaultValue(FlowTypes.Normal).IsRequired();
             entity.Property(x => x.Revision).IsRequired();
             entity.HasOne(x => x.Project).WithMany(x => x.Flows).HasForeignKey(x => x.ProjectId).OnDelete(DeleteBehavior.Cascade);
         });
@@ -129,6 +137,49 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.Property(x => x.MetaKey).HasMaxLength(120).IsRequired();
             entity.Property(x => x.MetaValue).HasMaxLength(4000).IsRequired();
             entity.HasOne(x => x.Flow).WithMany(x => x.MetadataItems).HasForeignKey(x => x.FlowId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<TransportManufacturer>(entity =>
+        {
+            entity.ToTable("TRANSPORT_MANUFACTURER");
+            entity.HasKey(x => x.ManufacturerId);
+            entity.HasIndex(x => new { x.Name, x.IsDeleted });
+            entity.Property(x => x.Name).HasMaxLength(120).IsRequired();
+            entity.Property(x => x.VehicleType).HasMaxLength(40).IsRequired();
+            entity.Property(x => x.Description).HasMaxLength(2000);
+        });
+
+        modelBuilder.Entity<TransportCommand>(entity =>
+        {
+            entity.ToTable("TRANSPORT_COMMAND");
+            entity.HasKey(x => x.CommandId);
+            entity.HasIndex(x => new { x.ManufacturerId, x.CommandName, x.IsDeleted });
+            entity.Property(x => x.CommandName).HasMaxLength(120).IsRequired();
+            entity.Property(x => x.ProcessType).HasMaxLength(40).IsRequired();
+            entity.Property(x => x.Description).HasMaxLength(2000);
+            entity.HasOne(x => x.Manufacturer).WithMany(x => x.Commands).HasForeignKey(x => x.ManufacturerId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<TransportLocation>(entity =>
+        {
+            entity.ToTable("TRANSPORT_LOCATION");
+            entity.HasKey(x => x.LocationId);
+            entity.HasIndex(x => new { x.ProjectId, x.Name, x.IsDeleted });
+            entity.Property(x => x.Name).HasMaxLength(120).IsRequired();
+            entity.Property(x => x.LocationType).HasMaxLength(40).IsRequired();
+            entity.Property(x => x.Description).HasMaxLength(2000);
+            entity.HasOne(x => x.Project).WithMany(x => x.TransportLocations).HasForeignKey(x => x.ProjectId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<TransportEquipment>(entity =>
+        {
+            entity.ToTable("TRANSPORT_EQUIPMENT");
+            entity.HasKey(x => x.EquipmentId);
+            entity.HasIndex(x => new { x.ProjectId, x.Name, x.IsDeleted });
+            entity.Property(x => x.Name).HasMaxLength(120).IsRequired();
+            entity.Property(x => x.Category).HasMaxLength(40).IsRequired();
+            entity.Property(x => x.Description).HasMaxLength(2000);
+            entity.HasOne(x => x.Project).WithMany(x => x.TransportEquipments).HasForeignKey(x => x.ProjectId).OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<User>(entity =>
