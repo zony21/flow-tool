@@ -5,6 +5,7 @@ public class Flow
     public Guid FlowId { get; set; }
     public Guid ProjectId { get; set; }
     public string Name { get; set; } = string.Empty;
+    public string FlowType { get; set; } = FlowTypes.Normal;
     public string? Description { get; set; }
     public int SortOrder { get; set; }
     public int Revision { get; set; }
