@@ -53,6 +53,8 @@ export type FlowLink = {
   condition?: string | null
 }
 
+export type FlowCommentKind = 'note' | 'warning' | 'todo' | 'exception' | 'api'
+
 export type FlowComment = {
   commentId: string
   flowId: string
