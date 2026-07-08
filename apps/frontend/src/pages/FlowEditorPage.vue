@@ -15,7 +15,7 @@ import { useFlowStore } from '../stores/flowStore'
 import { useProjectPermissionStore } from '../stores/projectPermissionStore'
 import { useUndoRedoStore } from '../stores/undoRedoStore'
 import { PermissionCodes } from '../types/permission'
-import { exportAiDsl, exportDesignDocument, exportJson, exportMermaid } from '../api/exportApi'
+import { exportAiDsl, exportApiSpecification, exportDesignDocument, exportJson, exportMermaid } from '../api/exportApi'
 
 const route = useRoute()
 const router = useRouter()
@@ -250,6 +250,20 @@ async function downloadDesignDocumentExport(): Promise<void> {
   }
 }
 
+async function downloadApiSpecificationExport(): Promise<void> {
+  if (!flow.value || flowStore.loading) return
+
+  saveMessage.value = null
+  saveError.value = null
+  try {
+    if (!(await saveBeforeExportIfNeeded()) || !flow.value) return
+    const result = await exportApiSpecification(projectId.value, flow.value.flowId)
+    downloadBlob(new Blob([result.content], { type: 'text/markdown;charset=utf-8' }), result.fileName || `${flow.value.name || 'flow'}_api_spec.md`)
+  } catch (error) {
+    saveError.value = getErrorMessage(error)
+  }
+}
+
 async function downloadJsonExport(): Promise<void> {
   if (!flow.value || flowStore.loading) return
 
@@ -350,6 +364,7 @@ function handleKeydown(event: KeyboardEvent): void {
             <Button label="JSON出力" icon="pi pi-download" severity="secondary" :disabled="!canExport" @click="downloadJsonExport" />
             <Button label="AI用出力" icon="pi pi-download" severity="secondary" :disabled="!canExport" @click="downloadAiDslExport" />
             <Button label="設計書出力" icon="pi pi-download" severity="secondary" :disabled="!canExport" @click="downloadDesignDocumentExport" />
+            <Button label="API仕様出力" icon="pi pi-download" severity="secondary" :disabled="!canExport" @click="downloadApiSpecificationExport" />
             <Button label="元に戻す" severity="secondary" :disabled="!canEdit || !undoRedoStore.canUndo" @click="editorStore.undo" />
             <Button label="やり直す" severity="secondary" :disabled="!canEdit || !undoRedoStore.canRedo" @click="editorStore.redo" />
             <Button :label="flowStore.loading ? '保存中...' : '保存'" :disabled="!canSaveStructure" @click="saveCurrentStructure" />
