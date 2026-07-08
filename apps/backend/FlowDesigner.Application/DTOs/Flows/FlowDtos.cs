@@ -4,6 +4,7 @@ public sealed record FlowSummaryDto(
     Guid FlowId,
     Guid ProjectId,
     string Name,
+    string FlowType,
     string? Description,
     int SortOrder,
     DateTime CreatedAtUtc,
@@ -13,6 +14,7 @@ public sealed record FlowDetailDto(
     Guid FlowId,
     Guid ProjectId,
     string Name,
+    string FlowType,
     string? Description,
     int SortOrder,
     int CurrentRevision,
@@ -120,11 +122,13 @@ public sealed record MetadataDto(
 
 public sealed record CreateFlowRequest(
     string Name,
-    string? Description);
+    string? Description,
+    string? FlowType);
 
 public sealed record UpdateFlowRequest(
     string Name,
-    string? Description);
+    string? Description,
+    string? FlowType);
 
 public sealed record DuplicateFlowRequest(
     string? Name);
