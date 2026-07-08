@@ -9,6 +9,7 @@ import { useFlowStore } from '../stores/flowStore'
 import { useProjectPermissionStore } from '../stores/projectPermissionStore'
 import { useProjectStore } from '../stores/projectStore'
 import { PermissionCodes } from '../types/permission'
+import type { FlowType } from '../types/flow'
 
 const route = useRoute()
 const router = useRouter()
@@ -28,9 +29,16 @@ const flowDeleteTarget = ref<{ flowId: string; name: string } | null>(null)
 const editingFlowId = ref<string | null>(null)
 const editingFlowName = ref('')
 const editingFlowDescription = ref('')
+const editingFlowType = ref<FlowType>('NORMAL')
 const flowName = ref('')
 const flowDescription = ref('')
+const flowType = ref<FlowType>('NORMAL')
 const flowErrorMessage = ref<string | null>(null)
+
+const flowTypeOptions: { value: FlowType; label: string; description: string }[] = [
+  { value: 'NORMAL', label: 'Normal', description: '通常フロー' },
+  { value: 'TRANSPORT', label: 'Transport', description: 'AGF/AGV搬送フロー' },
+]
 
 const projectId = computed(() => String(route.params.projectId ?? ''))
 const canUpdateProject = computed(() => permissionStore.can(PermissionCodes.ProjectUpdate))
@@ -109,6 +117,7 @@ async function createFlow(): Promise<void> {
   try {
     const flow = await flowStore.create(projectId.value, {
       name,
+      flowType: flowType.value,
       description: flowDescription.value.trim() || null,
     })
     closeCreateFlowDialog()
@@ -124,6 +133,7 @@ function openCreateFlowDialog(): void {
   if (!canCreateFlow.value) return
   flowName.value = ''
   flowDescription.value = ''
+  flowType.value = 'NORMAL'
   createFlowDialogVisible.value = true
 }
 
@@ -131,12 +141,14 @@ function closeCreateFlowDialog(): void {
   createFlowDialogVisible.value = false
   flowName.value = ''
   flowDescription.value = ''
+  flowType.value = 'NORMAL'
 }
 
-function startFlowEdit(flowId: string, name: string, description?: string | null): void {
+function startFlowEdit(flowId: string, name: string, flowTypeValue: FlowType, description?: string | null): void {
   if (!canCreateFlow.value) return
   editingFlowId.value = flowId
   editingFlowName.value = name
+  editingFlowType.value = flowTypeValue
   editingFlowDescription.value = description ?? ''
 }
 
@@ -144,6 +156,7 @@ function cancelFlowEdit(): void {
   editingFlowId.value = null
   editingFlowName.value = ''
   editingFlowDescription.value = ''
+  editingFlowType.value = 'NORMAL'
 }
 
 async function saveFlow(flowId: string): Promise<void> {
@@ -155,6 +168,7 @@ async function saveFlow(flowId: string): Promise<void> {
   try {
     await flowStore.update(projectId.value, flowId, {
       name,
+      flowType: editingFlowType.value,
       description: editingFlowDescription.value.trim() || null,
     })
     cancelFlowEdit()
@@ -215,6 +229,14 @@ async function backToProjects(): Promise<void> {
 function formatDate(value: string): string {
   return new Date(value).toLocaleString()
 }
+
+function flowTypeLabel(value: FlowType): string {
+  return value === 'TRANSPORT' ? 'Transport' : 'Normal'
+}
+
+function flowTypeDescription(value: FlowType): string {
+  return value === 'TRANSPORT' ? 'AGF/AGV搬送フロー' : '通常フロー'
+}
 </script>
 
 <template>
@@ -266,6 +288,7 @@ function formatDate(value: string): string {
           <thead>
             <tr>
               <th>Flow名</th>
+              <th>種別</th>
               <th>説明</th>
               <th>更新日時</th>
               <th>操作</th>
@@ -276,6 +299,13 @@ function formatDate(value: string): string {
               <template v-if="editingFlowId === flow.flowId">
                 <td>
                   <input v-model="editingFlowName" type="text" :disabled="savingFlowId === flow.flowId" />
+                </td>
+                <td>
+                  <select v-model="editingFlowType" :disabled="savingFlowId === flow.flowId">
+                    <option v-for="option in flowTypeOptions" :key="option.value" :value="option.value">
+                      {{ option.label }} - {{ option.description }}
+                    </option>
+                  </select>
                 </td>
                 <td>
                   <textarea v-model="editingFlowDescription" rows="2" :disabled="savingFlowId === flow.flowId" />
@@ -290,6 +320,11 @@ function formatDate(value: string): string {
               </template>
               <template v-else>
                 <td>{{ flow.name }}</td>
+                <td>
+                  <span class="flow-type-badge" :class="{ 'is-transport': flow.flowType === 'TRANSPORT' }">
+                    {{ flowTypeLabel(flow.flowType) }}
+                  </span>
+                </td>
                 <td>{{ flow.description || '説明なし' }}</td>
                 <td>{{ formatDate(flow.updatedAtUtc) }}</td>
                 <td>
@@ -304,7 +339,7 @@ function formatDate(value: string): string {
                       :disabled="duplicatingFlowId === flow.flowId"
                       @click="duplicateFlow(flow.flowId)"
                     />
-                    <Button v-if="canCreateFlow" label="編集" size="small" severity="secondary" @click="startFlowEdit(flow.flowId, flow.name, flow.description)" />
+                    <Button v-if="canCreateFlow" label="編集" size="small" severity="secondary" @click="startFlowEdit(flow.flowId, flow.name, flow.flowType, flow.description)" />
                     <Button
                       v-if="canCreateFlow"
                       label="削除"
@@ -326,6 +361,15 @@ function formatDate(value: string): string {
           <label>
             Flow名
             <input v-model="flowName" type="text" placeholder="例: 入庫搬送フロー" :disabled="creatingFlow" />
+          </label>
+          <label>
+            種別
+            <select v-model="flowType" :disabled="creatingFlow">
+              <option v-for="option in flowTypeOptions" :key="option.value" :value="option.value">
+                {{ option.label }} - {{ option.description }}
+              </option>
+            </select>
+            <span class="field-help">{{ flowTypeDescription(flowType) }}</span>
           </label>
           <label>
             説明
@@ -407,6 +451,7 @@ label {
 }
 
 input,
+select,
 textarea {
   width: 100%;
   padding: 10px 12px;
@@ -423,6 +468,12 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+
+.field-help {
+  color: var(--text-sub);
+  font-size: 0.85rem;
+  font-weight: 400;
 }
 
 .confirm-message {
@@ -445,6 +496,20 @@ textarea {
 .flow-table th {
   color: var(--text-sub);
   font-size: 0.85rem;
+}
+
+.flow-type-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.flow-type-badge.is-transport {
+  border-style: dashed;
 }
 
 .error-message {
