@@ -462,7 +462,7 @@ public sealed class FlowsController(
         {
             var laneId = node.LaneId.HasValue && laneIds.Contains(node.LaneId.Value)
                 ? node.LaneId
-                : sortedLanes.FirstOrDefault()?.LaneId;
+                : null;
 
             var stageId = node.StageId.HasValue && stageIds.Contains(node.StageId.Value)
                 ? node.StageId
@@ -490,7 +490,7 @@ public sealed class FlowsController(
         {
             var laneId = node.LaneId.HasValue && laneIds.Contains(node.LaneId.Value)
                 ? node.LaneId
-                : sortedLanes.FirstOrDefault()?.LaneId;
+                : null;
 
             var stageId = node.StageId.HasValue && stageIds.Contains(node.StageId.Value)
                 ? node.StageId

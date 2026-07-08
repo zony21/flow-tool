@@ -522,7 +522,7 @@ public sealed class ExportsController(AppDbContext dbContext) : ControllerBase
 
         return nodes.Select(node =>
         {
-            var laneId = node.LaneId.HasValue && laneIds.Contains(node.LaneId.Value) ? node.LaneId : sortedLanes.FirstOrDefault()?.LaneId;
+            var laneId = node.LaneId.HasValue && laneIds.Contains(node.LaneId.Value) ? node.LaneId : null;
             var stageId = node.StageId.HasValue && stageIds.Contains(node.StageId.Value) ? node.StageId : ResolveStageIdByX(node.X, sortedStages);
             return node with { LaneId = laneId, StageId = stageId };
         }).ToList();
