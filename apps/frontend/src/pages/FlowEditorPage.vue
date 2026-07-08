@@ -41,6 +41,9 @@ const saveMessage = ref<string | null>(null)
 const saveError = ref<string | null>(null)
 const stageWidth = 240
 const nodeX = 42
+const minRowHeight = 132
+const nodeVisualHeight = 100
+const rowPaddingBottom = 80
 
 onMounted(async () => {
   editorStore.reset()
@@ -92,7 +95,7 @@ function buildSaveRequest(createVersion: boolean, changeSummary: string | null =
     })),
     nodes: flow.value.nodes.map((node) => ({
       nodeId: node.nodeId,
-      laneId: node.laneId && validLaneIds.has(node.laneId) ? node.laneId : null,
+      laneId: node.laneId && validLaneIds.has(node.laneId) ? node.laneId : resolveLaneIdByY(node.y, sortedLanes),
       stageId: node.stageId && validStageIds.has(node.stageId) ? node.stageId : resolveStageIdByX(node.x, sortedStages),
       nodeType: node.nodeType,
       name: node.name,
@@ -123,6 +126,23 @@ function resolveStageIdByX(x: number, sortedStages: { stageId: string }[]): stri
   if (sortedStages.length === 0) return null
   const index = Math.max(0, Math.min(Math.round((x - nodeX) / stageWidth), sortedStages.length - 1))
   return sortedStages[index]?.stageId ?? null
+}
+
+function resolveLaneIdByY(y: number, sortedLanes: { laneId: string }[]): string | null {
+  if (!flow.value || sortedLanes.length === 0) return null
+
+  let top = 0
+  for (const lane of sortedLanes) {
+    const laneNodes = flow.value.nodes.filter((node) => node.laneId === lane.laneId)
+    const maxNodeBottom = Math.max(0, ...laneNodes.map((node) => (Number.isFinite(node.y) ? node.y : 28) + nodeVisualHeight))
+    const height = Math.max(minRowHeight, maxNodeBottom + rowPaddingBottom)
+    if (y >= top && y < top + height) {
+      return lane.laneId
+    }
+    top += height
+  }
+
+  return sortedLanes[sortedLanes.length - 1]?.laneId ?? null
 }
 
 async function saveCurrentStructure(): Promise<void> {
