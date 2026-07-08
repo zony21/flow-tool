@@ -5,6 +5,7 @@ import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
 import MainLayout from '../layouts/MainLayout.vue'
 import EditorLayout from '../layouts/EditorLayout.vue'
+import CommentManagementPanel from '../components/flow/CommentManagementPanel.vue'
 import FlowCanvas from '../components/flow/FlowCanvas.vue'
 import FlowOperationPanel from '../components/flow/FlowOperationPanel.vue'
 import LaneStagePanel from '../components/flow/LaneStagePanel.vue'
@@ -38,6 +39,7 @@ const canExport = computed(() => Boolean(flow.value) && !flowStore.loading)
 const hasDetailPanel = computed(() => Boolean(editorStore.selectedNodeId || editorStore.selectedLinkId))
 const settingsDialogVisible = ref(false)
 const exportDialogVisible = ref(false)
+const commentDialogVisible = ref(false)
 const saveMessage = ref<string | null>(null)
 const saveError = ref<string | null>(null)
 const stageWidth = 240
@@ -364,6 +366,7 @@ function handleKeydown(event: KeyboardEvent): void {
           </div>
           <div class="header-actions">
             <Button label="設備/分類設定" severity="secondary" :disabled="!flow" @click="settingsDialogVisible = true" />
+            <Button label="コメント" severity="secondary" :disabled="!flow" @click="commentDialogVisible = true" />
             <Button label="バージョン管理" severity="secondary" @click="router.push({ name: 'flow-versions', params: { projectId, flowId } })" />
             <Button label="バージョン作成" severity="secondary" :disabled="!canCreateVersion" @click="createVersionFromCurrentFlow" />
             <Button label="出力" icon="pi pi-download" severity="secondary" :disabled="!canExport" @click="exportDialogVisible = true" />
@@ -439,6 +442,18 @@ function handleKeydown(event: KeyboardEvent): void {
             @add-stage="editorStore.addStage"
             @update-stage="editorStore.updateStage"
             @delete-stage="editorStore.deleteStage"
+          />
+        </Dialog>
+
+        <Dialog v-model:visible="commentDialogVisible" modal header="コメント" :style="{ width: 'min(760px, 94vw)' }">
+          <CommentManagementPanel
+            v-if="flow"
+            :flow="flow"
+            :selected-node-id="editorStore.selectedNodeId"
+            :readonly="!canEdit"
+            @add-comment="editorStore.addComment"
+            @update-comment="editorStore.updateComment"
+            @delete-comment="editorStore.deleteComment"
           />
         </Dialog>
 
