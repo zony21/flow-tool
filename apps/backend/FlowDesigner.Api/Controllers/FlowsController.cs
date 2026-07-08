@@ -453,24 +453,18 @@ public sealed class FlowsController(
         IReadOnlyList<LaneDto> lanes,
         IReadOnlyList<StageDto> stages)
     {
-        var sortedLanes = lanes.OrderBy(lane => lane.SortOrder).ToList();
         var sortedStages = stages.OrderBy(stage => stage.SortOrder).ToList();
-        var laneIds = sortedLanes.Select(lane => lane.LaneId).ToHashSet();
         var stageIds = sortedStages.Select(stage => stage.StageId).ToHashSet();
 
         return nodes.Select(node =>
         {
-            var laneId = node.LaneId.HasValue && laneIds.Contains(node.LaneId.Value)
-                ? node.LaneId
-                : null;
-
             var stageId = node.StageId.HasValue && stageIds.Contains(node.StageId.Value)
                 ? node.StageId
                 : ResolveStageIdByX(node.X, sortedStages);
 
             return node with
             {
-                LaneId = laneId,
+                LaneId = node.LaneId,
                 StageId = stageId,
             };
         }).ToList();
@@ -481,24 +475,18 @@ public sealed class FlowsController(
         IReadOnlyList<SaveLaneRequest> lanes,
         IReadOnlyList<SaveStageRequest> stages)
     {
-        var sortedLanes = lanes.OrderBy(lane => lane.SortOrder).ToList();
         var sortedStages = stages.OrderBy(stage => stage.SortOrder).ToList();
-        var laneIds = sortedLanes.Select(lane => lane.LaneId).ToHashSet();
         var stageIds = sortedStages.Select(stage => stage.StageId).ToHashSet();
 
         return nodes.Select(node =>
         {
-            var laneId = node.LaneId.HasValue && laneIds.Contains(node.LaneId.Value)
-                ? node.LaneId
-                : null;
-
             var stageId = node.StageId.HasValue && stageIds.Contains(node.StageId.Value)
                 ? node.StageId
                 : ResolveStageIdByX(node.X, sortedStages);
 
             return node with
             {
-                LaneId = laneId,
+                LaneId = node.LaneId,
                 StageId = stageId,
             };
         }).ToList();
