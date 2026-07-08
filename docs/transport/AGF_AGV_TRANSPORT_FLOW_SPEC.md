@@ -1,92 +1,74 @@
-# AI Flow Designer フロー種別・AGF/AGV搬送設計拡張仕様
+# AGF/AGV搬送フロー設計仕様
 
-## 目的
+## 1. 本書の目的
 
-通常のシステムフローとAGF/AGV搬送フローを分離する。
+本書は、AI Flow DesignerにおけるAGF/AGV搬送設計機能の仕様を定義する。
 
-基本思想:
-Single Source of Truth
+通常の業務フロー・システムフローと、AGF/AGV固有の搬送フローを分離し、汎用性を維持したまま搬送設計を可能にする。
 
-構造データを正とし、表示・出力は生成結果とする。
+本機能もSingle Source of Truthを原則とし、構造化Flowデータを正として各種資料を生成する。
 
----
+## 2. 基本方針
 
-## フロー種別
-
-FlowにflowTypeを追加する。
-
-種類:
+Flowには種別を保持する。
 
 - Normal: 通常フロー
 - Transport: AGF/AGV搬送フロー
 
-既存フローはNormal扱い。
+既存FlowはNormalとして扱う。
 
----
+TransportはNormalを拡張する形式とし、通常機能を破壊しない。
 
-## Normal（通常フロー）
+## 3. 通常フロー（Normal）
 
-対象:
+通常フローは以下を対象とする。
 
-- 業務フロー
+- 業務処理
 - システム処理
-- 設備処理
-- 通信フロー
+- 設備連携
+- 通信処理
 
-利用可能:
+利用可能機能:
 
-- Node
-- Link
-- Lane
-- Stage
-- Comment
+- Node / Link / Lane / Stage / Comment編集
 - Mermaid出力
 - JSON出力
 - AI DSL出力
 - 設計書出力
 - API仕様出力
 
-利用不可:
+AGF/AGV専用設定、搬送表生成は利用不可とする。
 
-- 搬送表生成
-- AGFメーカー設定
-- AGFコマンド設定
+## 4. AGF/AGV搬送フロー（Transport）
 
----
-
-## Transport（AGF/AGV搬送フロー）
-
-Normal機能を継承する。
-
-追加機能:
+TransportではNormal機能に加えて以下を利用可能にする。
 
 - AGF/AGVメーカー管理
-- コマンド管理
+- メーカー別コマンド管理
 - ロケーション管理
 - 設備管理
 - 搬送表生成
 
----
+## 5. フロー作成仕様
 
-## 新規フロー作成
+新規Flow作成時にFlow種別を選択する。
 
-作成時に選択する。
+初期値はNormalとする。
 
-デフォルト:
-Normal
-
-選択:
+選択項目:
 
 - 通常フロー
 - AGF/AGV搬送フロー
 
----
+NormalからTransportへの変更は可能とする。
 
-## AGFメーカー管理
+変更時は、メーカー・コマンド・ロケーション・設備情報の追加設定が必要になることを通知する。
 
-Transportのみ。
+## 6. メーカー管理
 
-メーカーごとにコマンドを保持する。
+Transportのみ使用する。
+
+AGF/AGVメーカーごとに使用可能な動作コマンドを管理する。
 
 例:
 
@@ -94,43 +76,33 @@ Transportのみ。
 - Toyota
 - Nichiyu
 
----
+## 7. コマンド管理
 
-## Command管理
+メーカー単位で搬送コマンドを保持する。
 
-メーカー単位。
+| コマンド | 処理区分 |
+| --- | --- |
+| TravelToPosture | 移動 |
+| Loading | 荷上げ |
+| Unloading | 荷下ろし |
 
-例:
+コマンドはユーザー追加可能とする。
 
-|Command|処理区分|
-|-|-|
-|TravelToPosture|移動|
-|Loading|荷上げ|
-|Unloading|荷下ろし|
+## 8. ロケーション管理
 
-ユーザー追加可能。
+搬送位置情報を構造化して管理する。
 
----
+| ロケーション | 種類 |
+| --- | --- |
+| P1 | 経由点 |
+| A1 | 荷役場所 |
+| ST1 | 充電位置 |
 
-## Location管理
+## 9. 設備管理
 
-搬送位置を構造管理する。
+Lane / Stageとは別に実設備情報を管理する。
 
-例:
-
-|ID|種類|
-|-|-|
-|P1|経由点|
-|A1|荷役場所|
-|ST1|充電位置|
-
----
-
-## Equipment管理
-
-Lane/Stageとは別管理。
-
-対象:
+対象例:
 
 - PLC
 - RCS
@@ -145,11 +117,9 @@ Lane/Stageとは別管理。
 - 安全機器
 - その他
 
----
+## 10. Node拡張仕様
 
-## Transport Node拡張
-
-Transportの場合のみ追加。
+Transportの場合のみNodeへ搬送属性を追加する。
 
 追加項目:
 
@@ -158,11 +128,11 @@ Transportの場合のみ追加。
 - equipmentId
 - rwType
 
----
+通常Flowでは表示しない。
 
-## R/W
+## 11. 通信方向（R/W）
 
-PLC通信方向。
+PLC等との通信方向を表す。
 
 値:
 
@@ -170,55 +140,46 @@ PLC通信方向。
 - Read
 - Write
 
----
+## 12. 処理区分判定
 
-## 処理区分自動判定
+処理区分は可能な限り自動判定する。
 
-優先順:
+判定優先順:
 
 1. Command設定
 2. R/W設定
 
 例:
 
-TravelToPosture → 移動
+- TravelToPosture → 移動
+- Loading → 荷上げ
+- Write → PLC書込み
+- Read → PLC読込み
 
-Loading → 荷上げ
+## 13. 搬送表生成仕様
 
-Write → PLC書込み
+Transportのみ搬送表出力を許可する。
 
-Read → PLC読込み
+生成順:
 
----
+1. Flow取得
+2. Link順解析
+3. Node実行順決定
+4. Step番号採番
+5. 搬送表生成
 
-## 搬送表生成
+## 14. Markdown出力仕様
 
-Transportのみ使用可能。
+出力例:
 
-流れ:
+| No | 処理 | 動作 | ロケ | 設備 | R/W | 処理区分 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | A1占有ON | - | - | - | - | DB更新 |
+| 2 | SH1開指令 | - | - | SH1 | Write | PLC書込 |
+| 3 | A1荷上げ | Loading | A1 | - | - | 荷上げ |
+| 4 | P2移動 | TravelToPosture | P2 | - | - | 移動 |
 
-Flow
-↓
-Node順解析
-↓
-Link追跡
-↓
-Step生成
-
----
-
-## Markdown出力例
-
-|No|処理|動作|ロケ|設備|R/W|処理区分|
-|-|-|-|-|-|-|-|
-|1|A1占有ON|-|-|-|-|DB更新|
-|2|SH1開指令|-|-|SH1|Write|PLC書込|
-|3|A1荷上げ|Loading|A1|-|-|荷上げ|
-|4|P2移動|TravelToPosture|P2|-|-|移動|
-
----
-
-## Export
+## 15. Export仕様
 
 Normal:
 
@@ -232,26 +193,27 @@ Transport追加:
 
 - 搬送表
 
----
+## 16. 実装Phase
 
-## 実装Phase
+Phase1:
 
-### Phase1
-FlowType追加
+- FlowType追加
 
-### Phase2
-Transportマスタ追加
+Phase2:
 
-- Manufacturer
-- Command
-- Location
-- Equipment
+- Manufacturer管理
+- Command管理
+- Location管理
+- Equipment管理
 
-### Phase3
-Node詳細拡張
+Phase3:
 
-### Phase4
-搬送表Generator追加
+- Node詳細拡張
 
-### Phase5
-Markdown出力追加
+Phase4:
+
+- 搬送表Generator追加
+
+Phase5:
+
+- Markdown出力追加
