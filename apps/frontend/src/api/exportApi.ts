@@ -37,3 +37,8 @@ export async function exportDesignDocument(projectId: string, flowId: string): P
   const response = await httpClient.post<TextExportResponse>(`/api/projects/${projectId}/flows/${flowId}/export/design-doc`)
   return response.data
 }
+
+export async function exportApiSpecification(projectId: string, flowId: string): Promise<TextExportResponse> {
+  const response = await httpClient.post<TextExportResponse>(`/api/projects/${projectId}/flows/${flowId}/export/api-spec`)
+  return response.data
+}
