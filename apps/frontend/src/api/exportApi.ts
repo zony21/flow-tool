@@ -29,7 +29,7 @@ export async function exportMermaid(
 }
 
 export async function exportAiDsl(projectId: string, flowId: string): Promise<TextExportResponse> {
-  const response = await httpClient.post<TextExportResponse>(`/api/projects/${projectId}/flows/${flowId}/export/ai-dsl`)
+  const response = await httpClient.post<TextExportResponse>(`/api/projects/${projectId}/flows/${flowId}/export/ai-dsl-v2`)
   return response.data
 }
 
