@@ -18,11 +18,11 @@ const selectedNode = computed(() => props.flow.nodes.find((node) => node.nodeId 
 const categories = computed(() => props.flow.lanes.slice().sort((a, b) => a.sortOrder - b.sortOrder))
 const equipment = computed(() => props.flow.stages.slice().sort((a, b) => a.sortOrder - b.sortOrder))
 
-function updateField<K extends keyof FlowNode>(key: K, value: FlowNode[K]): void {
+function updateNode(patch: Partial<FlowNode>): void {
   if (!selectedNode.value || props.readonly) return
   emit('update-node', {
     ...selectedNode.value,
-    [key]: value,
+    ...patch,
   })
 }
 
@@ -42,12 +42,12 @@ function deleteSelectedNode(): void {
     <div class="form-grid">
       <label class="field">
         <span>ノード名</span>
-        <input :value="selectedNode.name" :disabled="readonly" @input="updateField('name', ($event.target as HTMLInputElement).value)" />
+        <input :value="selectedNode.name" :disabled="readonly" @input="updateNode({ name: ($event.target as HTMLInputElement).value })" />
       </label>
 
       <label class="field">
         <span>図形</span>
-        <select :value="selectedNode.nodeType" :disabled="readonly" @change="updateField('nodeType', ($event.target as HTMLSelectElement).value)">
+        <select :value="selectedNode.nodeType" :disabled="readonly" @change="updateNode({ nodeType: ($event.target as HTMLSelectElement).value })">
           <option v-for="sample in nodeSamples" :key="sample.type" :value="sample.type">
             {{ sample.label }}
           </option>
@@ -56,7 +56,7 @@ function deleteSelectedNode(): void {
 
       <label class="field">
         <span>設備</span>
-        <select :value="selectedNode.stageId ?? ''" :disabled="readonly" @change="updateField('stageId', ($event.target as HTMLSelectElement).value || null)">
+        <select :value="selectedNode.stageId ?? ''" :disabled="readonly" @change="updateNode({ stageId: ($event.target as HTMLSelectElement).value || null })">
           <option value="">未設定</option>
           <option v-for="stage in equipment" :key="stage.stageId" :value="stage.stageId">
             {{ stage.name }}
@@ -66,7 +66,7 @@ function deleteSelectedNode(): void {
 
       <label class="field">
         <span>工程分類</span>
-        <select :value="selectedNode.laneId ?? ''" :disabled="readonly" @change="updateField('laneId', ($event.target as HTMLSelectElement).value || null)">
+        <select :value="selectedNode.laneId ?? ''" :disabled="readonly" @change="updateNode({ laneId: ($event.target as HTMLSelectElement).value || null })">
           <option value="">未設定</option>
           <option v-for="lane in categories" :key="lane.laneId" :value="lane.laneId">
             {{ lane.name }}
@@ -80,7 +80,7 @@ function deleteSelectedNode(): void {
           rows="4"
           :value="selectedNode.description ?? ''"
           :disabled="readonly"
-          @input="updateField('description', ($event.target as HTMLTextAreaElement).value || null)"
+          @input="updateNode({ description: ($event.target as HTMLTextAreaElement).value || null })"
         />
       </label>
 
