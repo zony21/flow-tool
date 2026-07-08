@@ -44,62 +44,13 @@ p {
 }
 
 /* Flow editor laptop usability adjustments */
-.flow-editor-page {
-  min-height: calc(100vh - 96px);
-}
-
-.flow-editor-page .flow-editor-header {
-  gap: 10px !important;
-}
-
-.flow-editor-page .header-actions {
-  gap: 6px !important;
-}
-
 .flow-editor-page .header-actions .p-button {
   padding: 0.45rem 0.65rem;
   font-size: 0.86rem;
 }
 
-.flow-editor-page .editor-workspace {
-  min-height: 0 !important;
-}
-
 .flow-editor-page .flow-canvas {
-  height: clamp(420px, calc(100vh - 300px), 620px) !important;
-  min-height: 420px !important;
   scrollbar-gutter: stable both-edges;
-}
-
-.flow-editor-page .footer-actions {
-  position: sticky;
-  bottom: 0;
-  z-index: 50;
-  display: flex;
-  justify-content: flex-start;
-  padding: 8px 0 0 !important;
-  background: linear-gradient(180deg, rgb(247 250 252 / 0%) 0%, #f7fafc 28%, #f7fafc 100%);
-}
-
-@media (max-height: 820px) {
-  .flow-editor-page {
-    gap: 10px;
-  }
-
-  .flow-editor-page .flow-title h1 {
-    margin-bottom: 4px;
-    font-size: 1.25rem;
-  }
-
-  .flow-editor-page .flow-title p {
-    margin-top: 2px;
-    font-size: 0.82rem;
-  }
-
-  .flow-editor-page .flow-canvas {
-    height: clamp(360px, calc(100vh - 270px), 520px) !important;
-    min-height: 360px !important;
-  }
 }
 
 @media (max-width: 1366px) {
