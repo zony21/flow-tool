@@ -341,8 +341,14 @@ function handleKeydown(event: KeyboardEvent): void {
           </div>
         </div>
 
-        <p v-if="saveMessage" class="status-message success">{{ saveMessage }}</p>
-        <p v-if="saveError" class="status-message error">{{ saveError }}</p>
+        <div v-if="saveMessage" class="status-message success">
+          <span>{{ saveMessage }}</span>
+          <button type="button" class="status-close" aria-label="保存メッセージを閉じる" @click="saveMessage = null">×</button>
+        </div>
+        <div v-if="saveError" class="status-message error">
+          <span>{{ saveError }}</span>
+          <button type="button" class="status-close" aria-label="エラーメッセージを閉じる" @click="saveError = null">×</button>
+        </div>
 
         <p v-if="flowStore.loading" class="loading-text">読み込み中...</p>
         <div v-else-if="flow" class="editor-workspace" :class="{ 'details-open': hasDetailPanel }">
@@ -412,14 +418,18 @@ function handleKeydown(event: KeyboardEvent): void {
 .flow-editor-page {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 10px;
+  height: calc(100vh - 72px);
+  min-height: 0;
+  overflow: hidden;
 }
 
 .flow-editor-header {
   display: flex;
+  flex: 0 0 auto;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
+  gap: 12px;
 }
 
 .flow-title h1 {
@@ -427,7 +437,7 @@ function handleKeydown(event: KeyboardEvent): void {
 }
 
 .flow-title p {
-  margin: 6px 0 0;
+  margin: 4px 0 0;
   color: #64748b;
 }
 
@@ -451,12 +461,17 @@ function handleKeydown(event: KeyboardEvent): void {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 8px;
+  gap: 6px;
 }
 
 .status-message {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   margin: 0;
-  padding: 10px 12px;
+  padding: 8px 10px 8px 12px;
   border-radius: 8px;
   font-size: 0.9rem;
   font-weight: 700;
@@ -472,11 +487,31 @@ function handleKeydown(event: KeyboardEvent): void {
   background: #fee2e2;
 }
 
+.status-close {
+  display: inline-grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  padding: 0;
+  color: inherit;
+  background: rgb(255 255 255 / 55%);
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.status-close:hover {
+  background: rgb(255 255 255 / 85%);
+}
+
 .editor-workspace {
   display: grid;
+  flex: 1 1 auto;
   grid-template-columns: 220px minmax(0, 1fr);
-  gap: 16px;
-  min-height: 680px;
+  gap: 12px;
+  min-height: 0;
 }
 
 .editor-workspace.details-open {
@@ -484,21 +519,49 @@ function handleKeydown(event: KeyboardEvent): void {
 }
 
 .palette-column,
-.detail-drawer {
+.detail-drawer,
+.canvas-column {
   min-width: 0;
+  min-height: 0;
 }
 
 .canvas-column {
-  min-width: 0;
+  display: flex;
+}
+
+.canvas-column :deep(.flow-canvas) {
+  height: 100% !important;
+  min-height: 0 !important;
 }
 
 .footer-actions {
   display: flex;
+  flex: 0 0 auto;
   justify-content: flex-start;
-  padding-top: 4px;
+  padding-top: 2px;
 }
 
 .loading-text {
   color: #64748b;
+}
+
+@media (max-height: 820px) {
+  .flow-editor-page {
+    gap: 8px;
+    height: calc(100vh - 56px);
+  }
+
+  .flow-title h1 {
+    font-size: 1.25rem;
+  }
+
+  .flow-title p {
+    font-size: 0.82rem;
+  }
+
+  .status-message {
+    padding-top: 6px;
+    padding-bottom: 6px;
+  }
 }
 </style>
