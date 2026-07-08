@@ -15,6 +15,9 @@ namespace FlowDesigner.Api.Controllers;
 [Authorize]
 public sealed class DesignDocumentsController(AppDbContext dbContext) : ControllerBase
 {
+    private const double StageWidth = 240;
+    private const double NodeOffsetX = 42;
+
     [HttpPost]
     [RequirePermission(PermissionCodes.ExportExecute)]
     public async Task<ActionResult<TextExportResponse>> ExportDesignDocument(Guid projectId, Guid flowId, CancellationToken cancellationToken)
@@ -41,22 +44,18 @@ public sealed class DesignDocumentsController(AppDbContext dbContext) : Controll
         var lanes = await dbContext.Lanes.AsNoTracking()
             .Where(x => x.FlowId == flowId)
             .OrderBy(x => x.SortOrder)
-            .Select(x => new { x.LaneId, x.Name, x.SortOrder })
+            .Select(x => new DesignLane(x.LaneId, x.Name, x.SortOrder))
             .ToListAsync(cancellationToken);
 
         var stages = await dbContext.Stages.AsNoTracking()
             .Where(x => x.FlowId == flowId)
             .OrderBy(x => x.SortOrder)
-            .Select(x => new { x.StageId, x.Name, x.SortOrder })
+            .Select(x => new DesignStage(x.StageId, x.Name, x.SortOrder))
             .ToListAsync(cancellationToken);
 
-        var nodes = await dbContext.Nodes.AsNoTracking()
+        var rawNodes = await dbContext.Nodes.AsNoTracking()
             .Where(x => x.FlowId == flowId)
-            .OrderBy(x => x.Y)
-            .ThenBy(x => x.X)
-            .ThenBy(x => x.Name)
-            .Select(x => new
-            {
+            .Select(x => new DesignNode(
                 x.NodeId,
                 x.LaneId,
                 x.StageId,
@@ -64,35 +63,43 @@ public sealed class DesignDocumentsController(AppDbContext dbContext) : Controll
                 x.Name,
                 x.Description,
                 x.X,
-                x.Y,
-            })
+                x.Y))
             .ToListAsync(cancellationToken);
+
+        var nodes = NormalizeNodes(rawNodes, lanes, stages);
+        var laneSort = lanes.ToDictionary(x => x.LaneId, x => x.SortOrder);
+        var stageSort = stages.ToDictionary(x => x.StageId, x => x.SortOrder);
+        var orderedNodes = nodes
+            .OrderBy(x => x.LaneId is Guid laneId && laneSort.TryGetValue(laneId, out var laneOrder) ? laneOrder : int.MaxValue)
+            .ThenBy(x => x.Y)
+            .ThenBy(x => x.StageId is Guid stageId && stageSort.TryGetValue(stageId, out var stageOrder) ? stageOrder : int.MaxValue)
+            .ThenBy(x => x.X)
+            .ThenBy(x => x.Name)
+            .ToList();
 
         var links = await dbContext.Links.AsNoTracking()
             .Where(x => x.FlowId == flowId)
-            .Select(x => new
-            {
+            .Select(x => new DesignLink(
                 x.LinkId,
                 x.SourceNodeId,
                 x.TargetNodeId,
                 x.Label,
-                x.Condition,
-            })
+                x.Condition))
             .ToListAsync(cancellationToken);
 
         var comments = await dbContext.Comments.AsNoTracking()
             .Where(x => x.FlowId == flowId)
             .OrderBy(x => x.Y)
             .ThenBy(x => x.X)
-            .Select(x => new { x.CommentId, x.NodeId, x.Text, x.X, x.Y })
+            .Select(x => new DesignComment(x.CommentId, x.NodeId, x.Text, x.X, x.Y))
             .ToListAsync(cancellationToken);
 
         var lanesById = lanes.ToDictionary(x => x.LaneId, x => x.Name);
         var stagesById = stages.ToDictionary(x => x.StageId, x => x.Name);
-        var nodesById = nodes.ToDictionary(x => x.NodeId, x => x);
+        var nodesById = orderedNodes.ToDictionary(x => x.NodeId, x => x);
         var outgoing = links.GroupBy(x => x.SourceNodeId).ToDictionary(x => x.Key, x => x.ToList());
         var incoming = links.GroupBy(x => x.TargetNodeId).ToDictionary(x => x.Key, x => x.ToList());
-        var nodeKeys = nodes.Select((node, index) => new { node.NodeId, Key = $"N{index + 1}" }).ToDictionary(x => x.NodeId, x => x.Key);
+        var nodeKeys = orderedNodes.Select((node, index) => new { node.NodeId, Key = $"N{index + 1}" }).ToDictionary(x => x.NodeId, x => x.Key);
 
         var builder = new StringBuilder();
         builder.AppendLine($"# {EscapeMarkdown(flow.FlowName)} 設計書");
@@ -132,7 +139,7 @@ public sealed class DesignDocumentsController(AppDbContext dbContext) : Controll
         builder.AppendLine();
         foreach (var lane in lanes)
         {
-            var laneNodes = nodes.Where(node => node.LaneId == lane.LaneId).ToList();
+            var laneNodes = orderedNodes.Where(node => node.LaneId == lane.LaneId).ToList();
             if (laneNodes.Count == 0)
             {
                 continue;
@@ -143,10 +150,10 @@ public sealed class DesignDocumentsController(AppDbContext dbContext) : Controll
             builder.AppendLine("|No|設備・担当|処理|種別|説明|次処理|");
             builder.AppendLine("|---|---|---|---|---|---|");
 
-            foreach (var node in laneNodes.OrderBy(x => x.Y).ThenBy(x => x.X).ThenBy(x => x.Name))
+            foreach (var node in laneNodes)
             {
                 var nextText = outgoing.TryGetValue(node.NodeId, out var nextLinks) && nextLinks.Count > 0
-                    ? string.Join("<br>", nextLinks.Select(link => FormatNext(link.TargetNodeId, link.Label, link.Condition, nodesById, nodeKeys)))
+                    ? string.Join("<br>", nextLinks.Select(link => EscapeMarkdown(FormatNext(link.TargetNodeId, link.Label, link.Condition, nodesById, nodeKeys))))
                     : "なし";
 
                 builder.AppendLine($"|{nodeKeys[node.NodeId]}|{EscapeMarkdown(GetStageName(node.StageId, stagesById))}|{EscapeMarkdown(node.Name)}|{EscapeMarkdown(node.NodeType)}|{EscapeMarkdown(node.Description ?? "")}|{nextText}|");
@@ -155,7 +162,7 @@ public sealed class DesignDocumentsController(AppDbContext dbContext) : Controll
             builder.AppendLine();
         }
 
-        var unassignedNodes = nodes.Where(node => node.LaneId is null || !lanesById.ContainsKey(node.LaneId.Value)).ToList();
+        var unassignedNodes = orderedNodes.Where(node => node.LaneId is null || !lanesById.ContainsKey(node.LaneId.Value)).ToList();
         if (unassignedNodes.Count > 0)
         {
             builder.AppendLine("### 3.x 未設定");
@@ -164,7 +171,10 @@ public sealed class DesignDocumentsController(AppDbContext dbContext) : Controll
             builder.AppendLine("|---|---|---|---|---|---|");
             foreach (var node in unassignedNodes)
             {
-                builder.AppendLine($"|{nodeKeys[node.NodeId]}|{EscapeMarkdown(GetStageName(node.StageId, stagesById))}|{EscapeMarkdown(node.Name)}|{EscapeMarkdown(node.NodeType)}|{EscapeMarkdown(node.Description ?? "")}|なし|");
+                var nextText = outgoing.TryGetValue(node.NodeId, out var nextLinks) && nextLinks.Count > 0
+                    ? string.Join("<br>", nextLinks.Select(link => EscapeMarkdown(FormatNext(link.TargetNodeId, link.Label, link.Condition, nodesById, nodeKeys))))
+                    : "なし";
+                builder.AppendLine($"|{nodeKeys[node.NodeId]}|{EscapeMarkdown(GetStageName(node.StageId, stagesById))}|{EscapeMarkdown(node.Name)}|{EscapeMarkdown(node.NodeType)}|{EscapeMarkdown(node.Description ?? "")}|{nextText}|");
             }
             builder.AppendLine();
         }
@@ -173,7 +183,7 @@ public sealed class DesignDocumentsController(AppDbContext dbContext) : Controll
         builder.AppendLine();
         builder.AppendLine("|No|工程分類|設備・担当|処理名|種別|位置|");
         builder.AppendLine("|---|---|---|---|---|---|");
-        foreach (var node in nodes)
+        foreach (var node in orderedNodes)
         {
             builder.AppendLine($"|{nodeKeys[node.NodeId]}|{EscapeMarkdown(GetLaneName(node.LaneId, lanesById))}|{EscapeMarkdown(GetStageName(node.StageId, stagesById))}|{EscapeMarkdown(node.Name)}|{EscapeMarkdown(node.NodeType)}|x={node.X}, y={node.Y}|");
         }
@@ -200,7 +210,7 @@ public sealed class DesignDocumentsController(AppDbContext dbContext) : Controll
 
         builder.AppendLine("## 6. 入出力関係");
         builder.AppendLine();
-        foreach (var node in nodes)
+        foreach (var node in orderedNodes)
         {
             builder.AppendLine($"### {nodeKeys[node.NodeId]} {EscapeMarkdown(node.Name)}");
             builder.AppendLine();
@@ -233,10 +243,15 @@ public sealed class DesignDocumentsController(AppDbContext dbContext) : Controll
             builder.AppendLine();
         }
 
-        if (comments.Count > 0)
+        builder.AppendLine("## 7. コメント");
+        builder.AppendLine();
+        if (comments.Count == 0)
         {
-            builder.AppendLine("## 7. コメント");
+            builder.AppendLine("コメントはありません。");
             builder.AppendLine();
+        }
+        else
+        {
             builder.AppendLine("|対象|コメント|位置|");
             builder.AppendLine("|---|---|---|");
             foreach (var commentItem in comments)
@@ -257,6 +272,38 @@ public sealed class DesignDocumentsController(AppDbContext dbContext) : Controll
         return Ok(new TextExportResponse($"{BuildFileName(flow.ProjectName, flow.FlowName)}_design.md", builder.ToString().TrimEnd()));
     }
 
+    private static IReadOnlyList<DesignNode> NormalizeNodes(
+        IReadOnlyList<DesignNode> nodes,
+        IReadOnlyList<DesignLane> lanes,
+        IReadOnlyList<DesignStage> stages)
+    {
+        var laneIds = lanes.Select(x => x.LaneId).ToHashSet();
+        var stageIds = stages.Select(x => x.StageId).ToHashSet();
+
+        return nodes.Select(node =>
+        {
+            var laneId = node.LaneId.HasValue && laneIds.Contains(node.LaneId.Value) ? node.LaneId : null;
+            var stageId = node.StageId.HasValue && stageIds.Contains(node.StageId.Value)
+                ? node.StageId
+                : ResolveStageIdByX(node.X, stages);
+
+            return node with { LaneId = laneId, StageId = stageId };
+        }).ToList();
+    }
+
+    private static Guid? ResolveStageIdByX(double x, IReadOnlyList<DesignStage> stages)
+    {
+        if (stages.Count == 0)
+        {
+            return null;
+        }
+
+        var sortedStages = stages.OrderBy(x => x.SortOrder).ToList();
+        var index = (int)Math.Round((x - NodeOffsetX) / StageWidth);
+        index = Math.Max(0, Math.Min(index, sortedStages.Count - 1));
+        return sortedStages[index].StageId;
+    }
+
     private static string GetLaneName(Guid? laneId, IReadOnlyDictionary<Guid, string> lanesById)
     {
         return laneId is Guid id && lanesById.TryGetValue(id, out var name) ? name : "未設定";
@@ -272,34 +319,20 @@ public sealed class DesignDocumentsController(AppDbContext dbContext) : Controll
         return !string.IsNullOrWhiteSpace(condition) ? condition : string.IsNullOrWhiteSpace(label) ? "" : label;
     }
 
-    private static string FormatNext<TNode>(Guid targetNodeId, string? label, string? condition, IReadOnlyDictionary<Guid, TNode> nodesById, IReadOnlyDictionary<Guid, string> nodeKeys)
-        where TNode : class
+    private static string FormatNext(Guid targetNodeId, string? label, string? condition, IReadOnlyDictionary<Guid, DesignNode> nodesById, IReadOnlyDictionary<Guid, string> nodeKeys)
     {
-        var nodeName = GetNodeName(targetNodeId, nodesById);
+        var nodeName = nodesById.TryGetValue(targetNodeId, out var node) ? node.Name : targetNodeId.ToString();
         var key = nodeKeys.GetValueOrDefault(targetNodeId, targetNodeId.ToString());
         var linkLabel = ChooseLinkLabel(label, condition);
         return string.IsNullOrWhiteSpace(linkLabel) ? $"{key} {nodeName}" : $"{key} {nodeName}（{linkLabel}）";
     }
 
-    private static string FormatPrevious<TNode>(Guid sourceNodeId, string? label, string? condition, IReadOnlyDictionary<Guid, TNode> nodesById, IReadOnlyDictionary<Guid, string> nodeKeys)
-        where TNode : class
+    private static string FormatPrevious(Guid sourceNodeId, string? label, string? condition, IReadOnlyDictionary<Guid, DesignNode> nodesById, IReadOnlyDictionary<Guid, string> nodeKeys)
     {
-        var nodeName = GetNodeName(sourceNodeId, nodesById);
+        var nodeName = nodesById.TryGetValue(sourceNodeId, out var node) ? node.Name : sourceNodeId.ToString();
         var key = nodeKeys.GetValueOrDefault(sourceNodeId, sourceNodeId.ToString());
         var linkLabel = ChooseLinkLabel(label, condition);
         return string.IsNullOrWhiteSpace(linkLabel) ? $"{key} {nodeName}" : $"{key} {nodeName}（{linkLabel}）";
-    }
-
-    private static string GetNodeName<TNode>(Guid nodeId, IReadOnlyDictionary<Guid, TNode> nodesById)
-        where TNode : class
-    {
-        if (!nodesById.TryGetValue(nodeId, out var node))
-        {
-            return nodeId.ToString();
-        }
-
-        var property = typeof(TNode).GetProperty("Name");
-        return property?.GetValue(node)?.ToString() ?? nodeId.ToString();
     }
 
     private static string EscapeMarkdown(string? value)
@@ -322,4 +355,10 @@ public sealed class DesignDocumentsController(AppDbContext dbContext) : Controll
         var safe = new string(raw.Select(ch => invalidChars.Contains(ch) ? '_' : ch).ToArray());
         return string.IsNullOrWhiteSpace(safe) ? "flow" : safe;
     }
+
+    private sealed record DesignLane(Guid LaneId, string Name, int SortOrder);
+    private sealed record DesignStage(Guid StageId, string Name, int SortOrder);
+    private sealed record DesignNode(Guid NodeId, Guid? LaneId, Guid? StageId, string NodeType, string Name, string? Description, double X, double Y);
+    private sealed record DesignLink(Guid LinkId, Guid SourceNodeId, Guid TargetNodeId, string? Label, string? Condition);
+    private sealed record DesignComment(Guid CommentId, Guid? NodeId, string Text, double X, double Y);
 }
