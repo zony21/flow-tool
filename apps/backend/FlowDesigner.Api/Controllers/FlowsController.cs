@@ -42,6 +42,7 @@ public sealed class FlowsController(
                 flow.FlowId,
                 flow.ProjectId,
                 flow.Name,
+                flow.FlowType,
                 flow.Description,
                 flow.SortOrder,
                 flow.CreatedAtUtc,
@@ -58,6 +59,11 @@ public sealed class FlowsController(
         if (string.IsNullOrWhiteSpace(request.Name))
         {
             return ApiError.BadRequest<FlowDetailDto>(this, "Flow name is required.", "name");
+        }
+
+        if (!FlowTypes.IsValid(string.IsNullOrWhiteSpace(request.FlowType) ? FlowTypes.Normal : request.FlowType))
+        {
+            return ApiError.BadRequest<FlowDetailDto>(this, "FlowType must be NORMAL or TRANSPORT.", "flowType");
         }
 
         var projectExists = await dbContext.Projects.AnyAsync(project => project.ProjectId == projectId, cancellationToken);
@@ -77,6 +83,7 @@ public sealed class FlowsController(
             FlowId = Guid.NewGuid(),
             ProjectId = projectId,
             Name = request.Name.Trim(),
+            FlowType = FlowTypes.NormalizeOrDefault(request.FlowType),
             Description = request.Description,
             SortOrder = sortOrder + 1,
             Revision = 0,
@@ -130,6 +137,11 @@ public sealed class FlowsController(
             return ApiError.BadRequest<FlowDetailDto>(this, "Flow name is required.", "name");
         }
 
+        if (!FlowTypes.IsValid(string.IsNullOrWhiteSpace(request.FlowType) ? FlowTypes.Normal : request.FlowType))
+        {
+            return ApiError.BadRequest<FlowDetailDto>(this, "FlowType must be NORMAL or TRANSPORT.", "flowType");
+        }
+
         var flow = await dbContext.Flows.FirstOrDefaultAsync(x => x.ProjectId == projectId && x.FlowId == flowId, cancellationToken);
         if (flow is null)
         {
@@ -137,6 +149,7 @@ public sealed class FlowsController(
         }
 
         flow.Name = request.Name.Trim();
+        flow.FlowType = FlowTypes.NormalizeOrDefault(request.FlowType);
         flow.Description = request.Description;
         flow.UpdatedAtUtc = DateTime.UtcNow;
         await dbContext.SaveChangesAsync(cancellationToken);
@@ -265,6 +278,7 @@ public sealed class FlowsController(
             var snapshot = JsonSerializer.Serialize(new
             {
                 flowId,
+                flow.FlowType,
                 request.ClientRevision,
                 lanes,
                 stages,
@@ -343,6 +357,7 @@ public sealed class FlowsController(
             FlowId = Guid.NewGuid(),
             ProjectId = projectId,
             Name = duplicateName,
+            FlowType = sourceFlow.FlowType,
             Description = sourceFlow.Description,
             SortOrder = nextSortOrder + 1,
             Revision = 0,
@@ -431,7 +446,7 @@ public sealed class FlowsController(
         var comments = await dbContext.Comments.AsNoTracking().Where(x => x.FlowId == flowId).Select(x => new CommentDto(x.CommentId, x.FlowId, x.NodeId, x.Text, x.X, x.Y)).ToListAsync(cancellationToken);
         var metadata = await dbContext.MetadataItems.AsNoTracking().Where(x => x.FlowId == flowId).Select(x => new MetadataDto(x.MetadataId, x.FlowId, x.MetaKey, x.MetaValue)).ToListAsync(cancellationToken);
 
-        return new FlowDetailDto(flow.FlowId, flow.ProjectId, flow.Name, flow.Description, flow.SortOrder, flow.Revision, lanes, stages, nodes, links, comments, metadata);
+        return new FlowDetailDto(flow.FlowId, flow.ProjectId, flow.Name, flow.FlowType, flow.Description, flow.SortOrder, flow.Revision, lanes, stages, nodes, links, comments, metadata);
     }
 
     private async Task<string> BuildDuplicateFlowNameAsync(Guid projectId, string baseName, CancellationToken cancellationToken)
@@ -531,42 +546,48 @@ public sealed class FlowsController(
         IReadOnlyList<SaveLinkRequest> links,
         IReadOnlyList<SaveCommentRequest> comments)
     {
-        if (lanes.Any(x => string.IsNullOrWhiteSpace(x.Name)))
+        if (lanes.Any(lane => lane.LaneId == Guid.Empty || string.IsNullOrWhiteSpace(lane.Name)))
         {
-            return "Lane name is required.";
+            return "Lane id and name are required.";
         }
 
-        if (stages.Any(x => string.IsNullOrWhiteSpace(x.Name)))
+        if (stages.Any(stage => stage.StageId == Guid.Empty || string.IsNullOrWhiteSpace(stage.Name)))
         {
-            return "Stage name is required.";
+            return "Stage id and name are required.";
         }
 
-        if (nodes.Any(x => string.IsNullOrWhiteSpace(x.Name)))
+        var laneIds = lanes.Select(lane => lane.LaneId).ToHashSet();
+        var stageIds = stages.Select(stage => stage.StageId).ToHashSet();
+        var nodeIds = nodes.Select(node => node.NodeId).ToHashSet();
+
+        if (nodes.Any(node => node.NodeId == Guid.Empty || string.IsNullOrWhiteSpace(node.NodeType) || string.IsNullOrWhiteSpace(node.Name)))
         {
-            return "Node name is required.";
+            return "Node id, type, and name are required.";
         }
 
-        var laneIds = lanes.Select(x => x.LaneId).ToHashSet();
-        if (nodes.Any(x => x.LaneId.HasValue && !laneIds.Contains(x.LaneId.Value)))
+        if (nodes.Any(node => node.LaneId.HasValue && !laneIds.Contains(node.LaneId.Value)))
         {
-            return "Node laneId must reference an existing lane.";
+            return "Node refers to a lane that does not exist in this flow.";
         }
 
-        var stageIds = stages.Select(x => x.StageId).ToHashSet();
-        if (nodes.Any(x => x.StageId.HasValue && !stageIds.Contains(x.StageId.Value)))
+        if (nodes.Any(node => node.StageId.HasValue && !stageIds.Contains(node.StageId.Value)))
         {
-            return "Node stageId must reference an existing stage.";
+            return "Node refers to a stage that does not exist in this flow.";
         }
 
-        var nodeIds = nodes.Select(x => x.NodeId).ToHashSet();
-        if (links.Any(x => !nodeIds.Contains(x.SourceNodeId) || !nodeIds.Contains(x.TargetNodeId)))
+        if (links.Any(link => link.LinkId == Guid.Empty || !nodeIds.Contains(link.SourceNodeId) || !nodeIds.Contains(link.TargetNodeId)))
         {
-            return "Link source and target must reference existing nodes.";
+            return "Link source and target nodes must exist in this flow.";
         }
 
-        if (comments.Any(x => x.NodeId.HasValue && !nodeIds.Contains(x.NodeId.Value)))
+        if (comments.Any(comment => comment.CommentId == Guid.Empty || string.IsNullOrWhiteSpace(comment.Text)))
         {
-            return "Comment nodeId must reference existing node.";
+            return "Comment id and text are required.";
+        }
+
+        if (comments.Any(comment => comment.NodeId.HasValue && !nodeIds.Contains(comment.NodeId.Value)))
+        {
+            return "Comment refers to a node that does not exist in this flow.";
         }
 
         return null;
