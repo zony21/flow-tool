@@ -1,9 +1,10 @@
 import { httpClient } from './httpClient'
-import type { FlowDetail, FlowSummary, SaveFlowStructureRequest, SaveFlowStructureResponse } from '../types/flow'
+import type { FlowDetail, FlowSummary, FlowType, SaveFlowStructureRequest, SaveFlowStructureResponse } from '../types/flow'
 
 export type FlowSaveRequest = {
   name: string
   description?: string | null
+  flowType?: FlowType
 }
 
 export async function fetchFlows(projectId: string): Promise<FlowSummary[]> {
