@@ -37,15 +37,31 @@ const categoryHeight = 132
 const nodeRowOffset = 28
 const nodeSpacingY = 86
 
-function resolveAvailableY(nodes: FlowNode[], stageId: string | null | undefined, desiredY: number, exceptNodeId?: string): number {
+function resolveAvailableY(nodes: FlowNode[], stageId: string | null | undefined, laneId: string | null | undefined, desiredY: number, exceptNodeId?: string): number {
   let y = Math.max(nodeRowOffset, desiredY)
-  const sameStageNodes = nodes.filter((node) => node.stageId === stageId && node.nodeId !== exceptNodeId)
+  const sameCellNodes = nodes.filter((node) => node.stageId === stageId && node.laneId === laneId && node.nodeId !== exceptNodeId)
 
-  while (sameStageNodes.some((node) => Math.abs(node.y - y) < nodeSpacingY)) {
+  while (sameCellNodes.some((node) => Math.abs(node.y - y) < nodeSpacingY)) {
     y += nodeSpacingY
   }
 
   return y
+}
+
+function resolveValidLaneId(flow: FlowDetail, laneId: string | null | undefined): string | null {
+  if (laneId && flow.lanes.some((lane) => lane.laneId === laneId)) {
+    return laneId
+  }
+
+  return flow.lanes.slice().sort((a, b) => a.sortOrder - b.sortOrder)[0]?.laneId ?? null
+}
+
+function resolveValidStageId(flow: FlowDetail, stageId: string | null | undefined): string | null {
+  if (stageId && flow.stages.some((stage) => stage.stageId === stageId)) {
+    return stageId
+  }
+
+  return flow.stages.slice().sort((a, b) => a.sortOrder - b.sortOrder)[0]?.stageId ?? null
 }
 
 export const useEditorStore = defineStore('editor', {
@@ -212,11 +228,12 @@ export const useEditorStore = defineStore('editor', {
       const laneIndex = Math.max(0, lanes.findIndex((lane) => lane.laneId === defaultLane?.laneId))
       const nodeType = payload?.nodeType ?? 'process'
       const sample = getNodeSample(nodeType)
-      const sameStageNodes = flow.nodes.filter((node) => node.stageId === defaultStage?.stageId)
+      const sameCellNodes = flow.nodes.filter((node) => node.stageId === defaultStage?.stageId && node.laneId === defaultLane?.laneId)
       const nodeId = crypto.randomUUID()
       const x = stageIndex * stageWidth + nodeOffsetX
       const rowBaseY = lanes.length > 0 ? laneIndex * categoryHeight + nodeRowOffset : nodeRowOffset
-      const y = resolveAvailableY(flow.nodes, defaultStage?.stageId, payload?.y ?? rowBaseY)
+      const desiredY = payload?.y ?? rowBaseY
+      const y = resolveAvailableY(flow.nodes, defaultStage?.stageId, defaultLane?.laneId, desiredY)
 
       this.applyFlowChange(
         (currentFlow) => ({
@@ -229,7 +246,7 @@ export const useEditorStore = defineStore('editor', {
               laneId: defaultLane?.laneId,
               stageId: defaultStage?.stageId,
               nodeType,
-              name: payload?.name ?? `${sample.defaultName} ${sameStageNodes.length + 1}`,
+              name: payload?.name ?? `${sample.defaultName} ${sameCellNodes.length + 1}`,
               description: null,
               x,
               y,
@@ -244,13 +261,15 @@ export const useEditorStore = defineStore('editor', {
       this.applyFlowChange(
         (flow) => {
           const stages = flow.stages.slice().sort((a, b) => a.sortOrder - b.sortOrder)
-          const stageIndex = Math.max(0, stages.findIndex((stage) => stage.stageId === updatedNode.stageId))
+          const stageId = resolveValidStageId(flow, updatedNode.stageId)
+          const laneId = resolveValidLaneId(flow, updatedNode.laneId)
+          const stageIndex = Math.max(0, stages.findIndex((stage) => stage.stageId === stageId))
           const x = stageIndex * stageWidth + nodeOffsetX
-          const y = resolveAvailableY(flow.nodes, updatedNode.stageId, updatedNode.y, updatedNode.nodeId)
+          const y = resolveAvailableY(flow.nodes, stageId, laneId, updatedNode.y, updatedNode.nodeId)
 
           return {
             ...flow,
-            nodes: flow.nodes.map((node) => (node.nodeId === updatedNode.nodeId ? { ...updatedNode, x, y } : node)),
+            nodes: flow.nodes.map((node) => (node.nodeId === updatedNode.nodeId ? { ...updatedNode, laneId, stageId, x, y } : node)),
           }
         },
         { actionKey: `node:update:${updatedNode.nodeId}` },
@@ -262,8 +281,9 @@ export const useEditorStore = defineStore('editor', {
           const targetNode = flow.nodes.find((node) => node.nodeId === payload.nodeId)
           if (!targetNode) return flow
 
-          const stageId = payload.stageId ?? targetNode.stageId
-          const y = resolveAvailableY(flow.nodes, stageId, payload.y, payload.nodeId)
+          const stageId = resolveValidStageId(flow, payload.stageId ?? targetNode.stageId)
+          const laneId = resolveValidLaneId(flow, payload.laneId ?? targetNode.laneId)
+          const y = resolveAvailableY(flow.nodes, stageId, laneId, payload.y, payload.nodeId)
 
           return {
             ...flow,
@@ -273,8 +293,8 @@ export const useEditorStore = defineStore('editor', {
                     ...node,
                     x: payload.x,
                     y,
-                    laneId: payload.laneId ?? node.laneId,
-                    stageId: stageId ?? null,
+                    laneId,
+                    stageId,
                   }
                 : node,
             ),
