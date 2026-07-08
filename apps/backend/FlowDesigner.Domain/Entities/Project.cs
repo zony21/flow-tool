@@ -1,5 +1,6 @@
 using FlowDesigner.Domain.Entities.Auth;
 using FlowDesigner.Domain.Entities.Settings;
+using FlowDesigner.Domain.Entities.Transport;
 
 namespace FlowDesigner.Domain.Entities.Core;
 
@@ -19,4 +20,6 @@ public class Project
     public ICollection<EditorSetting> EditorSettings { get; set; } = new List<EditorSetting>();
     public ICollection<AiSetting> AiSettings { get; set; } = new List<AiSetting>();
     public ICollection<ExportSetting> ExportSettings { get; set; } = new List<ExportSetting>();
+    public ICollection<TransportLocation> TransportLocations { get; set; } = new List<TransportLocation>();
+    public ICollection<TransportEquipment> TransportEquipments { get; set; } = new List<TransportEquipment>();
 }
