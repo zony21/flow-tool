@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import type { FlowDetail, FlowLink, FlowNode, Lane, Stage } from '../types/flow'
+import type { FlowComment, FlowDetail, FlowLink, FlowNode, Lane, Stage } from '../types/flow'
 import { getNodeSample } from '../constants/nodeSamples'
 import { useFlowStore } from './flowStore'
 import { useUndoRedoStore } from './undoRedoStore'
@@ -29,6 +29,13 @@ type AddNodePayload = {
 type AddLinkPayload = {
   sourceNodeId: string
   targetNodeId: string
+}
+
+type AddCommentPayload = {
+  nodeId?: string | null
+  text: string
+  x?: number
+  y?: number
 }
 
 const stageWidth = 240
@@ -370,6 +377,51 @@ export const useEditorStore = defineStore('editor', {
       if (this.selectedLinkId === payload.linkId) {
         this.clearSelection()
       }
+    },
+    addComment(payload: AddCommentPayload): void {
+      const flowStore = useFlowStore()
+      const flow = flowStore.currentFlow
+      if (!flow || !payload.text.trim()) return
+
+      const selectedNode = payload.nodeId ? flow.nodes.find((node) => node.nodeId === payload.nodeId) : null
+      const comment: FlowComment = {
+        commentId: crypto.randomUUID(),
+        flowId: flow.flowId,
+        nodeId: payload.nodeId ?? null,
+        text: payload.text.trim(),
+        x: payload.x ?? selectedNode?.x ?? 40,
+        y: payload.y ?? selectedNode?.y ?? 40,
+      }
+
+      this.applyFlowChange(
+        (currentFlow) => ({
+          ...currentFlow,
+          comments: [...currentFlow.comments, comment],
+        }),
+        { actionKey: 'comment:add', coalesceWindowMs: 0 },
+      )
+    },
+    updateComment(updatedComment: FlowComment): void {
+      if (!updatedComment.text.trim()) return
+
+      this.applyFlowChange(
+        (flow) => ({
+          ...flow,
+          comments: flow.comments.map((comment) =>
+            comment.commentId === updatedComment.commentId ? { ...updatedComment, text: updatedComment.text.trim() } : comment,
+          ),
+        }),
+        { actionKey: `comment:update:${updatedComment.commentId}` },
+      )
+    },
+    deleteComment(payload: { commentId: string }): void {
+      this.applyFlowChange(
+        (flow) => ({
+          ...flow,
+          comments: flow.comments.filter((comment) => comment.commentId !== payload.commentId),
+        }),
+        { actionKey: `comment:delete:${payload.commentId}`, coalesceWindowMs: 0 },
+      )
     },
     undo(): void {
       const flowStore = useFlowStore()
