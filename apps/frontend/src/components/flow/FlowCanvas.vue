@@ -77,14 +77,9 @@ watch(
 const equipmentWidth = computed(() => Math.max(stages.value.length * stageWidth, stageWidth))
 const rowLayouts = computed<RowLayout[]>(() => {
   let top = 0
-  const fallbackLaneId = lanes.value[0]?.laneId
-  const validLaneIds = new Set(lanes.value.map((lane) => lane.laneId))
 
   return lanes.value.map((lane) => {
-    const laneNodes = props.flow.nodes.filter((node) => {
-      const resolvedLaneId = node.laneId && validLaneIds.has(node.laneId) ? node.laneId : fallbackLaneId
-      return resolvedLaneId === lane.laneId
-    })
+    const laneNodes = props.flow.nodes.filter((node) => node.laneId === lane.laneId)
     const maxNodeBottom = Math.max(
       0,
       ...laneNodes.map((node) => (Number.isFinite(node.y) ? node.y : nodeY) + nodeVisualHeight),
@@ -210,14 +205,14 @@ function getNodePosition(flowNode: FlowNode): NodePosition {
   const stageIndexFromStage = stages.value.findIndex((stage) => stage.stageId === flowNode.stageId)
   const stageIndexFromX = Number.isFinite(flowNode.x) ? stageIndexFromNodeX(flowNode.x) : 0
   const stageIndex = stageIndexFromStage >= 0 ? stageIndexFromStage : stageIndexFromX
-  const laneIndex = Math.max(0, lanes.value.findIndex((lane) => lane.laneId === flowNode.laneId))
-  const laneId = lanes.value[laneIndex]?.laneId
-  const row = rowLayouts.value.find((layout) => layout.laneId === laneId)
+  const laneIndex = lanes.value.findIndex((lane) => lane.laneId === flowNode.laneId)
+  const laneId = laneIndex >= 0 ? lanes.value[laneIndex]?.laneId : null
+  const row = laneId ? rowLayouts.value.find((layout) => layout.laneId === laneId) : null
   const laneRelativeY = Number.isFinite(flowNode.y) ? flowNode.y : nodeY
 
   return {
     x: Number.isFinite(flowNode.x) ? flowNode.x : nodeXFromStageIndex(stageIndex),
-    y: (row?.top ?? laneIndex * minRowHeight) + laneRelativeY,
+    y: (row?.top ?? 0) + laneRelativeY,
   }
 }
 
