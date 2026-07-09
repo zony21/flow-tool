@@ -104,6 +104,7 @@ public sealed class FlowsController(
             StageId = Guid.NewGuid(),
             FlowId = flow.FlowId,
             Name = "工程",
+            StageType = StageTypes.Auto,
             SortOrder = 1,
         });
         await dbContext.SaveChangesAsync(cancellationToken);
@@ -232,6 +233,7 @@ public sealed class FlowsController(
             StageId = stage.StageId,
             FlowId = flowId,
             Name = stage.Name.Trim(),
+            StageType = StageTypes.NormalizeOrDefault(stage.StageType),
             SortOrder = stage.SortOrder,
         }));
 
@@ -390,6 +392,7 @@ public sealed class FlowsController(
             StageId = stageIdMap[stage.StageId],
             FlowId = duplicateFlow.FlowId,
             Name = stage.Name,
+            StageType = StageTypes.NormalizeOrDefault(stage.StageType),
             SortOrder = stage.SortOrder,
         }));
         dbContext.Nodes.AddRange(sourceNodes.Select(node => new FlowNode
@@ -439,7 +442,7 @@ public sealed class FlowsController(
     {
         var flow = await dbContext.Flows.AsNoTracking().FirstAsync(x => x.ProjectId == projectId && x.FlowId == flowId, cancellationToken);
         var lanes = await dbContext.Lanes.AsNoTracking().Where(x => x.FlowId == flowId).OrderBy(x => x.SortOrder).Select(x => new LaneDto(x.LaneId, x.FlowId, x.Name, x.SortOrder)).ToListAsync(cancellationToken);
-        var stages = await dbContext.Stages.AsNoTracking().Where(x => x.FlowId == flowId).OrderBy(x => x.SortOrder).Select(x => new StageDto(x.StageId, x.FlowId, x.Name, x.SortOrder)).ToListAsync(cancellationToken);
+        var stages = await dbContext.Stages.AsNoTracking().Where(x => x.FlowId == flowId).OrderBy(x => x.SortOrder).Select(x => new StageDto(x.StageId, x.FlowId, x.Name, x.StageType, x.SortOrder)).ToListAsync(cancellationToken);
         var rawNodes = await dbContext.Nodes.AsNoTracking().Where(x => x.FlowId == flowId).OrderBy(x => x.Name).Select(x => new NodeDto(x.NodeId, x.FlowId, x.LaneId, x.StageId, x.NodeType, x.Name, x.Description, x.X, x.Y)).ToListAsync(cancellationToken);
         var nodes = NormalizeNodeDetailDtos(rawNodes, lanes, stages);
         var links = await dbContext.Links.AsNoTracking().Where(x => x.FlowId == flowId).Select(x => new LinkDto(x.LinkId, x.FlowId, x.SourceNodeId, x.TargetNodeId, x.Label, x.Condition)).ToListAsync(cancellationToken);
@@ -554,6 +557,12 @@ public sealed class FlowsController(
         if (stages.Any(stage => stage.StageId == Guid.Empty || string.IsNullOrWhiteSpace(stage.Name)))
         {
             return "Stage id and name are required.";
+        }
+
+        var invalidStageType = stages.FirstOrDefault(stage => !StageTypes.IsValid(string.IsNullOrWhiteSpace(stage.StageType) ? StageTypes.Auto : stage.StageType));
+        if (invalidStageType is not null)
+        {
+            return "StageType must be AUTO or MANUAL.";
         }
 
         var laneIds = lanes.Select(lane => lane.LaneId).ToHashSet();
