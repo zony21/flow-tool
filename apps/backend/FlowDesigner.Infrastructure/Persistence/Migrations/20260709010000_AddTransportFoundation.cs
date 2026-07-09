@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace FlowDesigner.Infrastructure.Persistence.Migrations
 {
     /// <inheritdoc />
+    [Migration("20260709010000_AddTransportFoundation")]
     public partial class AddTransportFoundation : Migration
     {
         /// <inheritdoc />
