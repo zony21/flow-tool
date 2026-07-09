@@ -49,6 +49,7 @@ public sealed record SaveLaneRequest(
 public sealed record SaveStageRequest(
     Guid StageId,
     string Name,
+    string? StageType,
     int SortOrder);
 
 public sealed record SaveNodeRequest(
@@ -85,6 +86,7 @@ public sealed record StageDto(
     Guid StageId,
     Guid FlowId,
     string Name,
+    string StageType,
     int SortOrder);
 
 public sealed record NodeDto(
