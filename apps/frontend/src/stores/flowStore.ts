@@ -76,7 +76,30 @@ export const useFlowStore = defineStore('flow', {
       this.loading = true
       this.clearError()
       try {
-        await saveFlowStructure(projectId, request.flowId, request)
+        const currentNodes = new Map(this.currentFlow?.nodes.map((node) => [node.nodeId, node]) ?? [])
+        const isTransportFlow = this.currentFlow?.flowType === 'TRANSPORT'
+        const enrichedRequest: SaveFlowStructureRequest = {
+          ...request,
+          stages: request.stages.map((stage) => {
+            const currentStage = this.currentFlow?.stages.find((item) => item.stageId === stage.stageId)
+            return {
+              ...stage,
+              stageType: currentStage?.stageType ?? stage.stageType ?? 'AUTO',
+            }
+          }),
+          nodes: request.nodes.map((node) => {
+            const currentNode = currentNodes.get(node.nodeId)
+            return {
+              ...node,
+              commandId: isTransportFlow ? currentNode?.commandId ?? node.commandId ?? null : null,
+              locationId: isTransportFlow ? currentNode?.locationId ?? node.locationId ?? null : null,
+              equipmentId: isTransportFlow ? currentNode?.equipmentId ?? node.equipmentId ?? null : null,
+              rwType: isTransportFlow ? currentNode?.rwType ?? node.rwType ?? 'NONE' : 'NONE',
+            }
+          }),
+        }
+
+        await saveFlowStructure(projectId, request.flowId, enrichedRequest)
         this.currentFlow = await fetchFlow(projectId, request.flowId)
       } catch (error) {
         this.setError(error)
