@@ -1,4 +1,6 @@
 export type FlowType = 'NORMAL' | 'TRANSPORT'
+export type StageType = 'AUTO' | 'MANUAL'
+export type TransportRwType = 'NONE' | 'READ' | 'WRITE'
 
 export type FlowSummary = {
   flowId: string
@@ -32,6 +34,7 @@ export type Stage = {
   stageId: string
   flowId: string
   name: string
+  stageType?: StageType
   sortOrder: number
 }
 
@@ -45,6 +48,10 @@ export type FlowNode = {
   description?: string | null
   x: number
   y: number
+  commandId?: string | null
+  locationId?: string | null
+  equipmentId?: string | null
+  rwType?: TransportRwType | null
 }
 
 export type FlowLink = {
@@ -83,6 +90,7 @@ export type SaveLaneRequest = {
 export type SaveStageRequest = {
   stageId: string
   name: string
+  stageType?: StageType | null
   sortOrder: number
 }
 
@@ -95,6 +103,10 @@ export type SaveNodeRequest = {
   description?: string | null
   x: number
   y: number
+  commandId?: string | null
+  locationId?: string | null
+  equipmentId?: string | null
+  rwType?: TransportRwType | null
 }
 
 export type SaveLinkRequest = {
