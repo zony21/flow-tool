@@ -1,4 +1,6 @@
 using System;
+using FlowDesigner.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
@@ -6,6 +8,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace FlowDesigner.Infrastructure.Persistence.Migrations
 {
     /// <inheritdoc />
+    [DbContext(typeof(AppDbContext))]
     [Migration("20260709010000_AddTransportFoundation")]
     public partial class AddTransportFoundation : Migration
     {
