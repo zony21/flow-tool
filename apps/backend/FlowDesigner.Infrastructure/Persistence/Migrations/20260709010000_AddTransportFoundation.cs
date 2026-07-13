@@ -23,6 +23,14 @@ namespace FlowDesigner.Infrastructure.Persistence.Migrations
                 nullable: false,
                 defaultValue: "NORMAL");
 
+            migrationBuilder.AddColumn<string>(
+                name: "StageType",
+                table: "STAGE",
+                type: "TEXT",
+                maxLength: 40,
+                nullable: false,
+                defaultValue: "AUTO");
+
             migrationBuilder.CreateTable(
                 name: "TRANSPORT_MANUFACTURER",
                 columns: table => new
@@ -169,6 +177,10 @@ namespace FlowDesigner.Infrastructure.Persistence.Migrations
             migrationBuilder.DropIndex(
                 name: "IX_FLOW_ProjectId_FlowType",
                 table: "FLOW");
+
+            migrationBuilder.DropColumn(
+                name: "StageType",
+                table: "STAGE");
 
             migrationBuilder.DropColumn(
                 name: "FlowType",
