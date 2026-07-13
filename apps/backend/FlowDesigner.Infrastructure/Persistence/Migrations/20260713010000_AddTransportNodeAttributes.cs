@@ -53,45 +53,12 @@ namespace FlowDesigner.Infrastructure.Persistence.Migrations
                 table: "NODE",
                 column: "EquipmentId");
 
-            migrationBuilder.AddForeignKey(
-                name: "FK_NODE_TRANSPORT_COMMAND_CommandId",
-                table: "NODE",
-                column: "CommandId",
-                principalTable: "TRANSPORT_COMMAND",
-                principalColumn: "CommandId",
-                onDelete: ReferentialAction.SetNull);
-
-            migrationBuilder.AddForeignKey(
-                name: "FK_NODE_TRANSPORT_LOCATION_LocationId",
-                table: "NODE",
-                column: "LocationId",
-                principalTable: "TRANSPORT_LOCATION",
-                principalColumn: "LocationId",
-                onDelete: ReferentialAction.SetNull);
-
-            migrationBuilder.AddForeignKey(
-                name: "FK_NODE_TRANSPORT_EQUIPMENT_EquipmentId",
-                table: "NODE",
-                column: "EquipmentId",
-                principalTable: "TRANSPORT_EQUIPMENT",
-                principalColumn: "EquipmentId",
-                onDelete: ReferentialAction.SetNull);
+            // SQLiteは既存テーブルへの外部キー追加を直接サポートしない。
+            // Transport参照の整合性はFlow保存時のアプリケーション検証で保証する。
         }
 
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropForeignKey(
-                name: "FK_NODE_TRANSPORT_COMMAND_CommandId",
-                table: "NODE");
-
-            migrationBuilder.DropForeignKey(
-                name: "FK_NODE_TRANSPORT_LOCATION_LocationId",
-                table: "NODE");
-
-            migrationBuilder.DropForeignKey(
-                name: "FK_NODE_TRANSPORT_EQUIPMENT_EquipmentId",
-                table: "NODE");
-
             migrationBuilder.DropIndex(
                 name: "IX_NODE_CommandId",
                 table: "NODE");
