@@ -59,6 +59,10 @@ public sealed record SaveNodeRequest(
     string NodeType,
     string Name,
     string? Description,
+    Guid? CommandId,
+    Guid? LocationId,
+    Guid? EquipmentId,
+    string? RwType,
     double X,
     double Y);
 
@@ -97,6 +101,10 @@ public sealed record NodeDto(
     string NodeType,
     string Name,
     string? Description,
+    Guid? CommandId,
+    Guid? LocationId,
+    Guid? EquipmentId,
+    string? RwType,
     double X,
     double Y);
 
