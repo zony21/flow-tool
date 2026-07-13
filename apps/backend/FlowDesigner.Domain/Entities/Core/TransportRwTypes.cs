@@ -8,11 +8,18 @@ public static class TransportRwTypes
 
     public static bool IsValid(string? value)
     {
-        return value is null or None or Read or Write;
+        var normalized = Normalize(value);
+        return normalized is None or Read or Write;
     }
 
     public static string? Normalize(string? value)
     {
         return string.IsNullOrWhiteSpace(value) ? null : value.Trim().ToUpperInvariant();
+    }
+
+    public static string NormalizeOrDefault(string? value)
+    {
+        var normalized = Normalize(value);
+        return IsValid(normalized) ? normalized! : None;
     }
 }
