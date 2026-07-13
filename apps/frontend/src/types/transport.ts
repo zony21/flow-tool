@@ -18,7 +18,7 @@ export type TransportEquipmentCategory =
   | '安全機器'
   | 'その他'
 
-export type RwType = 'None' | 'Read' | 'Write'
+export type RwType = 'NONE' | 'READ' | 'WRITE'
 
 export type TransportManufacturer = {
   manufacturerId: string
