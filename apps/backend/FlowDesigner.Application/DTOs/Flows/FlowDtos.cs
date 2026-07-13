@@ -59,12 +59,12 @@ public sealed record SaveNodeRequest(
     string NodeType,
     string Name,
     string? Description,
-    Guid? CommandId,
-    Guid? LocationId,
-    Guid? EquipmentId,
-    string? RwType,
     double X,
-    double Y);
+    double Y,
+    Guid? CommandId = null,
+    Guid? LocationId = null,
+    Guid? EquipmentId = null,
+    string? RwType = null);
 
 public sealed record SaveLinkRequest(
     Guid LinkId,
@@ -101,12 +101,12 @@ public sealed record NodeDto(
     string NodeType,
     string Name,
     string? Description,
-    Guid? CommandId,
-    Guid? LocationId,
-    Guid? EquipmentId,
-    string? RwType,
     double X,
-    double Y);
+    double Y,
+    Guid? CommandId = null,
+    Guid? LocationId = null,
+    Guid? EquipmentId = null,
+    string? RwType = null);
 
 public sealed record LinkDto(
     Guid LinkId,
