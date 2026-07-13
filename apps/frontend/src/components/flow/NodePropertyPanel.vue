@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { nodeSamples } from '../../constants/nodeSamples'
-import type { FlowDetail, FlowNode } from '../../types/flow'
+import { fetchTransportCommands, fetchTransportEquipments, fetchTransportLocations } from '../../api/transportApi'
+import type { FlowDetail, FlowNode, TransportRwType } from '../../types/flow'
+import type { TransportCommand, TransportEquipment, TransportLocation } from '../../types/transport'
 
 const props = defineProps<{
   flow: FlowDetail
@@ -16,7 +18,43 @@ const emit = defineEmits<{
 
 const selectedNode = computed(() => props.flow.nodes.find((node) => node.nodeId === props.nodeId) ?? null)
 const categories = computed(() => props.flow.lanes.slice().sort((a, b) => a.sortOrder - b.sortOrder))
-const equipment = computed(() => props.flow.stages.slice().sort((a, b) => a.sortOrder - b.sortOrder))
+const stages = computed(() => props.flow.stages.slice().sort((a, b) => a.sortOrder - b.sortOrder))
+const isTransportFlow = computed(() => props.flow.flowType === 'TRANSPORT')
+const transportCommands = ref<TransportCommand[]>([])
+const transportLocations = ref<TransportLocation[]>([])
+const transportEquipments = ref<TransportEquipment[]>([])
+const transportLoading = ref(false)
+const transportError = ref<string | null>(null)
+
+async function loadTransportMasters(): Promise<void> {
+  if (!isTransportFlow.value || !props.flow.projectId) {
+    transportCommands.value = []
+    transportLocations.value = []
+    transportEquipments.value = []
+    transportError.value = null
+    return
+  }
+
+  transportLoading.value = true
+  transportError.value = null
+  try {
+    const [commands, locations, equipments] = await Promise.all([
+      fetchTransportCommands(),
+      fetchTransportLocations(props.flow.projectId),
+      fetchTransportEquipments(props.flow.projectId),
+    ])
+    transportCommands.value = commands.slice().sort((a, b) => a.sortOrder - b.sortOrder)
+    transportLocations.value = locations.slice().sort((a, b) => a.sortOrder - b.sortOrder)
+    transportEquipments.value = equipments.slice().sort((a, b) => a.sortOrder - b.sortOrder)
+  } catch (error) {
+    transportError.value = error instanceof Error ? error.message : 'Transport設定の取得に失敗しました。'
+  } finally {
+    transportLoading.value = false
+  }
+}
+
+onMounted(loadTransportMasters)
+watch(() => [props.flow.projectId, props.flow.flowType], loadTransportMasters)
 
 function updateNode(patch: Partial<FlowNode>): void {
   if (!selectedNode.value || props.readonly) return
@@ -24,6 +62,10 @@ function updateNode(patch: Partial<FlowNode>): void {
     ...selectedNode.value,
     ...patch,
   })
+}
+
+function updateRwType(value: string): void {
+  updateNode({ rwType: value as TransportRwType })
 }
 
 function deleteSelectedNode(): void {
@@ -58,7 +100,7 @@ function deleteSelectedNode(): void {
         <span>設備</span>
         <select :value="selectedNode.stageId ?? ''" :disabled="readonly" @change="updateNode({ stageId: ($event.target as HTMLSelectElement).value || null })">
           <option value="">未設定</option>
-          <option v-for="stage in equipment" :key="stage.stageId" :value="stage.stageId">
+          <option v-for="stage in stages" :key="stage.stageId" :value="stage.stageId">
             {{ stage.name }}
           </option>
         </select>
@@ -83,6 +125,66 @@ function deleteSelectedNode(): void {
           @input="updateNode({ description: ($event.target as HTMLTextAreaElement).value || null })"
         />
       </label>
+
+      <section v-if="isTransportFlow" class="transport-section">
+        <div class="section-header">
+          <strong>Transport設定</strong>
+          <span v-if="transportLoading">読込中...</span>
+        </div>
+
+        <p v-if="transportError" class="transport-error">{{ transportError }}</p>
+
+        <label class="field">
+          <span>コマンド</span>
+          <select
+            :value="selectedNode.commandId ?? ''"
+            :disabled="readonly || transportLoading"
+            @change="updateNode({ commandId: ($event.target as HTMLSelectElement).value || null })"
+          >
+            <option value="">未設定</option>
+            <option v-for="command in transportCommands" :key="command.commandId" :value="command.commandId">
+              {{ command.commandName }}（{{ command.processType }}）
+            </option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>ロケーション</span>
+          <select
+            :value="selectedNode.locationId ?? ''"
+            :disabled="readonly || transportLoading"
+            @change="updateNode({ locationId: ($event.target as HTMLSelectElement).value || null })"
+          >
+            <option value="">未設定</option>
+            <option v-for="location in transportLocations" :key="location.locationId" :value="location.locationId">
+              {{ location.name }}（{{ location.locationType }}）
+            </option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>対象設備</span>
+          <select
+            :value="selectedNode.equipmentId ?? ''"
+            :disabled="readonly || transportLoading"
+            @change="updateNode({ equipmentId: ($event.target as HTMLSelectElement).value || null })"
+          >
+            <option value="">未設定</option>
+            <option v-for="item in transportEquipments" :key="item.equipmentId" :value="item.equipmentId">
+              {{ item.name }}（{{ item.category }}）
+            </option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>R/W Type</span>
+          <select :value="selectedNode.rwType ?? 'NONE'" :disabled="readonly" @change="updateRwType(($event.target as HTMLSelectElement).value)">
+            <option value="NONE">NONE</option>
+            <option value="READ">READ</option>
+            <option value="WRITE">WRITE</option>
+          </select>
+        </label>
+      </section>
 
       <div class="read-only-grid">
         <div>
@@ -109,7 +211,9 @@ function deleteSelectedNode(): void {
   gap: 16px;
   width: 320px;
   min-width: 320px;
+  max-height: 100%;
   padding: 16px;
+  overflow-y: auto;
   background: #ffffff;
   border: 1px solid #dbe3ef;
   border-radius: 8px;
@@ -153,6 +257,37 @@ function deleteSelectedNode(): void {
   border-radius: 8px;
   font: inherit;
   font-weight: 400;
+}
+
+.transport-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: #0f172a;
+  font-size: 13px;
+}
+
+.section-header span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.transport-error {
+  margin: 0;
+  color: #991b1b;
+  font-size: 12px;
 }
 
 .read-only-grid {
