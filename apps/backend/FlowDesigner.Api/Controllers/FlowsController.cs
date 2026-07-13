@@ -149,12 +149,25 @@ public sealed class FlowsController(
             return ApiError.NotFound<FlowDetailDto>(this, "Flow was not found.");
         }
 
+        var normalizedFlowType = FlowTypes.NormalizeOrDefault(request.FlowType);
         flow.Name = request.Name.Trim();
-        flow.FlowType = FlowTypes.NormalizeOrDefault(request.FlowType);
+        flow.FlowType = normalizedFlowType;
         flow.Description = request.Description;
         flow.UpdatedAtUtc = DateTime.UtcNow;
-        await dbContext.SaveChangesAsync(cancellationToken);
 
+        if (normalizedFlowType == FlowTypes.Normal)
+        {
+            var nodes = await dbContext.Nodes.Where(node => node.FlowId == flowId).ToListAsync(cancellationToken);
+            foreach (var node in nodes)
+            {
+                node.CommandId = null;
+                node.LocationId = null;
+                node.EquipmentId = null;
+                node.RwType = TransportRwTypes.None;
+            }
+        }
+
+        await dbContext.SaveChangesAsync(cancellationToken);
         return Ok(await BuildDetailDtoAsync(projectId, flowId, cancellationToken));
     }
 
@@ -193,10 +206,16 @@ public sealed class FlowsController(
         var lanes = (request.Lanes ?? Array.Empty<SaveLaneRequest>()).ToList();
         var stages = (request.Stages ?? Array.Empty<SaveStageRequest>()).ToList();
         var nodes = NormalizeNodeAssignments((request.Nodes ?? Array.Empty<SaveNodeRequest>()).ToList(), lanes, stages);
+        nodes = NormalizeTransportAttributes(nodes, flow.FlowType);
         var links = (request.Links ?? Array.Empty<SaveLinkRequest>()).ToList();
         var comments = (request.Comments ?? Array.Empty<SaveCommentRequest>()).ToList();
 
         var validationError = ValidateStructure(lanes, stages, nodes, links, comments);
+        if (validationError is null && flow.FlowType == FlowTypes.Transport)
+        {
+            validationError = await ValidateTransportReferencesAsync(projectId, nodes, cancellationToken);
+        }
+
         if (validationError is not null)
         {
             return UnprocessableEntity(ApiError.Create(
@@ -248,6 +267,10 @@ public sealed class FlowsController(
             Description = node.Description,
             X = node.X,
             Y = node.Y,
+            CommandId = node.CommandId,
+            LocationId = node.LocationId,
+            EquipmentId = node.EquipmentId,
+            RwType = TransportRwTypes.NormalizeOrDefault(node.RwType),
         }));
 
         dbContext.Links.AddRange(links.Select(link => new FlowLink
@@ -315,7 +338,6 @@ public sealed class FlowsController(
         }
 
         await transaction.CommitAsync(cancellationToken);
-
         return Ok(new SaveFlowStructureResponse(flow.FlowId, flow.Revision, flow.UpdatedAtUtc));
     }
 
@@ -362,7 +384,7 @@ public sealed class FlowsController(
             FlowType = sourceFlow.FlowType,
             Description = sourceFlow.Description,
             SortOrder = nextSortOrder + 1,
-            Revision = 0,
+            Revision = sourceFlow.Revision,
             CreatedAtUtc = now,
             UpdatedAtUtc = now,
         };
@@ -378,7 +400,6 @@ public sealed class FlowsController(
         var stageIdMap = sourceStages.ToDictionary(x => x.StageId, _ => Guid.NewGuid());
         var nodeIdMap = sourceNodes.ToDictionary(x => x.NodeId, _ => Guid.NewGuid());
 
-        duplicateFlow.Revision = sourceFlow.Revision;
         dbContext.Flows.Add(duplicateFlow);
         dbContext.Lanes.AddRange(sourceLanes.Select(lane => new Lane
         {
@@ -406,6 +427,10 @@ public sealed class FlowsController(
             Description = node.Description,
             X = node.X,
             Y = node.Y,
+            CommandId = node.CommandId,
+            LocationId = node.LocationId,
+            EquipmentId = node.EquipmentId,
+            RwType = TransportRwTypes.NormalizeOrDefault(node.RwType),
         }));
         dbContext.Links.AddRange(sourceLinks.Where(link => nodeIdMap.ContainsKey(link.SourceNodeId) && nodeIdMap.ContainsKey(link.TargetNodeId)).Select(link => new FlowLink
         {
@@ -434,7 +459,6 @@ public sealed class FlowsController(
         }));
 
         await dbContext.SaveChangesAsync(cancellationToken);
-
         return Ok(await BuildDetailDtoAsync(projectId, duplicateFlow.FlowId, cancellationToken));
     }
 
@@ -443,13 +467,74 @@ public sealed class FlowsController(
         var flow = await dbContext.Flows.AsNoTracking().FirstAsync(x => x.ProjectId == projectId && x.FlowId == flowId, cancellationToken);
         var lanes = await dbContext.Lanes.AsNoTracking().Where(x => x.FlowId == flowId).OrderBy(x => x.SortOrder).Select(x => new LaneDto(x.LaneId, x.FlowId, x.Name, x.SortOrder)).ToListAsync(cancellationToken);
         var stages = await dbContext.Stages.AsNoTracking().Where(x => x.FlowId == flowId).OrderBy(x => x.SortOrder).Select(x => new StageDto(x.StageId, x.FlowId, x.Name, x.StageType, x.SortOrder)).ToListAsync(cancellationToken);
-        var rawNodes = await dbContext.Nodes.AsNoTracking().Where(x => x.FlowId == flowId).OrderBy(x => x.Name).Select(x => new NodeDto(x.NodeId, x.FlowId, x.LaneId, x.StageId, x.NodeType, x.Name, x.Description, x.X, x.Y)).ToListAsync(cancellationToken);
+        var rawNodes = await dbContext.Nodes.AsNoTracking().Where(x => x.FlowId == flowId).OrderBy(x => x.Name).Select(x => new NodeDto(
+            x.NodeId,
+            x.FlowId,
+            x.LaneId,
+            x.StageId,
+            x.NodeType,
+            x.Name,
+            x.Description,
+            x.X,
+            x.Y,
+            x.CommandId,
+            x.LocationId,
+            x.EquipmentId,
+            x.RwType)).ToListAsync(cancellationToken);
         var nodes = NormalizeNodeDetailDtos(rawNodes, lanes, stages);
         var links = await dbContext.Links.AsNoTracking().Where(x => x.FlowId == flowId).Select(x => new LinkDto(x.LinkId, x.FlowId, x.SourceNodeId, x.TargetNodeId, x.Label, x.Condition)).ToListAsync(cancellationToken);
         var comments = await dbContext.Comments.AsNoTracking().Where(x => x.FlowId == flowId).Select(x => new CommentDto(x.CommentId, x.FlowId, x.NodeId, x.Text, x.X, x.Y)).ToListAsync(cancellationToken);
         var metadata = await dbContext.MetadataItems.AsNoTracking().Where(x => x.FlowId == flowId).Select(x => new MetadataDto(x.MetadataId, x.FlowId, x.MetaKey, x.MetaValue)).ToListAsync(cancellationToken);
 
         return new FlowDetailDto(flow.FlowId, flow.ProjectId, flow.Name, flow.FlowType, flow.Description, flow.SortOrder, flow.Revision, lanes, stages, nodes, links, comments, metadata);
+    }
+
+    private async Task<string?> ValidateTransportReferencesAsync(Guid projectId, IReadOnlyList<SaveNodeRequest> nodes, CancellationToken cancellationToken)
+    {
+        var commandIds = nodes.Where(node => node.CommandId.HasValue).Select(node => node.CommandId!.Value).Distinct().ToList();
+        var locationIds = nodes.Where(node => node.LocationId.HasValue).Select(node => node.LocationId!.Value).Distinct().ToList();
+        var equipmentIds = nodes.Where(node => node.EquipmentId.HasValue).Select(node => node.EquipmentId!.Value).Distinct().ToList();
+
+        if (commandIds.Count > 0)
+        {
+            var validCommandIds = await dbContext.TransportCommands
+                .AsNoTracking()
+                .Where(command => commandIds.Contains(command.CommandId) && !command.IsDeleted)
+                .Select(command => command.CommandId)
+                .ToListAsync(cancellationToken);
+            if (validCommandIds.Count != commandIds.Count)
+            {
+                return "Node refers to a transport command that does not exist or is deleted.";
+            }
+        }
+
+        if (locationIds.Count > 0)
+        {
+            var validLocationIds = await dbContext.TransportLocations
+                .AsNoTracking()
+                .Where(location => location.ProjectId == projectId && locationIds.Contains(location.LocationId) && !location.IsDeleted)
+                .Select(location => location.LocationId)
+                .ToListAsync(cancellationToken);
+            if (validLocationIds.Count != locationIds.Count)
+            {
+                return "Node refers to a transport location that does not belong to this project or is deleted.";
+            }
+        }
+
+        if (equipmentIds.Count > 0)
+        {
+            var validEquipmentIds = await dbContext.TransportEquipments
+                .AsNoTracking()
+                .Where(equipment => equipment.ProjectId == projectId && equipmentIds.Contains(equipment.EquipmentId) && !equipment.IsDeleted)
+                .Select(equipment => equipment.EquipmentId)
+                .ToListAsync(cancellationToken);
+            if (validEquipmentIds.Count != equipmentIds.Count)
+            {
+                return "Node refers to transport equipment that does not belong to this project or is deleted.";
+            }
+        }
+
+        return null;
     }
 
     private async Task<string> BuildDuplicateFlowNameAsync(Guid projectId, string baseName, CancellationToken cancellationToken)
@@ -492,11 +577,31 @@ public sealed class FlowsController(
             {
                 LaneId = node.LaneId,
                 StageId = stageId,
+                RwType = TransportRwTypes.NormalizeOrDefault(node.RwType),
             };
         }).ToList();
     }
 
-    private static IReadOnlyList<SaveNodeRequest> NormalizeNodeAssignments(
+    private static List<SaveNodeRequest> NormalizeTransportAttributes(IReadOnlyList<SaveNodeRequest> nodes, string flowType)
+    {
+        if (flowType == FlowTypes.Normal)
+        {
+            return nodes.Select(node => node with
+            {
+                CommandId = null,
+                LocationId = null,
+                EquipmentId = null,
+                RwType = TransportRwTypes.None,
+            }).ToList();
+        }
+
+        return nodes.Select(node => node with
+        {
+            RwType = TransportRwTypes.NormalizeOrDefault(node.RwType),
+        }).ToList();
+    }
+
+    private static List<SaveNodeRequest> NormalizeNodeAssignments(
         IReadOnlyList<SaveNodeRequest> nodes,
         IReadOnlyList<SaveLaneRequest> lanes,
         IReadOnlyList<SaveStageRequest> stages)
@@ -572,6 +677,11 @@ public sealed class FlowsController(
         if (nodes.Any(node => node.NodeId == Guid.Empty || string.IsNullOrWhiteSpace(node.NodeType) || string.IsNullOrWhiteSpace(node.Name)))
         {
             return "Node id, type, and name are required.";
+        }
+
+        if (nodes.Any(node => !TransportRwTypes.IsValid(string.IsNullOrWhiteSpace(node.RwType) ? TransportRwTypes.None : node.RwType)))
+        {
+            return "RwType must be NONE, READ, or WRITE.";
         }
 
         if (nodes.Any(node => node.LaneId.HasValue && !laneIds.Contains(node.LaneId.Value)))
