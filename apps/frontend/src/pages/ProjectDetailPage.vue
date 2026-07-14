@@ -4,12 +4,15 @@ import { useRoute, useRouter } from 'vue-router'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
 import MainLayout from '../layouts/MainLayout.vue'
+import LocationCreateDialog from '../components/transport/LocationCreateDialog.vue'
 import { normalizeApiError } from '../api/apiError'
+import { fetchTransportLocations } from '../api/transportApi'
 import { useFlowStore } from '../stores/flowStore'
 import { useProjectPermissionStore } from '../stores/projectPermissionStore'
 import { useProjectStore } from '../stores/projectStore'
 import { PermissionCodes } from '../types/permission'
 import type { FlowType } from '../types/flow'
+import type { TransportLocation } from '../types/transport'
 
 const route = useRoute()
 const router = useRouter()
@@ -34,6 +37,10 @@ const flowName = ref('')
 const flowDescription = ref('')
 const flowType = ref<FlowType>('NORMAL')
 const flowErrorMessage = ref<string | null>(null)
+const transportLocations = ref<TransportLocation[]>([])
+const locationDialogVisible = ref(false)
+const locationLoading = ref(false)
+const locationErrorMessage = ref<string | null>(null)
 
 const flowTypeOptions: { value: FlowType; label: string; description: string }[] = [
   { value: 'NORMAL', label: 'Normal', description: '通常フロー' },
@@ -64,8 +71,31 @@ async function loadPage(): Promise<void> {
   await Promise.all([
     projectStore.loadProject(projectId.value),
     loadFlows(),
+    loadLocations(),
   ])
   resetProjectEditForm()
+}
+
+async function loadLocations(): Promise<void> {
+  if (!projectId.value) return
+
+  locationLoading.value = true
+  locationErrorMessage.value = null
+  try {
+    const locations = await fetchTransportLocations(projectId.value)
+    transportLocations.value = locations.slice().sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, 'ja'))
+  } catch (error) {
+    locationErrorMessage.value = normalizeApiError(error).message
+  } finally {
+    locationLoading.value = false
+  }
+}
+
+async function handleLocationCreated(): Promise<void> {
+  await loadLocations()
+  if (!locationErrorMessage.value) {
+    locationDialogVisible.value = false
+  }
 }
 
 async function loadFlows(): Promise<void> {
@@ -272,6 +302,48 @@ function flowTypeDescription(value: FlowType): string {
 
       <p v-if="projectStore.errorMessage" class="error-message">{{ projectStore.errorMessage }}</p>
       <p v-if="flowErrorMessage" class="error-message">{{ flowErrorMessage }}</p>
+      <p v-if="locationErrorMessage" class="error-message">{{ locationErrorMessage }}</p>
+
+      <div class="card">
+        <div class="section-header">
+          <div>
+            <h2>ロケーション一覧</h2>
+            <p>このProjectのTransport Flowで共通利用するロケーションです。</p>
+          </div>
+          <div class="section-actions">
+            <span>{{ transportLocations.length }}件</span>
+            <Button
+              v-if="canCreateFlow"
+              label="新規ロケーション"
+              icon="pi pi-plus"
+              size="small"
+              :disabled="locationLoading"
+              @click="locationDialogVisible = true"
+            />
+          </div>
+        </div>
+        <p v-if="!canCreateFlow" class="viewer-message">Viewer権限ではロケーションを作成できません。</p>
+        <p v-if="locationLoading">読み込み中...</p>
+        <p v-else-if="transportLocations.length === 0">ロケーションはまだありません。</p>
+        <table v-else class="flow-table">
+          <thead>
+            <tr>
+              <th>ロケーション名</th>
+              <th>種別</th>
+              <th>説明</th>
+              <th>表示順</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="location in transportLocations" :key="location.locationId">
+              <td>{{ location.name }}</td>
+              <td>{{ location.locationType }}</td>
+              <td>{{ location.description || '説明なし' }}</td>
+              <td>{{ location.sortOrder }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
 
       <div class="card">
         <div class="section-header">
@@ -389,6 +461,13 @@ function flowTypeDescription(value: FlowType): string {
           <Button label="削除" severity="danger" :disabled="deletingFlowId !== null" @click="deleteFlow()" />
         </template>
       </Dialog>
+
+      <LocationCreateDialog
+        v-model:visible="locationDialogVisible"
+        :project-id="projectId"
+        :readonly="!canCreateFlow"
+        @created="handleLocationCreated"
+      />
     </section>
   </MainLayout>
 </template>

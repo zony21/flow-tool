@@ -105,6 +105,10 @@ function buildSaveRequest(createVersion: boolean, changeSummary: string | null =
       description: node.description,
       x: node.x,
       y: node.y,
+      commandId: node.commandId ?? null,
+      locationId: node.locationId ?? null,
+      equipmentId: node.equipmentId ?? null,
+      rwType: node.rwType ?? null,
     })),
     links: flow.value.links.map((link) => ({
       linkId: link.linkId,
