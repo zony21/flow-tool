@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { nodeSamples } from '../../constants/nodeSamples'
-import { fetchTransportCommands, fetchTransportEquipments, fetchTransportLocations, fetchTransportVehicleModels } from '../../api/transportApi'
+import { fetchTransportCommands, fetchTransportEquipments, fetchTransportLocations, fetchTransportManufacturerVehicleTypes } from '../../api/transportApi'
 import type { FlowDetail, FlowNode, TransportRwType } from '../../types/flow'
-import type { TransportCommand, TransportEquipment, TransportLocation, TransportVehicleModel } from '../../types/transport'
+import type { TransportCommand, TransportEquipment, TransportLocation, TransportManufacturerVehicleType } from '../../types/transport'
 
 const props = defineProps<{
   flow: FlowDetail
@@ -23,9 +23,9 @@ const isTransportFlow = computed(() => props.flow.flowType === 'TRANSPORT')
 const transportCommands = ref<TransportCommand[]>([])
 const transportLocations = ref<TransportLocation[]>([])
 const transportEquipments = ref<TransportEquipment[]>([])
-const transportVehicleModels = ref<TransportVehicleModel[]>([])
-const selectedVehicleModel = computed(() => transportVehicleModels.value.find((model) => model.vehicleModelId === selectedNode.value?.vehicleModelId) ?? null)
-const availableCommands = computed(() => selectedVehicleModel.value ? transportCommands.value.filter((command) => command.manufacturerId === selectedVehicleModel.value?.manufacturerId) : [])
+const transportVehicleTypes = ref<TransportManufacturerVehicleType[]>([])
+const selectedVehicleType = computed(() => transportVehicleTypes.value.find((item) => item.manufacturerVehicleTypeId === selectedNode.value?.manufacturerVehicleTypeId) ?? null)
+const availableCommands = computed(() => selectedVehicleType.value ? transportCommands.value.filter((command) => command.manufacturerVehicleTypeId === selectedVehicleType.value?.manufacturerVehicleTypeId) : [])
 const transportLoading = ref(false)
 const transportError = ref<string | null>(null)
 
@@ -34,7 +34,7 @@ async function loadTransportMasters(): Promise<void> {
     transportCommands.value = []
     transportLocations.value = []
     transportEquipments.value = []
-    transportVehicleModels.value = []
+    transportVehicleTypes.value = []
     transportError.value = null
     return
   }
@@ -42,16 +42,16 @@ async function loadTransportMasters(): Promise<void> {
   transportLoading.value = true
   transportError.value = null
   try {
-    const [commands, locations, equipments, vehicleModels] = await Promise.all([
-      fetchTransportCommands(),
+    const [commands, locations, equipments, vehicleTypes] = await Promise.all([
+      fetchTransportCommands(null, false),
       fetchTransportLocations(props.flow.projectId),
       fetchTransportEquipments(props.flow.projectId),
-      fetchTransportVehicleModels({ includeInactive: false }),
+      fetchTransportManufacturerVehicleTypes(false),
     ])
     transportCommands.value = commands.slice().sort((a, b) => a.sortOrder - b.sortOrder)
     transportLocations.value = locations.slice().sort((a, b) => a.sortOrder - b.sortOrder)
     transportEquipments.value = equipments.slice().sort((a, b) => a.sortOrder - b.sortOrder)
-    transportVehicleModels.value = vehicleModels.slice().sort((a, b) => a.sortOrder - b.sortOrder)
+    transportVehicleTypes.value = vehicleTypes.slice().sort((a, b) => a.sortOrder - b.sortOrder)
   } catch (error) {
     transportError.value = error instanceof Error ? error.message : 'Transport設定の取得に失敗しました。'
   } finally {
@@ -79,8 +79,8 @@ function deleteSelectedNode(): void {
   emit('delete-node', { nodeId: selectedNode.value.nodeId })
 }
 
-function updateVehicleModel(value: string): void {
-  updateNode({ vehicleModelId: value || null, commandId: null })
+function updateVehicleType(value: string): void {
+  updateNode({ manufacturerVehicleTypeId: value || null, commandId: null })
 }
 </script>
 
@@ -145,11 +145,11 @@ function updateVehicleModel(value: string): void {
         <p v-if="transportError" class="transport-error">{{ transportError }}</p>
 
         <label class="field">
-          <span>メーカー・機体</span>
-          <select :value="selectedNode.vehicleModelId ?? ''" :disabled="readonly || transportLoading" @change="updateVehicleModel(($event.target as HTMLSelectElement).value)">
+          <span>メーカー・種別</span>
+          <select :value="selectedNode.manufacturerVehicleTypeId ?? ''" :disabled="readonly || transportLoading" @change="updateVehicleType(($event.target as HTMLSelectElement).value)">
             <option value="">未設定</option>
-            <option v-for="model in transportVehicleModels" :key="model.vehicleModelId" :value="model.vehicleModelId">
-              {{ model.manufacturerName }}：{{ model.vehicleType }} / {{ model.modelName }}（{{ model.modelCode }}）
+            <option v-for="item in transportVehicleTypes" :key="item.manufacturerVehicleTypeId" :value="item.manufacturerVehicleTypeId">
+              {{ item.manufacturerName }} / {{ item.vehicleType }}
             </option>
           </select>
         </label>
@@ -158,7 +158,7 @@ function updateVehicleModel(value: string): void {
           <span>コマンド</span>
           <select
             :value="selectedNode.commandId ?? ''"
-            :disabled="readonly || transportLoading || !selectedVehicleModel"
+            :disabled="readonly || transportLoading || !selectedVehicleType"
             @change="updateNode({ commandId: ($event.target as HTMLSelectElement).value || null })"
           >
             <option value="">未設定</option>

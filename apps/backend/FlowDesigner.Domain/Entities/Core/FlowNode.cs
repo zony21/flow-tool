@@ -14,7 +14,7 @@ public class FlowNode
     public Guid? CommandId { get; set; }
     public Guid? LocationId { get; set; }
     public Guid? EquipmentId { get; set; }
-    public Guid? VehicleModelId { get; set; }
+    public Guid? ManufacturerVehicleTypeId { get; set; }
     public string? RwType { get; set; }
     public double X { get; set; }
     public double Y { get; set; }
@@ -25,7 +25,7 @@ public class FlowNode
     public TransportCommand? Command { get; set; }
     public TransportLocation? Location { get; set; }
     public TransportEquipment? Equipment { get; set; }
-    public TransportVehicleModel? VehicleModel { get; set; }
+    public TransportManufacturerVehicleType? ManufacturerVehicleType { get; set; }
     public ICollection<FlowLink> OutgoingLinks { get; set; } = new List<FlowLink>();
     public ICollection<FlowLink> IncomingLinks { get; set; } = new List<FlowLink>();
 }

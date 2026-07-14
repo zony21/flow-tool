@@ -7,6 +7,7 @@ public class TransportManufacturer
     public string VehicleType { get; set; } = string.Empty;
     public string? Description { get; set; }
     public int SortOrder { get; set; }
+    public bool IsActive { get; set; } = true;
     public bool IsDeleted { get; set; }
     public DateTime CreatedAtUtc { get; set; }
     public Guid? CreatedByUserId { get; set; }
@@ -16,5 +17,5 @@ public class TransportManufacturer
     public Guid? DeletedByUserId { get; set; }
 
     public ICollection<TransportCommand> Commands { get; set; } = new List<TransportCommand>();
-    public ICollection<TransportVehicleModel> VehicleModels { get; set; } = new List<TransportVehicleModel>();
+    public ICollection<TransportManufacturerVehicleType> VehicleTypes { get; set; } = new List<TransportManufacturerVehicleType>();
 }

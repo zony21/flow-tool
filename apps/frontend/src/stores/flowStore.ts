@@ -27,7 +27,7 @@ export function enrichFlowStructureRequest(
         commandId: isTransportFlow ? node.commandId ?? currentNode?.commandId ?? null : null,
         locationId: isTransportFlow ? node.locationId ?? currentNode?.locationId ?? null : null,
         equipmentId: isTransportFlow ? node.equipmentId ?? currentNode?.equipmentId ?? null : null,
-        vehicleModelId: isTransportFlow ? node.vehicleModelId ?? currentNode?.vehicleModelId ?? null : null,
+        manufacturerVehicleTypeId: isTransportFlow ? node.manufacturerVehicleTypeId ?? currentNode?.manufacturerVehicleTypeId ?? null : null,
         rwType: isTransportFlow ? node.rwType ?? currentNode?.rwType ?? 'NONE' : 'NONE',
       }
     }),

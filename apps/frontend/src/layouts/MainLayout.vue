@@ -1,6 +1,6 @@
 <template>
   <div class="layout-main">
-    <header class="header"><span>AI Flow Designer</span><RouterLink to="/projects">Project</RouterLink><RouterLink to="/settings">AGF・AGVマスタ</RouterLink></header>
+    <header class="header"><span>AI Flow Designer</span><RouterLink to="/projects">Project</RouterLink><RouterLink to="/settings/transport/manufacturers">AGF・AGVマスタ</RouterLink></header>
     <main class="main-content">
       <slot />
     </main>

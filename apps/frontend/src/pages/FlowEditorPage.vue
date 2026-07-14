@@ -108,7 +108,7 @@ function buildSaveRequest(createVersion: boolean, changeSummary: string | null =
       commandId: node.commandId ?? null,
       locationId: node.locationId ?? null,
       equipmentId: node.equipmentId ?? null,
-      vehicleModelId: node.vehicleModelId ?? null,
+      manufacturerVehicleTypeId: node.manufacturerVehicleTypeId ?? null,
       rwType: node.rwType ?? null,
     })),
     links: flow.value.links.map((link) => ({

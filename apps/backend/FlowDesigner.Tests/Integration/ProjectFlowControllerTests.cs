@@ -594,19 +594,23 @@ public sealed class ProjectFlowControllerTests
     }
 
     [Fact]
-    public async Task VehicleModel_GlobalCrud_ValidatesTypeAndDuplicateCode()
+    public async Task ManufacturerVehicleTypeAndCommand_ValidateHierarchyAndDuplicateCode()
     {
         await using var fixture = await TestFixture.CreateAsync();
-        var manufacturer = new TransportManufacturer { ManufacturerId = Guid.NewGuid(), Name = "Maker", VehicleType = "AGF", SortOrder = 1, CreatedAtUtc = DateTime.UtcNow, UpdatedAtUtc = DateTime.UtcNow };
+        var manufacturer = new TransportManufacturer { ManufacturerId = Guid.NewGuid(), Name = "Maker", VehicleType = "", SortOrder = 1, CreatedAtUtc = DateTime.UtcNow, UpdatedAtUtc = DateTime.UtcNow };
         fixture.DbContext.TransportManufacturers.Add(manufacturer); await fixture.DbContext.SaveChangesAsync();
         var controller = fixture.CreateTransportMastersController();
-        var request = new SaveTransportVehicleModelRequest(manufacturer.ManufacturerId, "AGF", " model-1 ", "Model 1", null, null, true);
-        var created = Assert.IsType<TransportVehicleModelDto>(Assert.IsType<OkObjectResult>((await controller.CreateVehicleModel(request, CancellationToken.None)).Result).Value);
-        Assert.Equal("MODEL-1", created.ModelCode);
-        Assert.True(created.IsActive);
-        Assert.IsType<UnprocessableEntityObjectResult>((await controller.CreateVehicleModel(request, CancellationToken.None)).Result);
-        var invalid = request with { VehicleType = "AMR", ModelCode = "AMR-1" };
-        Assert.IsType<UnprocessableEntityObjectResult>((await controller.CreateVehicleModel(invalid, CancellationToken.None)).Result);
+        var typeRequest = new SaveTransportManufacturerVehicleTypeRequest("AGF", null, null, true);
+        var type = Assert.IsType<TransportManufacturerVehicleTypeDto>(Assert.IsType<OkObjectResult>((await controller.CreateVehicleType(manufacturer.ManufacturerId, typeRequest, CancellationToken.None)).Result).Value);
+        Assert.Equal("AGF", type.VehicleType);
+        Assert.IsType<UnprocessableEntityObjectResult>((await controller.CreateVehicleType(manufacturer.ManufacturerId, typeRequest, CancellationToken.None)).Result);
+        Assert.IsType<UnprocessableEntityObjectResult>((await controller.CreateVehicleType(manufacturer.ManufacturerId, typeRequest with { VehicleType = "AMR" }, CancellationToken.None)).Result);
+
+        var commandRequest = new SaveTransportCommandRequest(" move ", "Move", "MOVE", null, null, true);
+        var command = Assert.IsType<TransportCommandDto>(Assert.IsType<OkObjectResult>((await controller.CreateCommand(type.ManufacturerVehicleTypeId, commandRequest, CancellationToken.None)).Result).Value);
+        Assert.Equal("MOVE", command.CommandCode);
+        Assert.Equal(type.ManufacturerVehicleTypeId, command.ManufacturerVehicleTypeId);
+        Assert.IsType<UnprocessableEntityObjectResult>((await controller.CreateCommand(type.ManufacturerVehicleTypeId, commandRequest, CancellationToken.None)).Result);
     }
 
     private static async Task<FlowVersionSummaryDto> CreateVersionAsync(

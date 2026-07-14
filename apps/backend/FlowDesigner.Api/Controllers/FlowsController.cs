@@ -163,7 +163,7 @@ public sealed class FlowsController(
                 node.CommandId = null;
                 node.LocationId = null;
                 node.EquipmentId = null;
-                node.VehicleModelId = null;
+                node.ManufacturerVehicleTypeId = null;
                 node.RwType = TransportRwTypes.None;
             }
         }
@@ -272,7 +272,7 @@ public sealed class FlowsController(
             LocationId = node.LocationId,
             EquipmentId = node.EquipmentId,
             RwType = TransportRwTypes.NormalizeOrDefault(node.RwType),
-            VehicleModelId = node.VehicleModelId,
+            ManufacturerVehicleTypeId = node.ManufacturerVehicleTypeId,
         }));
 
         dbContext.Links.AddRange(links.Select(link => new FlowLink
@@ -450,7 +450,7 @@ public sealed class FlowsController(
             LocationId = node.LocationId,
             EquipmentId = node.EquipmentId,
             RwType = TransportRwTypes.NormalizeOrDefault(node.RwType),
-            VehicleModelId = node.VehicleModelId,
+            ManufacturerVehicleTypeId = node.ManufacturerVehicleTypeId,
         }));
         dbContext.Links.AddRange(sourceLinks.Where(link => nodeIdMap.ContainsKey(link.SourceNodeId) && nodeIdMap.ContainsKey(link.TargetNodeId)).Select(link => new FlowLink
         {
@@ -501,7 +501,7 @@ public sealed class FlowsController(
             x.LocationId,
             x.EquipmentId,
             x.RwType,
-            x.VehicleModelId)).ToListAsync(cancellationToken);
+            x.ManufacturerVehicleTypeId)).ToListAsync(cancellationToken);
         var nodes = NormalizeNodeDetailDtos(rawNodes, lanes, stages);
         var links = await dbContext.Links.AsNoTracking().Where(x => x.FlowId == flowId).Select(x => new LinkDto(x.LinkId, x.FlowId, x.SourceNodeId, x.TargetNodeId, x.Label, x.Condition)).ToListAsync(cancellationToken);
         var comments = await dbContext.Comments.AsNoTracking().Where(x => x.FlowId == flowId).Select(x => new CommentDto(x.CommentId, x.FlowId, x.NodeId, x.Text, x.X, x.Y)).ToListAsync(cancellationToken);
@@ -515,7 +515,7 @@ public sealed class FlowsController(
         var commandIds = nodes.Where(node => node.CommandId.HasValue).Select(node => node.CommandId!.Value).Distinct().ToList();
         var locationIds = nodes.Where(node => node.LocationId.HasValue).Select(node => node.LocationId!.Value).Distinct().ToList();
         var equipmentIds = nodes.Where(node => node.EquipmentId.HasValue).Select(node => node.EquipmentId!.Value).Distinct().ToList();
-        var vehicleModelIds = nodes.Where(node => node.VehicleModelId.HasValue).Select(node => node.VehicleModelId!.Value).Distinct().ToList();
+        var vehicleTypeIds = nodes.Where(node => node.ManufacturerVehicleTypeId.HasValue).Select(node => node.ManufacturerVehicleTypeId!.Value).Distinct().ToList();
 
         if (commandIds.Count > 0)
         {
@@ -556,19 +556,18 @@ public sealed class FlowsController(
             }
         }
 
-        if (vehicleModelIds.Count > 0)
+        if (vehicleTypeIds.Count > 0)
         {
-            var models = await dbContext.TransportVehicleModels.AsNoTracking()
-                .Where(model => vehicleModelIds.Contains(model.VehicleModelId) && !model.IsDeleted)
-                .Select(model => new { model.VehicleModelId, model.ManufacturerId }).ToListAsync(cancellationToken);
-            if (models.Count != vehicleModelIds.Count) return "Node refers to a vehicle model that does not exist or is deleted.";
-            var commandManufacturers = await dbContext.TransportCommands.AsNoTracking()
+            var types = await dbContext.TransportManufacturerVehicleTypes.AsNoTracking()
+                .Where(type => vehicleTypeIds.Contains(type.ManufacturerVehicleTypeId) && !type.IsDeleted && type.IsActive && !type.Manufacturer.IsDeleted && type.Manufacturer.IsActive)
+                .Select(type => type.ManufacturerVehicleTypeId).ToListAsync(cancellationToken);
+            if (types.Count != vehicleTypeIds.Count) return "Node refers to a manufacturer vehicle type that does not exist, is deleted, or is inactive.";
+            var commandTypes = await dbContext.TransportCommands.AsNoTracking()
                 .Where(command => commandIds.Contains(command.CommandId) && !command.IsDeleted)
-                .ToDictionaryAsync(command => command.CommandId, command => command.ManufacturerId, cancellationToken);
-            var modelManufacturers = models.ToDictionary(model => model.VehicleModelId, model => model.ManufacturerId);
-            if (nodes.Any(node => node.VehicleModelId.HasValue && node.CommandId.HasValue &&
-                modelManufacturers[node.VehicleModelId.Value] != commandManufacturers.GetValueOrDefault(node.CommandId.Value)))
-                return "Node command must belong to the selected vehicle model manufacturer.";
+                .ToDictionaryAsync(command => command.CommandId, command => command.ManufacturerVehicleTypeId, cancellationToken);
+            if (nodes.Any(node => node.ManufacturerVehicleTypeId.HasValue && node.CommandId.HasValue &&
+                node.ManufacturerVehicleTypeId.Value != commandTypes.GetValueOrDefault(node.CommandId.Value)))
+                return "Node command must belong to the selected manufacturer vehicle type.";
         }
 
         return null;
@@ -628,7 +627,7 @@ public sealed class FlowsController(
                 CommandId = null,
                 LocationId = null,
                 EquipmentId = null,
-                VehicleModelId = null,
+                ManufacturerVehicleTypeId = null,
                 RwType = TransportRwTypes.None,
             }).ToList();
         }

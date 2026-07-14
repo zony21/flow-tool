@@ -4,28 +4,28 @@ import type {
   SaveTransportEquipmentRequest,
   SaveTransportLocationRequest,
   SaveTransportManufacturerRequest,
-  SaveTransportVehicleModelRequest,
+  SaveTransportManufacturerVehicleTypeRequest,
   TransportCommand,
   TransportEquipment,
   TransportLocation,
   TransportManufacturer,
-  TransportVehicleModel,
+  TransportManufacturerVehicleType,
 } from '../types/transport'
 
-export async function fetchTransportVehicleModels(params?: { manufacturerId?: string; vehicleType?: 'AGF' | 'AGV'; includeInactive?: boolean }): Promise<TransportVehicleModel[]> {
-  return (await httpClient.get<TransportVehicleModel[]>('/api/transport/vehicle-models', { params })).data
+export async function fetchTransportManufacturerVehicleTypes(includeInactive = true): Promise<TransportManufacturerVehicleType[]> {
+  return (await httpClient.get<TransportManufacturerVehicleType[]>('/api/transport/manufacturer-vehicle-types', { params: { includeInactive } })).data
 }
 
-export async function createTransportVehicleModel(request: SaveTransportVehicleModelRequest): Promise<TransportVehicleModel> {
-  return (await httpClient.post<TransportVehicleModel>('/api/transport/vehicle-models', request)).data
+export async function createTransportManufacturerVehicleType(manufacturerId: string, request: SaveTransportManufacturerVehicleTypeRequest): Promise<TransportManufacturerVehicleType> {
+  return (await httpClient.post<TransportManufacturerVehicleType>(`/api/transport/manufacturers/${manufacturerId}/vehicle-types`, request)).data
 }
 
-export async function updateTransportVehicleModel(id: string, request: SaveTransportVehicleModelRequest): Promise<TransportVehicleModel> {
-  return (await httpClient.put<TransportVehicleModel>(`/api/transport/vehicle-models/${id}`, request)).data
+export async function updateTransportManufacturerVehicleType(id: string, request: SaveTransportManufacturerVehicleTypeRequest): Promise<TransportManufacturerVehicleType> {
+  return (await httpClient.put<TransportManufacturerVehicleType>(`/api/transport/manufacturer-vehicle-types/${id}`, request)).data
 }
 
-export async function deleteTransportVehicleModel(id: string): Promise<void> {
-  await httpClient.delete(`/api/transport/vehicle-models/${id}`)
+export async function deleteTransportManufacturerVehicleType(id: string): Promise<void> {
+  await httpClient.delete(`/api/transport/manufacturer-vehicle-types/${id}`)
 }
 
 export async function fetchTransportManufacturers(): Promise<TransportManufacturer[]> {
@@ -47,15 +47,15 @@ export async function deleteTransportManufacturer(manufacturerId: string): Promi
   await httpClient.delete(`/api/transport/manufacturers/${manufacturerId}`)
 }
 
-export async function fetchTransportCommands(manufacturerId?: string | null): Promise<TransportCommand[]> {
+export async function fetchTransportCommands(manufacturerVehicleTypeId?: string | null, includeInactive = true): Promise<TransportCommand[]> {
   const response = await httpClient.get<TransportCommand[]>('/api/transport/commands', {
-    params: manufacturerId ? { manufacturerId } : undefined,
+    params: { manufacturerVehicleTypeId: manufacturerVehicleTypeId || undefined, includeInactive },
   })
   return response.data
 }
 
-export async function createTransportCommand(request: SaveTransportCommandRequest): Promise<TransportCommand> {
-  const response = await httpClient.post<TransportCommand>('/api/transport/commands', request)
+export async function createTransportCommand(manufacturerVehicleTypeId: string, request: SaveTransportCommandRequest): Promise<TransportCommand> {
+  const response = await httpClient.post<TransportCommand>(`/api/transport/manufacturer-vehicle-types/${manufacturerVehicleTypeId}/commands`, request)
   return response.data
 }
 

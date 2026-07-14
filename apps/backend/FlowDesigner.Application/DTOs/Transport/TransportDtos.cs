@@ -3,19 +3,35 @@ namespace FlowDesigner.Application.DTOs.Transport;
 public sealed record TransportManufacturerDto(
     Guid ManufacturerId,
     string Name,
+    string? Description,
+    int SortOrder,
+    bool IsActive,
+    DateTime CreatedAtUtc,
+    DateTime UpdatedAtUtc);
+
+public sealed record TransportManufacturerVehicleTypeDto(
+    Guid ManufacturerVehicleTypeId,
+    Guid ManufacturerId,
+    string ManufacturerName,
     string VehicleType,
     string? Description,
     int SortOrder,
+    bool IsActive,
     DateTime CreatedAtUtc,
     DateTime UpdatedAtUtc);
 
 public sealed record TransportCommandDto(
     Guid CommandId,
+    Guid ManufacturerVehicleTypeId,
     Guid ManufacturerId,
+    string ManufacturerName,
+    string VehicleType,
+    string CommandCode,
     string CommandName,
     string ProcessType,
     string? Description,
     int SortOrder,
+    bool IsActive,
     DateTime CreatedAtUtc,
     DateTime UpdatedAtUtc);
 
@@ -40,31 +56,25 @@ public sealed record TransportEquipmentDto(
     DateTime CreatedAtUtc,
     DateTime UpdatedAtUtc);
 
-public sealed record TransportVehicleModelDto(
-    Guid VehicleModelId,
-    Guid ManufacturerId,
-    string ManufacturerName,
-    string VehicleType,
-    string ModelCode,
-    string ModelName,
-    string? Description,
-    int SortOrder,
-    bool IsActive,
-    DateTime CreatedAtUtc,
-    DateTime UpdatedAtUtc);
-
 public sealed record SaveTransportManufacturerRequest(
     string Name,
+    string? Description,
+    int? SortOrder,
+    bool IsActive = true);
+
+public sealed record SaveTransportManufacturerVehicleTypeRequest(
     string VehicleType,
     string? Description,
-    int? SortOrder);
+    int? SortOrder,
+    bool IsActive = true);
 
 public sealed record SaveTransportCommandRequest(
-    Guid ManufacturerId,
+    string CommandCode,
     string CommandName,
     string ProcessType,
     string? Description,
-    int? SortOrder);
+    int? SortOrder,
+    bool IsActive = true);
 
 public sealed record SaveTransportLocationRequest(
     string Name,
@@ -78,11 +88,3 @@ public sealed record SaveTransportEquipmentRequest(
     string? Description,
     int? SortOrder);
 
-public sealed record SaveTransportVehicleModelRequest(
-    Guid ManufacturerId,
-    string VehicleType,
-    string ModelCode,
-    string ModelName,
-    string? Description,
-    int? SortOrder,
-    bool IsActive = true);

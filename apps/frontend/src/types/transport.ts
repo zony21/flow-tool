@@ -1,4 +1,4 @@
-export type VehicleType = 'AGF' | 'AGV' | 'AMR'
+export type VehicleType = 'AGF' | 'AGV'
 
 export type TransportProcessType = '移動' | '荷上げ' | '荷下ろし' | '待機' | '充電' | 'その他'
 
@@ -23,21 +23,37 @@ export type RwType = 'NONE' | 'READ' | 'WRITE'
 export type TransportManufacturer = {
   manufacturerId: string
   name: string
-  vehicleType: VehicleType | string
   description?: string | null
   sortOrder: number
-  isDeleted: boolean
+  isActive: boolean
+  createdAtUtc: string
+  updatedAtUtc: string
+}
+
+export type TransportManufacturerVehicleType = {
+  manufacturerVehicleTypeId: string
+  manufacturerId: string
+  manufacturerName: string
+  vehicleType: VehicleType
+  description?: string | null
+  sortOrder: number
+  isActive: boolean
   createdAtUtc: string
   updatedAtUtc: string
 }
 
 export type TransportCommand = {
   commandId: string
+  manufacturerVehicleTypeId: string
   manufacturerId: string
+  manufacturerName: string
+  vehicleType: VehicleType
+  commandCode: string
   commandName: string
   processType: TransportProcessType | string
   description?: string | null
   sortOrder: number
+  isActive: boolean
   createdAtUtc: string
   updatedAtUtc: string
 }
@@ -64,25 +80,8 @@ export type TransportEquipment = {
   updatedAtUtc: string
 }
 
-export type TransportVehicleModel = {
-  vehicleModelId: string
-  manufacturerId: string
-  manufacturerName: string
-  vehicleType: 'AGF' | 'AGV'
-  modelCode: string
-  modelName: string
-  description?: string | null
-  sortOrder: number
-  isActive: boolean
-  createdAtUtc: string
-  updatedAtUtc: string
-}
-
-export type SaveTransportVehicleModelRequest = {
-  manufacturerId: string
-  vehicleType: 'AGF' | 'AGV'
-  modelCode: string
-  modelName: string
+export type SaveTransportManufacturerVehicleTypeRequest = {
+  vehicleType: VehicleType
   description?: string | null
   sortOrder?: number | null
   isActive: boolean
@@ -90,17 +89,18 @@ export type SaveTransportVehicleModelRequest = {
 
 export type SaveTransportManufacturerRequest = {
   name: string
-  vehicleType: VehicleType | string
   description?: string | null
   sortOrder?: number | null
+  isActive: boolean
 }
 
 export type SaveTransportCommandRequest = {
-  manufacturerId: string
+  commandCode: string
   commandName: string
   processType: TransportProcessType | string
   description?: string | null
   sortOrder?: number | null
+  isActive: boolean
 }
 
 export type SaveTransportLocationRequest = {

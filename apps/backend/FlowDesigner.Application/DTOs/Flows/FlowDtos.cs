@@ -65,7 +65,7 @@ public sealed record SaveNodeRequest(
     Guid? LocationId = null,
     Guid? EquipmentId = null,
     string? RwType = null,
-    Guid? VehicleModelId = null);
+    Guid? ManufacturerVehicleTypeId = null);
 
 public sealed record SaveLinkRequest(
     Guid LinkId,
@@ -108,7 +108,7 @@ public sealed record NodeDto(
     Guid? LocationId = null,
     Guid? EquipmentId = null,
     string? RwType = null,
-    Guid? VehicleModelId = null);
+    Guid? ManufacturerVehicleTypeId = null);
 
 public sealed record LinkDto(
     Guid LinkId,
