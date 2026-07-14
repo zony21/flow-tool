@@ -55,7 +55,7 @@ Node座標（X/Y）は設計意味を持たないView Hintとして扱う。
 
 ## 5. 運用ルール
 
-- 開発対象ブランチはmainのみ。
+- 開発対象ブランチは、Project Ownerの明示的な指示によって決定する。
 - docs配下には正式設計書のみ残す。
 - READMEは正式索引として管理する。
 - feature / chatgpt / cleanup 等の過去ブランチは正としない。

@@ -26,6 +26,7 @@ export type TransportManufacturer = {
   vehicleType: VehicleType | string
   description?: string | null
   sortOrder: number
+  isDeleted: boolean
   createdAtUtc: string
   updatedAtUtc: string
 }

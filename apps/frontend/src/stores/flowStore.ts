@@ -4,6 +4,35 @@ import { createFlow, deleteFlow, duplicateFlow, fetchFlow, fetchFlows, saveFlowS
 import type { SaveFlowStructureRequest } from '../types/flow'
 import type { FlowDetail, FlowSummary } from '../types/flow'
 
+export function enrichFlowStructureRequest(
+  currentFlow: FlowDetail | null,
+  request: SaveFlowStructureRequest,
+): SaveFlowStructureRequest {
+  const currentNodes = new Map(currentFlow?.nodes.map((node) => [node.nodeId, node]) ?? [])
+  const isTransportFlow = currentFlow?.flowType === 'TRANSPORT'
+
+  return {
+    ...request,
+    stages: request.stages.map((stage) => {
+      const currentStage = currentFlow?.stages.find((item) => item.stageId === stage.stageId)
+      return {
+        ...stage,
+        stageType: stage.stageType ?? currentStage?.stageType ?? 'AUTO',
+      }
+    }),
+    nodes: request.nodes.map((node) => {
+      const currentNode = currentNodes.get(node.nodeId)
+      return {
+        ...node,
+        commandId: isTransportFlow ? node.commandId ?? currentNode?.commandId ?? null : null,
+        locationId: isTransportFlow ? node.locationId ?? currentNode?.locationId ?? null : null,
+        equipmentId: isTransportFlow ? node.equipmentId ?? currentNode?.equipmentId ?? null : null,
+        rwType: isTransportFlow ? node.rwType ?? currentNode?.rwType ?? 'NONE' : 'NONE',
+      }
+    }),
+  }
+}
+
 export const useFlowStore = defineStore('flow', {
   state: () => ({
     flows: [] as FlowSummary[],
@@ -76,28 +105,7 @@ export const useFlowStore = defineStore('flow', {
       this.loading = true
       this.clearError()
       try {
-        const currentNodes = new Map(this.currentFlow?.nodes.map((node) => [node.nodeId, node]) ?? [])
-        const isTransportFlow = this.currentFlow?.flowType === 'TRANSPORT'
-        const enrichedRequest: SaveFlowStructureRequest = {
-          ...request,
-          stages: request.stages.map((stage) => {
-            const currentStage = this.currentFlow?.stages.find((item) => item.stageId === stage.stageId)
-            return {
-              ...stage,
-              stageType: currentStage?.stageType ?? stage.stageType ?? 'AUTO',
-            }
-          }),
-          nodes: request.nodes.map((node) => {
-            const currentNode = currentNodes.get(node.nodeId)
-            return {
-              ...node,
-              commandId: isTransportFlow ? currentNode?.commandId ?? node.commandId ?? null : null,
-              locationId: isTransportFlow ? currentNode?.locationId ?? node.locationId ?? null : null,
-              equipmentId: isTransportFlow ? currentNode?.equipmentId ?? node.equipmentId ?? null : null,
-              rwType: isTransportFlow ? currentNode?.rwType ?? node.rwType ?? 'NONE' : 'NONE',
-            }
-          }),
-        }
+        const enrichedRequest = enrichFlowStructureRequest(this.currentFlow, request)
 
         await saveFlowStructure(projectId, request.flowId, enrichedRequest)
         this.currentFlow = await fetchFlow(projectId, request.flowId)

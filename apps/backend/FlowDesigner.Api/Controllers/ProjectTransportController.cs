@@ -27,7 +27,7 @@ public sealed class ProjectTransportController(
             .Where(x => x.ProjectId == projectId && !x.IsDeleted)
             .OrderBy(x => x.SortOrder)
             .ThenBy(x => x.Name)
-            .Select(x => new TransportLocationDto(x.LocationId, x.ProjectId, x.Name, x.LocationType, x.Description, x.SortOrder, x.CreatedAtUtc, x.UpdatedAtUtc))
+            .Select(x => new TransportLocationDto(x.LocationId, x.ProjectId, x.Name, x.LocationType, x.Description, x.SortOrder, x.IsDeleted, x.CreatedAtUtc, x.UpdatedAtUtc))
             .ToListAsync(cancellationToken);
 
         return Ok(items);
@@ -228,7 +228,7 @@ public sealed class ProjectTransportController(
 
     private static TransportLocationDto ToDto(TransportLocation entity)
     {
-        return new TransportLocationDto(entity.LocationId, entity.ProjectId, entity.Name, entity.LocationType, entity.Description, entity.SortOrder, entity.CreatedAtUtc, entity.UpdatedAtUtc);
+        return new TransportLocationDto(entity.LocationId, entity.ProjectId, entity.Name, entity.LocationType, entity.Description, entity.SortOrder, entity.IsDeleted, entity.CreatedAtUtc, entity.UpdatedAtUtc);
     }
 
     private static TransportEquipmentDto ToDto(TransportEquipment entity)

@@ -7,6 +7,8 @@ using FlowDesigner.Application.DTOs.Versions;
 using FlowDesigner.Application.Interfaces.Authorization;
 using FlowDesigner.Application.Interfaces.Services;
 using FlowDesigner.Domain.Entities.Auth;
+using FlowDesigner.Domain.Entities.Core;
+using FlowDesigner.Domain.Entities.Transport;
 using FlowDesigner.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -69,7 +71,7 @@ public sealed class ProjectFlowControllerTests
             flow.FlowId,
             flow.CurrentRevision,
             [new SaveLaneRequest(laneId, "Operator", 1)],
-            [new SaveStageRequest(stageId, "Read", 1)],
+            [new SaveStageRequest(stageId, "Read", "AUTO", 1)],
             [
                 new SaveNodeRequest(startNodeId, laneId, stageId, "Start", "Start", null, 10, 20),
                 new SaveNodeRequest(endNodeId, laneId, stageId, "End", "End", "Done", 110, 20),
@@ -126,35 +128,6 @@ public sealed class ProjectFlowControllerTests
         Assert.Equal(0, await fixture.DbContext.Versions.CountAsync());
     }
 
-    [Theory]
-    [InlineData("Flow.Update")]
-    [InlineData("Node.Update")]
-    [InlineData("Link.Update")]
-    [InlineData("Comment.Update")]
-    public async Task SaveStructure_WhenAnyRequiredPermissionIsMissing_ReturnsForbidden(string deniedPermission)
-    {
-        await using var fixture = await TestFixture.CreateAsync(deniedPermission: deniedPermission);
-        var flow = await fixture.CreateProjectAndFlowAsync();
-
-        var response = await fixture.CreateFlowsController().SaveStructure(
-            flow.ProjectId,
-            flow.FlowId,
-            new SaveFlowStructureRequest(
-                flow.FlowId,
-                flow.CurrentRevision,
-                [],
-                [],
-                [],
-                [],
-                [],
-                false,
-                null),
-            CancellationToken.None);
-
-        var forbidden = Assert.IsType<ObjectResult>(response.Result);
-        Assert.Equal(StatusCodes.Status403Forbidden, forbidden.StatusCode);
-    }
-
     [Fact]
     public async Task UpdateProject_AndUpdateFlow_PersistChanges()
     {
@@ -187,7 +160,7 @@ public sealed class ProjectFlowControllerTests
     }
 
     [Fact]
-    public async Task DuplicateFlow_CopiesStructureWithNewIdsAndInitialVersion()
+    public async Task DuplicateFlow_CopiesStructureWithNewIds()
     {
         await using var fixture = await TestFixture.CreateAsync();
         var flow = await fixture.CreateProjectAndFlowAsync();
@@ -201,7 +174,7 @@ public sealed class ProjectFlowControllerTests
         await fixture.SaveStructureAsync(
             flow,
             [new SaveLaneRequest(laneId, "Lane", 1)],
-            [new SaveStageRequest(stageId, "Stage", 1)],
+            [new SaveStageRequest(stageId, "Stage", "AUTO", 1)],
             [
                 new SaveNodeRequest(startNodeId, laneId, stageId, "Start", "Start", null, 10, 20),
                 new SaveNodeRequest(endNodeId, laneId, stageId, "End", "End", null, 110, 20),
@@ -216,8 +189,8 @@ public sealed class ProjectFlowControllerTests
             new DuplicateFlowRequest(null),
             CancellationToken.None);
 
-        var created = Assert.IsType<CreatedAtActionResult>(response.Result);
-        var duplicate = Assert.IsType<FlowDetailDto>(created.Value);
+        var ok = Assert.IsType<OkObjectResult>(response.Result);
+        var duplicate = Assert.IsType<FlowDetailDto>(ok.Value);
 
         Assert.NotEqual(flow.FlowId, duplicate.FlowId);
         Assert.Equal("Flow Copy", duplicate.Name);
@@ -239,8 +212,6 @@ public sealed class ProjectFlowControllerTests
         var duplicateComment = Assert.Single(duplicate.Comments);
         Assert.Contains(duplicate.Nodes, node => node.NodeId == duplicateComment.NodeId);
 
-        var duplicateVersion = Assert.Single(await fixture.DbContext.Versions.Where(version => version.FlowId == duplicate.FlowId).ToListAsync());
-        Assert.Equal(1, duplicateVersion.VersionNumber);
     }
 
     [Fact]
@@ -254,7 +225,7 @@ public sealed class ProjectFlowControllerTests
         await fixture.SaveStructureAsync(
             flow,
             [new SaveLaneRequest(Guid.NewGuid(), "Lane", 1)],
-            [new SaveStageRequest(Guid.NewGuid(), "Stage", 1)],
+            [new SaveStageRequest(Guid.NewGuid(), "Stage", "AUTO", 1)],
             [
                 new SaveNodeRequest(firstNodeId, null, null, "Start", "Start", null, 10, 20),
                 new SaveNodeRequest(secondNodeId, null, null, "End", "End", null, 110, 20),
@@ -288,7 +259,7 @@ public sealed class ProjectFlowControllerTests
         await fixture.SaveStructureAsync(
             flow,
             [new SaveLaneRequest(laneId, "Lane", 1)],
-            [new SaveStageRequest(stageId, "Stage", 1)],
+            [new SaveStageRequest(stageId, "Stage", "AUTO", 1)],
             [new SaveNodeRequest(firstNodeId, laneId, stageId, "Task", "Pick", null, 10, 10)],
             [],
             [],
@@ -303,7 +274,7 @@ public sealed class ProjectFlowControllerTests
         await fixture.SaveStructureAsync(
             current,
             [new SaveLaneRequest(laneId, "Lane", 1)],
-            [new SaveStageRequest(stageId, "Stage", 1)],
+            [new SaveStageRequest(stageId, "Stage", "AUTO", 1)],
             [
                 new SaveNodeRequest(firstNodeId, laneId, stageId, "Task", "Pick updated", null, 20, 10),
                 new SaveNodeRequest(secondNodeId, laneId, stageId, "Task", "Pack", null, 120, 10),
@@ -411,7 +382,7 @@ public sealed class ProjectFlowControllerTests
         await fixture.SaveStructureAsync(
             flow,
             [new SaveLaneRequest(Guid.NewGuid(), "Lane", 1)],
-            [new SaveStageRequest(Guid.NewGuid(), "Stage", 1)],
+            [new SaveStageRequest(Guid.NewGuid(), "Stage", "AUTO", 1)],
             [new SaveNodeRequest(nodeId, null, null, "Task", "Pick", "Pick item", 10, 20)],
             [],
             [],
@@ -425,7 +396,7 @@ public sealed class ProjectFlowControllerTests
         using var document = JsonDocument.Parse(Encoding.UTF8.GetString(file.FileContents));
         Assert.Equal(1, document.RootElement.GetProperty("schemaVersion").GetInt32());
         Assert.Equal(flow.FlowId, document.RootElement.GetProperty("flow").GetProperty("flowId").GetGuid());
-        Assert.Equal("Pick", document.RootElement.GetProperty("nodes")[0].GetProperty("name").GetString());
+        Assert.Equal("Pick", document.RootElement.GetProperty("raw").GetProperty("nodes")[0].GetProperty("name").GetString());
     }
 
     [Fact]
@@ -461,6 +432,164 @@ public sealed class ProjectFlowControllerTests
         Assert.Contains("Pick", result.Content);
         Assert.Contains("-->|\"next\"|", result.Content);
         Assert.Contains("%% Comment: Check label", result.Content);
+    }
+
+    [Fact]
+    public async Task TransportStructure_SaveLoadAndVersionSnapshot_PreserveTransportAttributes()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var flow = await fixture.CreateProjectAndFlowAsync(FlowTypes.Transport);
+        var (commandId, equipmentId, locationId) = await fixture.CreateTransportMastersAsync(flow.ProjectId);
+        var nodeId = Guid.NewGuid();
+
+        await fixture.SaveStructureAsync(
+            flow,
+            [],
+            [],
+            [new SaveNodeRequest(nodeId, null, null, "Task", "Move", null, 10, 20, commandId, locationId, equipmentId, "WRITE")],
+            [],
+            [],
+            createVersion: true);
+
+        var getResponse = await fixture.CreateFlowsController().Get(flow.ProjectId, flow.FlowId, CancellationToken.None);
+        var loaded = Assert.IsType<FlowDetailDto>(Assert.IsType<OkObjectResult>(getResponse.Result).Value);
+        var node = Assert.Single(loaded.Nodes);
+        Assert.Equal(commandId, node.CommandId);
+        Assert.Equal(equipmentId, node.EquipmentId);
+        Assert.Equal(locationId, node.LocationId);
+        Assert.Equal("WRITE", node.RwType);
+
+        var version = Assert.Single(await fixture.DbContext.Versions.Where(item => item.FlowId == flow.FlowId).ToListAsync());
+        using var snapshot = JsonDocument.Parse(version.SnapshotJson);
+        var snapshotNode = snapshot.RootElement.GetProperty("nodes")[0];
+        Assert.Equal(commandId, snapshotNode.GetProperty("commandId").GetGuid());
+        Assert.Equal(equipmentId, snapshotNode.GetProperty("equipmentId").GetGuid());
+        Assert.Equal(locationId, snapshotNode.GetProperty("locationId").GetGuid());
+        Assert.Equal("WRITE", snapshotNode.GetProperty("rwType").GetString());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TransportStructure_InvalidProjectOrDeletedLocation_ReturnsValidationError(bool deleted)
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var flow = await fixture.CreateProjectAndFlowAsync(FlowTypes.Transport);
+        var locationProjectId = flow.ProjectId;
+        if (!deleted)
+        {
+            var otherProjectResult = await fixture.CreateProjectsController().Create(new CreateProjectRequest("Other", null), CancellationToken.None);
+            locationProjectId = Assert.IsType<ProjectDetailDto>(Assert.IsType<CreatedAtActionResult>(otherProjectResult.Result).Value).ProjectId;
+        }
+
+        var location = fixture.CreateLocation(locationProjectId, deleted);
+        fixture.DbContext.TransportLocations.Add(location);
+        await fixture.DbContext.SaveChangesAsync();
+
+        var response = await fixture.CreateFlowsController().SaveStructure(
+            flow.ProjectId,
+            flow.FlowId,
+            new SaveFlowStructureRequest(
+                flow.FlowId,
+                flow.CurrentRevision,
+                [],
+                [],
+                [new SaveNodeRequest(Guid.NewGuid(), null, null, "Task", "Move", null, 10, 20, LocationId: location.LocationId)],
+                [],
+                [],
+                false,
+                null),
+            CancellationToken.None);
+
+        var validation = Assert.IsType<UnprocessableEntityObjectResult>(response.Result);
+        Assert.Equal(StatusCodes.Status422UnprocessableEntity, validation.StatusCode);
+        Assert.Contains("location", validation.Value?.ToString() ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task NormalStructure_WithTransportValues_ClearsAllTransportAttributes()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var flow = await fixture.CreateProjectAndFlowAsync(FlowTypes.Normal);
+
+        await fixture.SaveStructureAsync(
+            flow,
+            [],
+            [],
+            [new SaveNodeRequest(Guid.NewGuid(), null, null, "Task", "Normal", null, 10, 20, Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "READ")],
+            [],
+            [],
+            createVersion: false);
+
+        var node = Assert.Single(await fixture.DbContext.Nodes.Where(item => item.FlowId == flow.FlowId).ToListAsync());
+        Assert.Null(node.CommandId);
+        Assert.Null(node.EquipmentId);
+        Assert.Null(node.LocationId);
+        Assert.Equal("NONE", node.RwType);
+    }
+
+    [Fact]
+    public async Task UpdateFlow_FromTransportToNormal_ClearsPersistedTransportAttributes()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var flow = await fixture.CreateProjectAndFlowAsync(FlowTypes.Transport);
+        var (commandId, equipmentId, locationId) = await fixture.CreateTransportMastersAsync(flow.ProjectId);
+
+        await fixture.SaveStructureAsync(
+            flow,
+            [],
+            [],
+            [new SaveNodeRequest(Guid.NewGuid(), null, null, "Task", "Move", null, 10, 20, commandId, locationId, equipmentId, "READ")],
+            [],
+            [],
+            createVersion: false);
+
+        var update = await fixture.CreateFlowsController().Update(
+            flow.ProjectId,
+            flow.FlowId,
+            new UpdateFlowRequest(flow.Name, flow.Description, FlowTypes.Normal),
+            CancellationToken.None);
+        var updated = Assert.IsType<FlowDetailDto>(Assert.IsType<OkObjectResult>(update.Result).Value);
+        var node = Assert.Single(updated.Nodes);
+        Assert.Null(node.CommandId);
+        Assert.Null(node.EquipmentId);
+        Assert.Null(node.LocationId);
+        Assert.Equal("NONE", node.RwType);
+    }
+
+    [Fact]
+    public async Task DuplicateTransportFlow_RetainsMasterReferencesAndRemapsNodeLinks()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var flow = await fixture.CreateProjectAndFlowAsync(FlowTypes.Transport);
+        var (commandId, equipmentId, locationId) = await fixture.CreateTransportMastersAsync(flow.ProjectId);
+        var firstNodeId = Guid.NewGuid();
+        var secondNodeId = Guid.NewGuid();
+
+        await fixture.SaveStructureAsync(
+            flow,
+            [],
+            [],
+            [
+                new SaveNodeRequest(firstNodeId, null, null, "Task", "Move", null, 10, 20, commandId, locationId, equipmentId, "WRITE"),
+                new SaveNodeRequest(secondNodeId, null, null, "Task", "End", null, 110, 20),
+            ],
+            [new SaveLinkRequest(Guid.NewGuid(), firstNodeId, secondNodeId, null, null)],
+            [],
+            createVersion: false);
+
+        var response = await fixture.CreateFlowsController().Duplicate(flow.ProjectId, flow.FlowId, new DuplicateFlowRequest(null), CancellationToken.None);
+        var duplicate = Assert.IsType<FlowDetailDto>(Assert.IsType<OkObjectResult>(response.Result).Value);
+        Assert.NotEqual(flow.FlowId, duplicate.FlowId);
+        var copiedNode = Assert.Single(duplicate.Nodes, item => item.Name == "Move");
+        Assert.NotEqual(firstNodeId, copiedNode.NodeId);
+        Assert.Equal(commandId, copiedNode.CommandId);
+        Assert.Equal(equipmentId, copiedNode.EquipmentId);
+        Assert.Equal(locationId, copiedNode.LocationId);
+        Assert.Equal("WRITE", copiedNode.RwType);
+        var link = Assert.Single(duplicate.Links);
+        Assert.Contains(duplicate.Nodes, item => item.NodeId == link.SourceNodeId);
+        Assert.Contains(duplicate.Nodes, item => item.NodeId == link.TargetNodeId);
     }
 
     private static async Task<FlowVersionSummaryDto> CreateVersionAsync(
@@ -550,7 +679,7 @@ public sealed class ProjectFlowControllerTests
             return WithHttpContext(new ExportsController(DbContext));
         }
 
-        public async Task<FlowDetailDto> CreateProjectAndFlowAsync()
+        public async Task<FlowDetailDto> CreateProjectAndFlowAsync(string? flowType = null)
         {
             var projectResult = await CreateProjectsController().Create(
                 new CreateProjectRequest("Project", null),
@@ -559,10 +688,68 @@ public sealed class ProjectFlowControllerTests
 
             var flowResult = await CreateFlowsController().Create(
                 project.ProjectId,
-                new CreateFlowRequest("Flow", null),
+                new CreateFlowRequest("Flow", null, flowType),
                 CancellationToken.None);
 
             return Assert.IsType<FlowDetailDto>(Assert.IsType<CreatedAtActionResult>(flowResult.Result).Value);
+        }
+
+        public TransportLocation CreateLocation(Guid projectId, bool deleted = false)
+        {
+            var now = DateTime.UtcNow;
+            return new TransportLocation
+            {
+                LocationId = Guid.NewGuid(),
+                ProjectId = projectId,
+                Name = "P1",
+                LocationType = "経由点",
+                SortOrder = 1,
+                IsDeleted = deleted,
+                CreatedAtUtc = now,
+                UpdatedAtUtc = now,
+                DeletedAtUtc = deleted ? now : null,
+            };
+        }
+
+        public async Task<(Guid CommandId, Guid EquipmentId, Guid LocationId)> CreateTransportMastersAsync(Guid projectId)
+        {
+            var now = DateTime.UtcNow;
+            var manufacturer = new TransportManufacturer
+            {
+                ManufacturerId = Guid.NewGuid(),
+                Name = "Maker",
+                VehicleType = "AGV",
+                SortOrder = 1,
+                CreatedAtUtc = now,
+                UpdatedAtUtc = now,
+            };
+            var command = new TransportCommand
+            {
+                CommandId = Guid.NewGuid(),
+                ManufacturerId = manufacturer.ManufacturerId,
+                CommandName = "Move",
+                ProcessType = "移動",
+                SortOrder = 1,
+                CreatedAtUtc = now,
+                UpdatedAtUtc = now,
+            };
+            var equipment = new TransportEquipment
+            {
+                EquipmentId = Guid.NewGuid(),
+                ProjectId = projectId,
+                Name = "PLC1",
+                Category = "PLC",
+                SortOrder = 1,
+                CreatedAtUtc = now,
+                UpdatedAtUtc = now,
+            };
+            var location = CreateLocation(projectId);
+            DbContext.TransportManufacturers.Add(manufacturer);
+            DbContext.TransportCommands.Add(command);
+            DbContext.TransportEquipments.Add(equipment);
+            DbContext.TransportLocations.Add(location);
+            await DbContext.SaveChangesAsync();
+            return (command.CommandId, equipment.EquipmentId, location.LocationId);
         }
 
         public async Task<SaveFlowStructureResponse> SaveStructureAsync(

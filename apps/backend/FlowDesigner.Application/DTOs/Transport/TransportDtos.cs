@@ -26,6 +26,7 @@ public sealed record TransportLocationDto(
     string LocationType,
     string? Description,
     int SortOrder,
+    bool IsDeleted,
     DateTime CreatedAtUtc,
     DateTime UpdatedAtUtc);
 

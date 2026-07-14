@@ -341,6 +341,23 @@ public sealed class FlowsController(
         return Ok(new SaveFlowStructureResponse(flow.FlowId, flow.Revision, flow.UpdatedAtUtc));
     }
 
+    [HttpDelete("{flowId:guid}")]
+    [RequirePermission(PermissionCodes.FlowUpdate)]
+    public async Task<IActionResult> Delete(Guid projectId, Guid flowId, CancellationToken cancellationToken)
+    {
+        var flow = await dbContext.Flows.FirstOrDefaultAsync(
+            item => item.ProjectId == projectId && item.FlowId == flowId,
+            cancellationToken);
+        if (flow is null)
+        {
+            return NotFound(ApiError.Create(HttpContext, ApiErrorCodes.NotFound, "Flow was not found."));
+        }
+
+        dbContext.Flows.Remove(flow);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return NoContent();
+    }
+
     [HttpPost("{flowId:guid}/duplicate")]
     [RequirePermission(PermissionCodes.FlowUpdate)]
     public async Task<ActionResult<FlowDetailDto>> Duplicate(

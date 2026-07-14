@@ -1,97 +1,54 @@
-# 05_06_Template_Export_API設計
+# 05_06 Template Export API Design
 
-## Transport搬送表生成 追加仕様
+## 1. Scope
 
-## Stage分類
+This document defines the intended Transport Template export mapping. The Transport Template Generator is not implemented in the Location foundation cycle.
 
-Transport FlowではStageは単なる設備分類ではない。
+## 2. Stage Classification
 
-Stageは処理主体を表す。
+In a Transport Flow, Stage represents the processing owner rather than only an equipment category.
 
-例:
+Examples include AGF/AGV, PLC, WCS, conveyor, shutter, tablet, and human operator.
 
-- AGF / AGV
-- PLC
-- WCS
-- コンベア
-- シャッター
-- タブレット
-- 有人作業
+`StageType` values:
 
-## Stage種別
+- `AUTO`: equipment or system control;
+- `MANUAL`: human work.
 
-Stageに種別を保持する。
+The future Transport Template includes `AUTO` stages and excludes `MANUAL` stages. The Flow diagram may continue to contain both.
 
-stageType:
+## 3. Location Mapping
 
-- AUTO（設備・システム制御）
-- MANUAL（有人作業）
+The Transport Template Location column must use this mapping:
 
-例:
+```text
+Location
+  <- Node.LocationId
+  <- resolved TransportLocation code or display value
+```
 
-Stage: 作業者
-stageType: MANUAL
+The generator must not infer Location from:
 
-Stage: AGV
-stageType: AUTO
+- Equipment;
+- Node coordinates;
+- Lane;
+- Stage;
+- Project layout;
+- screen layout.
 
+Location is Project-level master data, while the relevant Transport Node stores only its `LocationId` reference.
 
-## 搬送表生成対象
+## 4. Planned Generation Sequence
 
-搬送テンプレートはAGF/AGVに実行させる順序表である。
+The planned generator will:
 
-そのため有人作業はフロー上には表示するが、搬送表には出力しない。
+1. require `FlowType = TRANSPORT`;
+2. split Transport patterns by Lane;
+3. traverse Nodes in Link order within each Lane;
+4. resolve each Node's Stage;
+5. exclude `StageType = MANUAL`;
+6. generate steps for eligible `AUTO` Nodes;
+7. number steps within each Lane;
+8. resolve the Location column through `Node.LocationId`.
 
-ルール:
-
-- StageType = AUTO
-  - 搬送表出力対象
-
-- StageType = MANUAL
-  - 搬送表出力対象外
-
-
-例:
-
-Flow:
-
-Lane: 倉庫 → 包装機搬送
-
-1. 作業者: パレット準備
-2. 作業者: タブレット完了報告
-3. AGV: A1へ移動
-4. AGV: 荷上げ
-5. PLC: シャッター開指令
-6. AGV: 搬送開始
-
-
-搬送表生成結果:
-
-# 倉庫 → 包装機搬送
-
-|No|処理|動作|ロケ|設備|R/W|処理区分|
-|-|-|-|-|-|-|-|
-|1|A1へ移動|TravelToPosture|A1|-|-|移動|
-|2|荷上げ|Loading|A1|-|-|荷上げ|
-|3|シャッター開指令|-|-|SH1|Write|PLC書込|
-|4|搬送開始|TravelToPosture|P1|-|-|移動|
-
-
-## 生成順序
-
-1. FlowType = TRANSPORT確認
-2. Lane単位で搬送パターン分割
-3. Lane内NodeをLink順解析
-4. Node所属Stage取得
-5. StageType=MANUALを除外
-6. AUTO NodeのみStep生成
-7. Lane単位でNo採番
-
-
-重要:
-
-フロー図:
-人作業 + 設備 + システムを含める
-
-搬送テンプレート:
-AGF/AGV動作に必要な設備・システム処理のみ出力する
+Traversal, pattern splitting, filtering, Markdown export, and PDF export remain outside the current implementation cycle.
