@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { nodeSamples } from '../../constants/nodeSamples'
-import { fetchTransportCommands, fetchTransportEquipments, fetchTransportLocations } from '../../api/transportApi'
+import { fetchTransportCommands, fetchTransportEquipments, fetchTransportLocations, fetchTransportVehicleModels } from '../../api/transportApi'
 import type { FlowDetail, FlowNode, TransportRwType } from '../../types/flow'
-import type { TransportCommand, TransportEquipment, TransportLocation } from '../../types/transport'
+import type { TransportCommand, TransportEquipment, TransportLocation, TransportVehicleModel } from '../../types/transport'
 
 const props = defineProps<{
   flow: FlowDetail
@@ -23,6 +23,9 @@ const isTransportFlow = computed(() => props.flow.flowType === 'TRANSPORT')
 const transportCommands = ref<TransportCommand[]>([])
 const transportLocations = ref<TransportLocation[]>([])
 const transportEquipments = ref<TransportEquipment[]>([])
+const transportVehicleModels = ref<TransportVehicleModel[]>([])
+const selectedVehicleModel = computed(() => transportVehicleModels.value.find((model) => model.vehicleModelId === selectedNode.value?.vehicleModelId) ?? null)
+const availableCommands = computed(() => selectedVehicleModel.value ? transportCommands.value.filter((command) => command.manufacturerId === selectedVehicleModel.value?.manufacturerId) : [])
 const transportLoading = ref(false)
 const transportError = ref<string | null>(null)
 
@@ -31,6 +34,7 @@ async function loadTransportMasters(): Promise<void> {
     transportCommands.value = []
     transportLocations.value = []
     transportEquipments.value = []
+    transportVehicleModels.value = []
     transportError.value = null
     return
   }
@@ -38,14 +42,16 @@ async function loadTransportMasters(): Promise<void> {
   transportLoading.value = true
   transportError.value = null
   try {
-    const [commands, locations, equipments] = await Promise.all([
+    const [commands, locations, equipments, vehicleModels] = await Promise.all([
       fetchTransportCommands(),
       fetchTransportLocations(props.flow.projectId),
       fetchTransportEquipments(props.flow.projectId),
+      fetchTransportVehicleModels({ includeInactive: false }),
     ])
     transportCommands.value = commands.slice().sort((a, b) => a.sortOrder - b.sortOrder)
     transportLocations.value = locations.slice().sort((a, b) => a.sortOrder - b.sortOrder)
     transportEquipments.value = equipments.slice().sort((a, b) => a.sortOrder - b.sortOrder)
+    transportVehicleModels.value = vehicleModels.slice().sort((a, b) => a.sortOrder - b.sortOrder)
   } catch (error) {
     transportError.value = error instanceof Error ? error.message : 'Transport設定の取得に失敗しました。'
   } finally {
@@ -71,6 +77,10 @@ function updateRwType(value: string): void {
 function deleteSelectedNode(): void {
   if (!selectedNode.value || props.readonly) return
   emit('delete-node', { nodeId: selectedNode.value.nodeId })
+}
+
+function updateVehicleModel(value: string): void {
+  updateNode({ vehicleModelId: value || null, commandId: null })
 }
 </script>
 
@@ -135,14 +145,24 @@ function deleteSelectedNode(): void {
         <p v-if="transportError" class="transport-error">{{ transportError }}</p>
 
         <label class="field">
+          <span>メーカー・機体</span>
+          <select :value="selectedNode.vehicleModelId ?? ''" :disabled="readonly || transportLoading" @change="updateVehicleModel(($event.target as HTMLSelectElement).value)">
+            <option value="">未設定</option>
+            <option v-for="model in transportVehicleModels" :key="model.vehicleModelId" :value="model.vehicleModelId">
+              {{ model.manufacturerName }}：{{ model.vehicleType }} / {{ model.modelName }}（{{ model.modelCode }}）
+            </option>
+          </select>
+        </label>
+
+        <label class="field">
           <span>コマンド</span>
           <select
             :value="selectedNode.commandId ?? ''"
-            :disabled="readonly || transportLoading"
+            :disabled="readonly || transportLoading || !selectedVehicleModel"
             @change="updateNode({ commandId: ($event.target as HTMLSelectElement).value || null })"
           >
             <option value="">未設定</option>
-            <option v-for="command in transportCommands" :key="command.commandId" :value="command.commandId">
+            <option v-for="command in availableCommands" :key="command.commandId" :value="command.commandId">
               {{ command.commandName }}（{{ command.processType }}）
             </option>
           </select>

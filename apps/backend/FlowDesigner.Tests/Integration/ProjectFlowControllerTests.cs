@@ -3,6 +3,7 @@ using FlowDesigner.Application.DTOs.Exports;
 using FlowDesigner.Application.DTOs.Auth;
 using FlowDesigner.Application.DTOs.Flows;
 using FlowDesigner.Application.DTOs.Projects;
+using FlowDesigner.Application.DTOs.Transport;
 using FlowDesigner.Application.DTOs.Versions;
 using FlowDesigner.Application.Interfaces.Authorization;
 using FlowDesigner.Application.Interfaces.Services;
@@ -592,6 +593,22 @@ public sealed class ProjectFlowControllerTests
         Assert.Contains(duplicate.Nodes, item => item.NodeId == link.TargetNodeId);
     }
 
+    [Fact]
+    public async Task VehicleModel_GlobalCrud_ValidatesTypeAndDuplicateCode()
+    {
+        await using var fixture = await TestFixture.CreateAsync();
+        var manufacturer = new TransportManufacturer { ManufacturerId = Guid.NewGuid(), Name = "Maker", VehicleType = "AGF", SortOrder = 1, CreatedAtUtc = DateTime.UtcNow, UpdatedAtUtc = DateTime.UtcNow };
+        fixture.DbContext.TransportManufacturers.Add(manufacturer); await fixture.DbContext.SaveChangesAsync();
+        var controller = fixture.CreateTransportMastersController();
+        var request = new SaveTransportVehicleModelRequest(manufacturer.ManufacturerId, "AGF", " model-1 ", "Model 1", null, null, true);
+        var created = Assert.IsType<TransportVehicleModelDto>(Assert.IsType<OkObjectResult>((await controller.CreateVehicleModel(request, CancellationToken.None)).Result).Value);
+        Assert.Equal("MODEL-1", created.ModelCode);
+        Assert.True(created.IsActive);
+        Assert.IsType<UnprocessableEntityObjectResult>((await controller.CreateVehicleModel(request, CancellationToken.None)).Result);
+        var invalid = request with { VehicleType = "AMR", ModelCode = "AMR-1" };
+        Assert.IsType<UnprocessableEntityObjectResult>((await controller.CreateVehicleModel(invalid, CancellationToken.None)).Result);
+    }
+
     private static async Task<FlowVersionSummaryDto> CreateVersionAsync(
         FlowVersionsController controller,
         Guid projectId,
@@ -678,6 +695,8 @@ public sealed class ProjectFlowControllerTests
         {
             return WithHttpContext(new ExportsController(DbContext));
         }
+
+        public TransportMastersController CreateTransportMastersController() => WithHttpContext(new TransportMastersController(DbContext, currentUserService));
 
         public async Task<FlowDetailDto> CreateProjectAndFlowAsync(string? flowType = null)
         {

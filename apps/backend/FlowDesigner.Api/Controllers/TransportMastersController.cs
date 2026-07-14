@@ -210,6 +210,89 @@ public sealed class TransportMastersController(
         return NoContent();
     }
 
+    [HttpGet("vehicle-models")]
+    public async Task<ActionResult<IReadOnlyList<TransportVehicleModelDto>>> ListVehicleModels(
+        [FromQuery] Guid? manufacturerId,
+        [FromQuery] string? vehicleType,
+        [FromQuery] bool includeInactive = true,
+        CancellationToken cancellationToken = default)
+    {
+        var query = dbContext.TransportVehicleModels.AsNoTracking().Where(x => !x.IsDeleted);
+        if (manufacturerId.HasValue) query = query.Where(x => x.ManufacturerId == manufacturerId.Value);
+        if (!string.IsNullOrWhiteSpace(vehicleType)) query = query.Where(x => x.VehicleType == vehicleType.Trim().ToUpper());
+        if (!includeInactive) query = query.Where(x => x.IsActive);
+        var items = await query.OrderBy(x => x.SortOrder).ThenBy(x => x.ModelName)
+            .Select(x => new TransportVehicleModelDto(x.VehicleModelId, x.ManufacturerId, x.Manufacturer.Name, x.VehicleType, x.ModelCode, x.ModelName, x.Description, x.SortOrder, x.IsActive, x.CreatedAtUtc, x.UpdatedAtUtc))
+            .ToListAsync(cancellationToken);
+        return Ok(items);
+    }
+
+    [HttpPost("vehicle-models")]
+    public async Task<ActionResult<TransportVehicleModelDto>> CreateVehicleModel([FromBody] SaveTransportVehicleModelRequest request, CancellationToken cancellationToken)
+    {
+        var error = await ValidateVehicleModelAsync(request, null, cancellationToken);
+        if (error is not null) return UnprocessableEntity(ApiError.Create(HttpContext, ApiErrorCodes.ValidationError, error));
+        var now = DateTime.UtcNow;
+        var entity = new TransportVehicleModel
+        {
+            VehicleModelId = Guid.NewGuid(), ManufacturerId = request.ManufacturerId, VehicleType = request.VehicleType.Trim().ToUpper(),
+            ModelCode = request.ModelCode.Trim().ToUpper(), ModelName = request.ModelName.Trim(), Description = request.Description,
+            SortOrder = request.SortOrder ?? await NextVehicleModelSortOrderAsync(cancellationToken), IsActive = request.IsActive,
+            CreatedAtUtc = now, UpdatedAtUtc = now, CreatedByUserId = currentUserService.GetCurrentUserId(), UpdatedByUserId = currentUserService.GetCurrentUserId(),
+        };
+        dbContext.TransportVehicleModels.Add(entity);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return Ok(await VehicleModelDtoAsync(entity.VehicleModelId, cancellationToken));
+    }
+
+    [HttpPut("vehicle-models/{vehicleModelId:guid}")]
+    public async Task<ActionResult<TransportVehicleModelDto>> UpdateVehicleModel(Guid vehicleModelId, [FromBody] SaveTransportVehicleModelRequest request, CancellationToken cancellationToken)
+    {
+        var entity = await dbContext.TransportVehicleModels.FirstOrDefaultAsync(x => x.VehicleModelId == vehicleModelId && !x.IsDeleted, cancellationToken);
+        if (entity is null) return ApiError.NotFound<TransportVehicleModelDto>(this, "Vehicle Model was not found.");
+        var error = await ValidateVehicleModelAsync(request, vehicleModelId, cancellationToken);
+        if (error is not null) return UnprocessableEntity(ApiError.Create(HttpContext, ApiErrorCodes.ValidationError, error));
+        entity.ManufacturerId = request.ManufacturerId; entity.VehicleType = request.VehicleType.Trim().ToUpper(); entity.ModelCode = request.ModelCode.Trim().ToUpper();
+        entity.ModelName = request.ModelName.Trim(); entity.Description = request.Description; entity.SortOrder = request.SortOrder ?? entity.SortOrder; entity.IsActive = request.IsActive;
+        entity.UpdatedAtUtc = DateTime.UtcNow; entity.UpdatedByUserId = currentUserService.GetCurrentUserId();
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return Ok(await VehicleModelDtoAsync(vehicleModelId, cancellationToken));
+    }
+
+    [HttpDelete("vehicle-models/{vehicleModelId:guid}")]
+    public async Task<IActionResult> DeleteVehicleModel(Guid vehicleModelId, CancellationToken cancellationToken)
+    {
+        var entity = await dbContext.TransportVehicleModels.FirstOrDefaultAsync(x => x.VehicleModelId == vehicleModelId && !x.IsDeleted, cancellationToken);
+        if (entity is null) return NotFound(ApiError.Create(HttpContext, ApiErrorCodes.NotFound, "Vehicle Model was not found."));
+        if (await dbContext.Nodes.AnyAsync(x => x.VehicleModelId == vehicleModelId, cancellationToken))
+            return Conflict(ApiError.Create(HttpContext, ApiErrorCodes.ValidationError, "Vehicle Model is assigned to a Node."));
+        entity.IsDeleted = true; entity.DeletedAtUtc = DateTime.UtcNow; entity.DeletedByUserId = currentUserService.GetCurrentUserId(); entity.UpdatedAtUtc = entity.DeletedAtUtc.Value; entity.UpdatedByUserId = entity.DeletedByUserId;
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return NoContent();
+    }
+
+    private async Task<string?> ValidateVehicleModelAsync(SaveTransportVehicleModelRequest request, Guid? currentId, CancellationToken cancellationToken)
+    {
+        var type = request.VehicleType?.Trim().ToUpper();
+        if (string.IsNullOrWhiteSpace(request.ModelCode) || string.IsNullOrWhiteSpace(request.ModelName)) return "ModelCode and ModelName are required.";
+        if (type is not ("AGF" or "AGV")) return "VehicleType must be AGF or AGV.";
+        var manufacturer = await dbContext.TransportManufacturers.AsNoTracking().FirstOrDefaultAsync(x => x.ManufacturerId == request.ManufacturerId && !x.IsDeleted, cancellationToken);
+        if (manufacturer is null) return "Manufacturer was not found.";
+        if (!string.Equals(manufacturer.VehicleType, type, StringComparison.OrdinalIgnoreCase)) return "VehicleType must match Manufacturer VehicleType.";
+        var code = request.ModelCode.Trim().ToUpper();
+        if (await dbContext.TransportVehicleModels.AnyAsync(x => x.ManufacturerId == request.ManufacturerId && x.VehicleType == type && x.ModelCode == code && !x.IsDeleted && x.VehicleModelId != currentId, cancellationToken))
+            return "ModelCode already exists for this Manufacturer and VehicleType.";
+        return null;
+    }
+
+    private async Task<int> NextVehicleModelSortOrderAsync(CancellationToken cancellationToken) =>
+        (await dbContext.TransportVehicleModels.Where(x => !x.IsDeleted).Select(x => (int?)x.SortOrder).MaxAsync(cancellationToken) ?? 0) + 1;
+
+    private async Task<TransportVehicleModelDto> VehicleModelDtoAsync(Guid id, CancellationToken cancellationToken) =>
+        await dbContext.TransportVehicleModels.AsNoTracking().Where(x => x.VehicleModelId == id)
+            .Select(x => new TransportVehicleModelDto(x.VehicleModelId, x.ManufacturerId, x.Manufacturer.Name, x.VehicleType, x.ModelCode, x.ModelName, x.Description, x.SortOrder, x.IsActive, x.CreatedAtUtc, x.UpdatedAtUtc))
+            .SingleAsync(cancellationToken);
+
     private async Task<int> NextManufacturerSortOrderAsync(CancellationToken cancellationToken)
     {
         return (await dbContext.TransportManufacturers.Where(x => !x.IsDeleted).Select(x => (int?)x.SortOrder).MaxAsync(cancellationToken) ?? 0) + 1;

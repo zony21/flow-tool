@@ -4,11 +4,29 @@ import type {
   SaveTransportEquipmentRequest,
   SaveTransportLocationRequest,
   SaveTransportManufacturerRequest,
+  SaveTransportVehicleModelRequest,
   TransportCommand,
   TransportEquipment,
   TransportLocation,
   TransportManufacturer,
+  TransportVehicleModel,
 } from '../types/transport'
+
+export async function fetchTransportVehicleModels(params?: { manufacturerId?: string; vehicleType?: 'AGF' | 'AGV'; includeInactive?: boolean }): Promise<TransportVehicleModel[]> {
+  return (await httpClient.get<TransportVehicleModel[]>('/api/transport/vehicle-models', { params })).data
+}
+
+export async function createTransportVehicleModel(request: SaveTransportVehicleModelRequest): Promise<TransportVehicleModel> {
+  return (await httpClient.post<TransportVehicleModel>('/api/transport/vehicle-models', request)).data
+}
+
+export async function updateTransportVehicleModel(id: string, request: SaveTransportVehicleModelRequest): Promise<TransportVehicleModel> {
+  return (await httpClient.put<TransportVehicleModel>(`/api/transport/vehicle-models/${id}`, request)).data
+}
+
+export async function deleteTransportVehicleModel(id: string): Promise<void> {
+  await httpClient.delete(`/api/transport/vehicle-models/${id}`)
+}
 
 export async function fetchTransportManufacturers(): Promise<TransportManufacturer[]> {
   const response = await httpClient.get<TransportManufacturer[]>('/api/transport/manufacturers')

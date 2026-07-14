@@ -40,6 +40,19 @@ public sealed record TransportEquipmentDto(
     DateTime CreatedAtUtc,
     DateTime UpdatedAtUtc);
 
+public sealed record TransportVehicleModelDto(
+    Guid VehicleModelId,
+    Guid ManufacturerId,
+    string ManufacturerName,
+    string VehicleType,
+    string ModelCode,
+    string ModelName,
+    string? Description,
+    int SortOrder,
+    bool IsActive,
+    DateTime CreatedAtUtc,
+    DateTime UpdatedAtUtc);
+
 public sealed record SaveTransportManufacturerRequest(
     string Name,
     string VehicleType,
@@ -64,3 +77,12 @@ public sealed record SaveTransportEquipmentRequest(
     string Category,
     string? Description,
     int? SortOrder);
+
+public sealed record SaveTransportVehicleModelRequest(
+    Guid ManufacturerId,
+    string VehicleType,
+    string ModelCode,
+    string ModelName,
+    string? Description,
+    int? SortOrder,
+    bool IsActive = true);

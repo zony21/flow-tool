@@ -1,6 +1,6 @@
 <template>
   <div class="layout-main">
-    <header class="header">AI Flow Designer</header>
+    <header class="header"><span>AI Flow Designer</span><RouterLink to="/projects">Project</RouterLink><RouterLink to="/settings">AGF・AGVマスタ</RouterLink></header>
     <main class="main-content">
       <slot />
     </main>
@@ -22,7 +22,10 @@
   background: #0f172a;
   color: #f8fafc;
   font-weight: 600;
+  display: flex;
+  gap: 20px;
 }
+.header a { color: #f8fafc; }
 
 .main-content {
   flex: 1 1 auto;

@@ -64,6 +64,30 @@ export type TransportEquipment = {
   updatedAtUtc: string
 }
 
+export type TransportVehicleModel = {
+  vehicleModelId: string
+  manufacturerId: string
+  manufacturerName: string
+  vehicleType: 'AGF' | 'AGV'
+  modelCode: string
+  modelName: string
+  description?: string | null
+  sortOrder: number
+  isActive: boolean
+  createdAtUtc: string
+  updatedAtUtc: string
+}
+
+export type SaveTransportVehicleModelRequest = {
+  manufacturerId: string
+  vehicleType: 'AGF' | 'AGV'
+  modelCode: string
+  modelName: string
+  description?: string | null
+  sortOrder?: number | null
+  isActive: boolean
+}
+
 export type SaveTransportManufacturerRequest = {
   name: string
   vehicleType: VehicleType | string

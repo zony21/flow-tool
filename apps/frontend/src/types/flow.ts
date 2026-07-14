@@ -51,6 +51,7 @@ export type FlowNode = {
   commandId?: string | null
   locationId?: string | null
   equipmentId?: string | null
+  vehicleModelId?: string | null
   rwType?: TransportRwType | null
 }
 
@@ -106,6 +107,7 @@ export type SaveNodeRequest = {
   commandId?: string | null
   locationId?: string | null
   equipmentId?: string | null
+  vehicleModelId?: string | null
   rwType?: TransportRwType | null
 }
 

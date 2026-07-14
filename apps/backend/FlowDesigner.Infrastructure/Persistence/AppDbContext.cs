@@ -23,6 +23,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<TransportCommand> TransportCommands => Set<TransportCommand>();
     public DbSet<TransportLocation> TransportLocations => Set<TransportLocation>();
     public DbSet<TransportEquipment> TransportEquipments => Set<TransportEquipment>();
+    public DbSet<TransportVehicleModel> TransportVehicleModels => Set<TransportVehicleModel>();
 
     public DbSet<User> Users => Set<User>();
     public DbSet<ProjectMember> ProjectMembers => Set<ProjectMember>();
@@ -181,6 +182,16 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.Property(x => x.Description).HasMaxLength(2000);
             entity.HasOne(x => x.Project).WithMany(x => x.TransportEquipments).HasForeignKey(x => x.ProjectId).OnDelete(DeleteBehavior.Cascade);
         });
+
+        modelBuilder.Entity<TransportVehicleModel>(entity =>
+        {
+            entity.ToTable("TRANSPORT_VEHICLE_MODEL"); entity.HasKey(x => x.VehicleModelId);
+            entity.HasIndex(x => new { x.ManufacturerId, x.VehicleType, x.ModelCode, x.IsDeleted }).IsUnique();
+            entity.Property(x => x.VehicleType).HasMaxLength(10).IsRequired(); entity.Property(x => x.ModelCode).HasMaxLength(120).IsRequired(); entity.Property(x => x.ModelName).HasMaxLength(200).IsRequired();
+            entity.HasOne(x => x.Manufacturer).WithMany(x => x.VehicleModels).HasForeignKey(x => x.ManufacturerId).OnDelete(DeleteBehavior.Restrict);
+        });
+        modelBuilder.Entity<FlowNode>().HasOne(x => x.VehicleModel).WithMany(x => x.Nodes).HasForeignKey(x => x.VehicleModelId).OnDelete(DeleteBehavior.Restrict);
+
 
         modelBuilder.Entity<User>(entity =>
         {

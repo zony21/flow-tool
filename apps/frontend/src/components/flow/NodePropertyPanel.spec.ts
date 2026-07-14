@@ -7,6 +7,7 @@ const transportApi = vi.hoisted(() => ({
   fetchTransportCommands: vi.fn(),
   fetchTransportEquipments: vi.fn(),
   fetchTransportLocations: vi.fn(),
+  fetchTransportVehicleModels: vi.fn(),
 }))
 
 vi.mock('../../api/transportApi', () => transportApi)
@@ -38,6 +39,7 @@ describe('NodePropertyPanel Location selector', () => {
     transportApi.fetchTransportLocations.mockResolvedValue([{
       locationId: 'location-1', projectId: 'project-1', name: 'P1', locationType: '経由点', sortOrder: 1, isDeleted: false, createdAtUtc: '', updatedAtUtc: '',
     }])
+    transportApi.fetchTransportVehicleModels.mockResolvedValue([])
   })
 
   it('Transport FlowだけにLocation selectorを表示する', async () => {
