@@ -141,7 +141,7 @@ onMounted(load)
 
 <template>
   <MainLayout>
-    <section class="transport-master-page">
+    <section class="transport-master-page manufacturer-page">
       <nav class="transport-breadcrumbs" aria-label="パンくず">
         <span>グローバル設定</span>
         <i class="pi pi-angle-right" />
@@ -213,7 +213,7 @@ onMounted(load)
             v-for="item in filteredItems"
             v-else
             :key="item.manufacturerId"
-            class="transport-table__row"
+            class="transport-table__row manufacturer-row"
           >
             <button class="transport-primary-cell" type="button" @click="showTypes(item)">
               <span class="transport-avatar"><i class="pi pi-building" /></span>
@@ -227,10 +227,10 @@ onMounted(load)
               <i :class="item.isActive ? 'pi pi-check-circle' : 'pi pi-pause-circle'" />
               {{ item.isActive ? '有効' : '無効' }}
             </span>
-            <div class="transport-actions">
-              <Button label="AGF・AGV" icon="pi pi-arrow-right" text @click="showTypes(item)" />
-              <Button icon="pi pi-pencil" text rounded aria-label="編集" @click="open(item)" />
-              <Button icon="pi pi-trash" text rounded severity="danger" aria-label="削除" @click="remove(item)" />
+            <div class="transport-actions manufacturer-actions">
+              <Button label="設定" icon="pi pi-arrow-right" size="small" outlined @click="showTypes(item)" />
+              <Button label="編集" icon="pi pi-pencil" size="small" text @click="open(item)" />
+              <Button label="削除" icon="pi pi-trash" size="small" text severity="danger" @click="remove(item)" />
             </div>
           </article>
         </div>
@@ -285,3 +285,61 @@ onMounted(load)
     </section>
   </MainLayout>
 </template>
+
+<style scoped>
+.manufacturer-page :deep(.transport-table--manufacturers .transport-table__head),
+.manufacturer-page :deep(.transport-table--manufacturers .transport-table__row) {
+  grid-template-columns: minmax(180px, 1.05fr) minmax(180px, 1.25fr) 92px 250px;
+}
+
+.manufacturer-actions {
+  min-width: 250px;
+  flex-wrap: nowrap;
+  overflow: visible;
+}
+
+.manufacturer-actions :deep(.p-button) {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+@media (max-width: 980px) {
+  .manufacturer-page :deep(.transport-table--manufacturers .transport-table__head) {
+    display: none;
+  }
+
+  .manufacturer-page :deep(.transport-table--manufacturers .transport-table__row) {
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: 12px;
+  }
+
+  .manufacturer-page :deep(.transport-table--manufacturers .transport-table__row > :nth-child(2)),
+  .manufacturer-page :deep(.transport-table--manufacturers .transport-table__row > .manufacturer-actions) {
+    grid-column: 1 / -1;
+  }
+
+  .manufacturer-actions {
+    min-width: 0;
+    justify-content: flex-start;
+    padding-top: 10px;
+    border-top: 1px solid #eef2f7;
+  }
+}
+
+@media (max-width: 520px) {
+  .manufacturer-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
+  }
+
+  .manufacturer-actions :deep(.p-button:first-child) {
+    grid-column: 1 / -1;
+  }
+
+  .manufacturer-actions :deep(.p-button) {
+    justify-content: center;
+    width: 100%;
+  }
+}
+</style>
