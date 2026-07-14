@@ -1,153 +1,341 @@
-# 04_26_TRANSPORT詳細設計
+# 04_26 TRANSPORT Detailed Design
 
-## 1. 本書の目的
+## 1. Purpose
 
-本書は、AGF/AGV搬送フローで利用するTransport関連テーブルの詳細設計を定義する。
+This document defines the Transport master and Project Transport data used by AGF / AGV Transport Flows.
 
-Transport関連テーブルは、メーカー、コマンド、ロケーション、設備をProject単位で管理し、Transport FlowのNode属性および搬送表出力に利用する。
+The design separates global reusable master data from Project-level facility data.
 
-## 2. テーブル概要
+```text
+Global Transport Master
+├── TRANSPORT_MANUFACTURER
+├── TRANSPORT_MANUFACTURER_VEHICLE_TYPE
+└── TRANSPORT_COMMAND
 
-Transport関連テーブルは以下で構成する。
+Project-level Transport Data
+├── TRANSPORT_LOCATION
+└── TRANSPORT_EQUIPMENT
+```
 
-- TRANSPORT_MANUFACTURER
-- TRANSPORT_COMMAND
-- LOCATION
-- EQUIPMENT
+## 2. Authoritative Hierarchy
 
-## 3. 採用理由
+The AGF / AGV command hierarchy is:
 
-AGF/AGV搬送ではメーカーごとに動作コマンドが異なる。
+```text
+Manufacturer
+├── AGF
+│    └── Commands
+└── AGV
+     └── Commands
+```
 
-また、搬送表にはロケーション、設備、R/W、処理区分が必要であり、これらを自由文字列だけで管理すると表記揺れが発生する。
+A Manufacturer may support AGF, AGV, or both.
 
-そのためProject単位のマスタとして構造化する。
+A Command belongs to one Manufacturer Vehicle Type, not directly to a Project.
 
-## 4. TRANSPORT_MANUFACTURER
+Vehicle models and physical vehicle instances are outside this design.
 
-### 4.1 概要
+## 3. TRANSPORT_MANUFACTURER
 
-AGF/AGVメーカーを管理する。
+### 3.1 Responsibility
 
-### 4.2 カラム一覧
+Stores a global AGF / AGV manufacturer reusable across Projects.
 
-| カラム | 型 | NULL | 説明 |
+A Manufacturer does not store one fixed Vehicle Type.
+
+### 3.2 Columns
+
+| Column | Type | NULL | Description |
 | --- | --- | --- | --- |
-| manufacturer_id | TEXT | NO | PK、GUID |
-| project_id | TEXT | NO | PROJECT FK |
-| manufacturer_name | TEXT | NO | メーカー名 |
-| vehicle_type | TEXT | NO | AGF、AGV、AMRなど |
-| description | TEXT | YES | 説明 |
-| display_order | INTEGER | NO | 表示順 |
-| is_deleted | INTEGER | NO | 論理削除 |
-| created_at | TEXT | NO | 作成日時 |
-| created_by | TEXT | NO | 作成者 |
-| updated_at | TEXT | NO | 更新日時 |
-| updated_by | TEXT | NO | 更新者 |
+| manufacturer_id | TEXT | NO | Primary key, GUID |
+| name | TEXT | NO | Manufacturer name |
+| description | TEXT | YES | Description |
+| sort_order | INTEGER | NO | Display order |
+| is_active | INTEGER | NO | Active status |
+| is_deleted | INTEGER | NO | Soft-deletion flag |
+| created_at_utc | TEXT | NO | Creation timestamp |
+| created_by_user_id | TEXT | YES | Creator |
+| updated_at_utc | TEXT | NO | Update timestamp |
+| updated_by_user_id | TEXT | YES | Updater |
+| deleted_at_utc | TEXT | YES | Deletion timestamp |
+| deleted_by_user_id | TEXT | YES | Deleter |
+
+The former Manufacturer `vehicle_type` column is obsolete after migration to `TRANSPORT_MANUFACTURER_VEHICLE_TYPE`.
+
+## 4. TRANSPORT_MANUFACTURER_VEHICLE_TYPE
+
+### 4.1 Responsibility
+
+Stores one Vehicle Type supported by one Manufacturer.
+
+Allowed values in this cycle:
+
+```text
+AGF
+AGV
+```
+
+A Manufacturer may have both records.
+
+### 4.2 Columns
+
+| Column | Type | NULL | Description |
+| --- | --- | --- | --- |
+| manufacturer_vehicle_type_id | TEXT | NO | Primary key, GUID |
+| manufacturer_id | TEXT | NO | TRANSPORT_MANUFACTURER reference |
+| vehicle_type | TEXT | NO | `AGF` or `AGV` |
+| description | TEXT | YES | Description for this combination |
+| sort_order | INTEGER | NO | Display order |
+| is_active | INTEGER | NO | Active status |
+| is_deleted | INTEGER | NO | Soft-deletion flag |
+| created_at_utc | TEXT | NO | Creation timestamp |
+| created_by_user_id | TEXT | YES | Creator |
+| updated_at_utc | TEXT | NO | Update timestamp |
+| updated_by_user_id | TEXT | YES | Updater |
+| deleted_at_utc | TEXT | YES | Deletion timestamp |
+| deleted_by_user_id | TEXT | YES | Deleter |
+
+### 4.3 Constraints
+
+Unique among non-deleted records:
+
+```text
+manufacturer_id + vehicle_type
+```
+
+Delete behavior from Manufacturer must be `RESTRICT` or equivalent application-level protection.
 
 ## 5. TRANSPORT_COMMAND
 
-### 5.1 概要
+### 5.1 Responsibility
 
-メーカー別の動作コマンドを管理する。
+Stores one command or API supported by one Manufacturer Vehicle Type.
 
-### 5.2 カラム一覧
+The authoritative ownership path is:
 
-| カラム | 型 | NULL | 説明 |
+```text
+TRANSPORT_COMMAND
+  -> TRANSPORT_MANUFACTURER_VEHICLE_TYPE
+  -> TRANSPORT_MANUFACTURER
+```
+
+### 5.2 Columns
+
+| Column | Type | NULL | Description |
 | --- | --- | --- | --- |
-| command_id | TEXT | NO | PK、GUID |
-| manufacturer_id | TEXT | NO | TRANSPORT_MANUFACTURER FK |
-| command_name | TEXT | NO | TravelToPosture、Loadingなど |
-| process_category | TEXT | NO | 移動、荷上げ、荷下ろしなど |
-| description | TEXT | YES | 説明 |
-| display_order | INTEGER | NO | 表示順 |
-| is_deleted | INTEGER | NO | 論理削除 |
-| created_at | TEXT | NO | 作成日時 |
-| created_by | TEXT | NO | 作成者 |
-| updated_at | TEXT | NO | 更新日時 |
-| updated_by | TEXT | NO | 更新者 |
+| command_id | TEXT | NO | Primary key, GUID |
+| manufacturer_vehicle_type_id | TEXT | NO | Manufacturer Vehicle Type reference |
+| command_code | TEXT | NO | API or command identifier |
+| command_name | TEXT | NO | Human-readable name |
+| process_type | TEXT | NO | Transport process classification |
+| description | TEXT | YES | Parameters, response notes, or description |
+| sort_order | INTEGER | NO | Display order |
+| is_active | INTEGER | NO | Active status |
+| is_deleted | INTEGER | NO | Soft-deletion flag |
+| created_at_utc | TEXT | NO | Creation timestamp |
+| created_by_user_id | TEXT | YES | Creator |
+| updated_at_utc | TEXT | NO | Update timestamp |
+| updated_by_user_id | TEXT | YES | Updater |
+| deleted_at_utc | TEXT | YES | Deletion timestamp |
+| deleted_by_user_id | TEXT | YES | Deleter |
 
-## 6. LOCATION
+### 5.3 Constraints
 
-### 6.1 概要
+Unique among non-deleted records:
 
-搬送位置をProject単位で管理する。
+```text
+manufacturer_vehicle_type_id + command_code
+```
 
-### 6.2 カラム一覧
+The former direct `manufacturer_id` relationship is obsolete after migration.
 
-| カラム | 型 | NULL | 説明 |
-| --- | --- | --- | --- |
-| location_id | TEXT | NO | PK、GUID |
-| project_id | TEXT | NO | PROJECT FK |
-| location_code | TEXT | NO | P1、A1、ST1など |
-| location_name | TEXT | YES | 表示名 |
-| location_type | TEXT | NO | 経由点、荷役場所、充電位置、待機場所など |
-| description | TEXT | YES | 説明 |
-| display_order | INTEGER | NO | 表示順 |
-| is_deleted | INTEGER | NO | 論理削除 |
-| created_at | TEXT | NO | 作成日時 |
-| created_by | TEXT | NO | 作成者 |
-| updated_at | TEXT | NO | 更新日時 |
-| updated_by | TEXT | NO | 更新者 |
+## 6. Action Unit Assignment
 
-## 7. EQUIPMENT
+The left-side Flow unit currently displayed as `動作` may assign multiple Manufacturer Vehicle Types.
 
-### 7.1 概要
+The actual structured entity represented by this UI item must be confirmed from the implementation before naming the physical table.
 
-PLC、RCS、WCS、コンベア、シャッターなどの実設備をProject単位で管理する。
+The required logical relationship is:
 
-### 7.2 カラム一覧
+```text
+ACTION_UNIT N:M TRANSPORT_MANUFACTURER_VEHICLE_TYPE
+```
 
-| カラム | 型 | NULL | 説明 |
-| --- | --- | --- | --- |
-| equipment_id | TEXT | NO | PK、GUID |
-| project_id | TEXT | NO | PROJECT FK |
-| equipment_name | TEXT | NO | 設備名 |
-| equipment_category | TEXT | NO | PLC、RCS、WCS、コンベアなど |
-| description | TEXT | YES | 説明 |
-| display_order | INTEGER | NO | 表示順 |
-| is_deleted | INTEGER | NO | 論理削除 |
-| created_at | TEXT | NO | 作成日時 |
-| created_by | TEXT | NO | 作成者 |
-| updated_at | TEXT | NO | 更新日時 |
-| updated_by | TEXT | NO | 更新者 |
+Recommended assignment columns:
 
-## 8. Index
+```text
+assignment_id
+action_unit_id
+manufacturer_vehicle_type_id
+sort_order
+created_at_utc
+created_by_user_id
+```
 
-- idx_transport_manufacturer_project: project_id, is_deleted, display_order
-- idx_transport_command_manufacturer: manufacturer_id, is_deleted, display_order
-- idx_location_project: project_id, is_deleted, display_order
-- idx_equipment_project: project_id, is_deleted, display_order
+Unique constraint:
 
-## 9. 削除ルール
+```text
+action_unit_id + manufacturer_vehicle_type_id
+```
 
-各マスタは論理削除とする。
+If the current Action Unit is implemented as `STAGE`, use a Stage assignment table and `stage_id`.
 
-Nodeで参照中のデータは削除不可とする。
+If it is implemented as another structured entity, use that authoritative entity instead of creating a duplicate Action entity.
 
-## 10. 利用画面
+## 7. TRANSPORT_LOCATION
 
-- AGF/AGVメーカー管理画面
-- AGF/AGVコマンド管理画面
-- 設備管理画面
-- フローエディタ画面
-- ロケーション管理ダイアログ
+### 7.1 Responsibility
 
-## 11. 利用API
+Stores physical facility positions per Project.
 
-- Transport Manufacturer API
-- Transport Command API
-- Location API
-- Equipment API
+A Transport Node references an existing Project Location through `Node.LocationId`.
 
-## 12. テスト観点
+### 7.2 Main Columns
 
-- Project単位でメーカーを管理できること
-- メーカー単位でコマンドを管理できること
-- ロケーションを追加し、Transport Nodeで選択できること
-- 設備を追加し、Transport Nodeで選択できること
-- Nodeで使用中のマスタを削除できないこと
+```text
+location_id
+project_id
+name
+location_type
+description
+sort_order
+is_deleted
+audit columns
+```
 
-## 13. 完了条件
+## 8. TRANSPORT_EQUIPMENT
 
-Transport Flowで利用するメーカー、コマンド、ロケーション、設備をProject単位で管理でき、Node属性および搬送表生成に利用できること。
+### 8.1 Responsibility
+
+Stores Project-level facility or system equipment such as PLC, RCS, WCS, conveyor, shutter, robot, or sensor.
+
+It is not the AGF / AGV manufacturer command master.
+
+### 8.2 Main Columns
+
+```text
+equipment_id
+project_id
+name
+category
+description
+sort_order
+is_deleted
+audit columns
+```
+
+## 9. Relationships
+
+```text
+TRANSPORT_MANUFACTURER 1:N TRANSPORT_MANUFACTURER_VEHICLE_TYPE
+TRANSPORT_MANUFACTURER_VEHICLE_TYPE 1:N TRANSPORT_COMMAND
+ACTION_UNIT N:M TRANSPORT_MANUFACTURER_VEHICLE_TYPE
+PROJECT 1:N TRANSPORT_LOCATION
+PROJECT 1:N TRANSPORT_EQUIPMENT
+NODE N:1 TRANSPORT_COMMAND (optional)
+NODE N:1 TRANSPORT_LOCATION (optional)
+NODE N:1 TRANSPORT_EQUIPMENT (optional)
+```
+
+## 10. Indexes
+
+Recommended indexes:
+
+```text
+TRANSPORT_MANUFACTURER:
+  is_deleted, is_active, sort_order
+
+TRANSPORT_MANUFACTURER_VEHICLE_TYPE:
+  manufacturer_id, vehicle_type, is_deleted
+  manufacturer_id, is_active, sort_order
+
+TRANSPORT_COMMAND:
+  manufacturer_vehicle_type_id, command_code, is_deleted
+  manufacturer_vehicle_type_id, is_active, sort_order
+
+Action assignment:
+  action_unit_id, sort_order
+  manufacturer_vehicle_type_id
+
+TRANSPORT_LOCATION:
+  project_id, is_deleted, sort_order
+
+TRANSPORT_EQUIPMENT:
+  project_id, is_deleted, sort_order
+```
+
+## 11. Migration Rule
+
+Migrate existing data without changing existing Command IDs.
+
+Recommended sequence:
+
+```text
+1. Create TRANSPORT_MANUFACTURER_VEHICLE_TYPE.
+2. Create one Vehicle Type row from each existing Manufacturer.vehicle_type.
+3. Add manufacturer_vehicle_type_id to TRANSPORT_COMMAND.
+4. Map each existing Command to the generated Vehicle Type row.
+5. Preserve command_id values.
+6. Deprecate or remove Manufacturer.vehicle_type.
+7. Deprecate or remove Command.manufacturer_id.
+```
+
+If immediate removal is unsafe, obsolete columns may remain temporarily, but they must not remain authoritative.
+
+## 12. Deactivation and Deletion
+
+All master deletion is soft deletion.
+
+Inactive records cannot be newly assigned or selected.
+
+Existing references remain stored and must display an inactive indication.
+
+Deletion restrictions:
+
+```text
+Manufacturer:
+  cannot delete while Vehicle Types, Commands, or Flow assignments exist
+
+Manufacturer Vehicle Type:
+  cannot delete while Commands or Flow assignments exist
+
+Command:
+  cannot delete while referenced by a Node
+
+Location / Equipment:
+  cannot delete while referenced by a Node
+```
+
+## 13. Save, Snapshot, and Duplication
+
+Action Unit assignments must be preserved through:
+
+```text
+Flow save
+Flow load
+Version Snapshot
+Flow duplication
+JSON export
+AI DSL export
+```
+
+Flow duplication regenerates Action Unit and assignment IDs, remaps assignments to duplicated Action Units, and retains global `manufacturer_vehicle_type_id` references.
+
+## 14. Test Conditions
+
+Confirm that:
+
+- one Manufacturer can own AGF and AGV;
+- duplicate AGF or AGV under one Manufacturer is rejected;
+- Commands belong to Manufacturer plus Vehicle Type;
+- duplicate Command Code is rejected within one Manufacturer Vehicle Type;
+- the same Command Code is allowed under another Manufacturer Vehicle Type;
+- one Action Unit may assign multiple Manufacturer Vehicle Types;
+- duplicate Action Unit assignments are rejected;
+- Node Command validation rejects a Command outside the Action Unit assignments;
+- assignments survive save, load, Snapshot, and duplication;
+- existing Location and Equipment behavior remains Project-scoped.
+
+## 15. Completion Condition
+
+Global Manufacturer, Manufacturer Vehicle Type, and Command master data are structurally separated from Project Location and Equipment data, and Flow Action Units can reference multiple Manufacturer Vehicle Types without duplicating master definitions per Project.
