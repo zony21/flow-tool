@@ -6,7 +6,7 @@ import ProjectListPage from '../pages/ProjectListPage.vue'
 import ProjectDetailPage from '../pages/ProjectDetailPage.vue'
 import FlowEditorPage from '../pages/FlowEditorPage.vue'
 import VersionManagementPage from '../pages/VersionManagementPage.vue'
-import SettingsPage from '../pages/SettingsPage.vue'
+import TransportManufacturersPage from '../pages/TransportManufacturersPage.vue'
 import TransportVehicleTypesPage from '../pages/TransportVehicleTypesPage.vue'
 import TransportCommandsPage from '../pages/TransportCommandsPage.vue'
 import LoginPage from '../pages/LoginPage.vue'
@@ -22,7 +22,7 @@ const router = createRouter({
     { path: '/projects/:projectId/flows/:flowId/editor', name: 'flow-editor', component: FlowEditorPage, meta: { requiresAuth: true, permission: PermissionCodes.FlowRead } },
     { path: '/projects/:projectId/flows/:flowId/versions', name: 'flow-versions', component: VersionManagementPage, meta: { requiresAuth: true, permission: PermissionCodes.VersionRead } },
     { path: '/settings', redirect: { name: 'transport-manufacturers' } },
-    { path: '/settings/transport/manufacturers', name: 'transport-manufacturers', component: SettingsPage, meta: { requiresAuth: true } },
+    { path: '/settings/transport/manufacturers', name: 'transport-manufacturers', component: TransportManufacturersPage, meta: { requiresAuth: true } },
     { path: '/settings/transport/manufacturers/:manufacturerId/vehicle-types', name: 'transport-vehicle-types', component: TransportVehicleTypesPage, meta: { requiresAuth: true } },
     { path: '/settings/transport/manufacturers/:manufacturerId/vehicle-types/:typeId/commands', name: 'transport-commands', component: TransportCommandsPage, meta: { requiresAuth: true } },
     { path: '/login', name: 'login', component: LoginPage },
