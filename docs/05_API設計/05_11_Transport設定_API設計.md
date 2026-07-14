@@ -2,47 +2,254 @@
 
 ## 1. Purpose
 
-Transport Settings APIs provide Transport master data used by Transport Flows. Location and Equipment are Project-level master data. The current Command ownership model is global through its Manufacturer relationship.
+Transport Settings APIs provide global AGF / AGV command master data and Project-level facility data used by Transport Flows.
 
-## 2. Project Location API
+Ownership is separated as follows:
 
-### List
+```text
+Global Transport Master
+├── Manufacturer
+├── Manufacturer Vehicle Type
+└── Command
 
-```http
-GET /api/projects/{projectId}/transport/locations
+Project-level Transport Data
+├── Location
+└── Equipment
 ```
 
-Returns non-deleted Locations for the Project, ordered by `SortOrder` and name. The response supplies the Node Detail selector and Project Transport Settings with:
+The global command hierarchy is:
 
-- `LocationId`
-- `ProjectId`
-- `Name`
-- `LocationType`
-- `Description`
-- `SortOrder`
-- `IsDeleted`
-- creation and update timestamps
-
-Soft-deleted Locations are excluded from the list, and the response also exposes the current deletion flag. An active/inactive redesign is outside this cycle.
-
-### Create
-
-```http
-POST /api/projects/{projectId}/transport/locations
+```text
+Manufacturer
+├── AGF
+│    └── Commands
+└── AGV
+     └── Commands
 ```
 
-Required fields are `Name` and `LocationType`. Optional fields are `Description` and `SortOrder`.
+A Manufacturer may support AGF, AGV, or both.
 
-### Update and Delete
+## 2. Global Manufacturer API
 
 ```http
-PUT /api/projects/{projectId}/transport/locations/{locationId}
+GET    /api/transport/manufacturers
+POST   /api/transport/manufacturers
+PUT    /api/transport/manufacturers/{manufacturerId}
+DELETE /api/transport/manufacturers/{manufacturerId}
+```
+
+### Manufacturer DTO
+
+```text
+ManufacturerId
+Name
+Description
+SortOrder
+IsActive
+CreatedAtUtc
+UpdatedAtUtc
+```
+
+The Manufacturer DTO does not contain one fixed `VehicleType`.
+
+Create and update validate:
+
+```text
+Name is required
+Name is unique according to the existing master policy
+IsActive is valid
+```
+
+Delete uses soft deletion and is rejected while dependent Vehicle Types, Commands, or Flow assignments exist.
+
+## 3. Manufacturer Vehicle Type API
+
+```http
+GET    /api/transport/manufacturers/{manufacturerId}/vehicle-types
+POST   /api/transport/manufacturers/{manufacturerId}/vehicle-types
+PUT    /api/transport/manufacturers/{manufacturerId}/vehicle-types/{manufacturerVehicleTypeId}
+DELETE /api/transport/manufacturers/{manufacturerId}/vehicle-types/{manufacturerVehicleTypeId}
+```
+
+### Manufacturer Vehicle Type DTO
+
+```text
+ManufacturerVehicleTypeId
+ManufacturerId
+ManufacturerName
+VehicleType
+Description
+SortOrder
+IsActive
+CreatedAtUtc
+UpdatedAtUtc
+```
+
+Allowed values:
+
+```text
+AGF
+AGV
+```
+
+Create and update validate:
+
+```text
+Manufacturer exists and is not deleted
+VehicleType is AGF or AGV
+Manufacturer + VehicleType is not duplicated among non-deleted records
+```
+
+Delete uses soft deletion and is rejected while Commands or Flow Action Unit assignments reference the record.
+
+## 4. Global Command API
+
+```http
+GET    /api/transport/manufacturer-vehicle-types/{manufacturerVehicleTypeId}/commands
+POST   /api/transport/manufacturer-vehicle-types/{manufacturerVehicleTypeId}/commands
+PUT    /api/transport/manufacturer-vehicle-types/{manufacturerVehicleTypeId}/commands/{commandId}
+DELETE /api/transport/manufacturer-vehicle-types/{manufacturerVehicleTypeId}/commands/{commandId}
+```
+
+Optional global search may be provided:
+
+```http
+GET /api/transport/commands?manufacturerId={manufacturerId}&vehicleType=AGF
+```
+
+### Command DTO
+
+```text
+CommandId
+ManufacturerVehicleTypeId
+ManufacturerId
+ManufacturerName
+VehicleType
+CommandCode
+CommandName
+ProcessType
+Description
+SortOrder
+IsActive
+CreatedAtUtc
+UpdatedAtUtc
+```
+
+Create and update validate:
+
+```text
+Manufacturer Vehicle Type exists and is not deleted
+CommandCode is required
+CommandName is required
+ProcessType is required
+CommandCode is unique within the Manufacturer Vehicle Type
+```
+
+A Command is not Project-owned.
+
+Delete uses soft deletion and is rejected while a Node references the Command.
+
+## 5. Action Unit Assignment API
+
+The left-side Flow unit currently displayed as `動作` may assign multiple Manufacturer Vehicle Types.
+
+The actual structured entity corresponding to this UI unit must be confirmed from the implementation before finalizing the physical route name.
+
+Logical operations required:
+
+```http
+GET    /api/projects/{projectId}/flows/{flowId}/action-units/{actionUnitId}/manufacturer-vehicle-types
+PUT    /api/projects/{projectId}/flows/{flowId}/action-units/{actionUnitId}/manufacturer-vehicle-types
+```
+
+The PUT operation replaces the assignment set atomically.
+
+### Assignment Request
+
+```text
+ManufacturerVehicleTypeIds: Guid[]
+```
+
+### Assignment Response
+
+```text
+ActionUnitId
+Assignments[]
+  ManufacturerVehicleTypeId
+  ManufacturerId
+  ManufacturerName
+  VehicleType
+  ActiveCommandCount
+  IsActive
+```
+
+Validation:
+
+```text
+Action Unit belongs to the specified Flow
+Flow belongs to the specified Project
+all Manufacturer Vehicle Types exist and are not deleted
+duplicate IDs are rejected or normalized consistently
+inactive values cannot be newly assigned
+existing inactive assignments remain loadable
+```
+
+If Action Unit assignments are included directly in the Flow Structure API instead of separate endpoints, the same validation and response information remain required.
+
+## 6. Node Command Filtering
+
+The Node Command selector must use the Manufacturer Vehicle Types assigned to the Node's Action Unit.
+
+The available command set is:
+
+```text
+active, non-deleted Commands
+whose ManufacturerVehicleTypeId is assigned to the Action Unit
+```
+
+Recommended option display:
+
+```text
+Manufacturer A / AGF / TravelToPosture
+Manufacturer B / AGV / MoveTask
+```
+
+If no Manufacturer Vehicle Type is assigned, the command list is empty and the UI displays guidance.
+
+Flow Structure save validation rejects a new Node Command reference that does not belong to the Action Unit's assigned Manufacturer Vehicle Types.
+
+Existing inactive Command references remain loadable and visible with an inactive indication.
+
+## 7. Project Location API
+
+```http
+GET    /api/projects/{projectId}/transport/locations
+POST   /api/projects/{projectId}/transport/locations
+PUT    /api/projects/{projectId}/transport/locations/{locationId}
 DELETE /api/projects/{projectId}/transport/locations/{locationId}
 ```
 
-Delete uses soft deletion. Project Transport Settings owns these management operations; Node Detail only selects an existing Location.
+Location is Project-level master data.
 
-## 3. Project Equipment API
+The list supplies the Node Location selector with:
+
+```text
+LocationId
+ProjectId
+Name
+LocationType
+Description
+SortOrder
+IsDeleted
+CreatedAtUtc
+UpdatedAtUtc
+```
+
+Soft-deleted Locations are excluded from normal lists.
+
+Flow Structure validation rejects a Location that is missing, deleted, or belongs to another Project.
+
+## 8. Project Equipment API
 
 ```http
 GET    /api/projects/{projectId}/transport/equipments
@@ -51,27 +258,60 @@ PUT    /api/projects/{projectId}/transport/equipments/{equipmentId}
 DELETE /api/projects/{projectId}/transport/equipments/{equipmentId}
 ```
 
-Equipment belongs to a Project and is validated against the Flow Project when referenced by a Node.
+Equipment remains Project-level facility or system data.
 
-## 4. Manufacturer and Command API
+It is not the AGF / AGV Manufacturer Vehicle Type master.
 
-```http
-GET    /api/transport/manufacturers
-POST   /api/transport/manufacturers
-GET    /api/transport/commands
-POST   /api/transport/commands
+Flow Structure validation rejects Equipment that is missing, deleted, or belongs to another Project.
+
+## 9. Deactivation and Existing References
+
+Inactive Manufacturer, Manufacturer Vehicle Type, or Command records:
+
+```text
+cannot be newly assigned or newly selected
+remain loadable when already referenced
+must be returned with enough status information for the UI to display an inactive indication
 ```
 
-Update and delete use the corresponding master ID path. Commands remain associated with Manufacturers according to the current implementation.
+Deactivation must not silently clear Flow assignments or Node Command references.
 
-## 5. Errors and Permissions
+## 10. Errors
 
-- `400`: invalid request data
-- `404`: Project or master record not found
-- `422`: invalid Flow structure reference or value
+Recommended responses:
 
-Read operations require Flow read permission. Create, update, and delete operations require Flow update permission in the current API implementation.
+```text
+400: invalid request format or required field
+404: Project, Flow, Action Unit, or master record not found
+409: duplicate master value or delete blocked by references
+422: invalid Flow assignment or Node reference
+```
 
-## 6. Node Reference Rule
+Use the application's existing error response structure.
 
-A Transport Node stores only `LocationId`. Flow Structure validation rejects a Location that is missing, deleted, or belongs to another Project. Normal Flow clears the reference.
+## 11. Permissions
+
+Global Manufacturer, Manufacturer Vehicle Type, and Command mutation requires the global Transport master administration permission available in the application.
+
+Project Location, Equipment, and Flow Action Unit assignment require the corresponding Project Flow update permission.
+
+If a dedicated global permission does not yet exist, the implementation must report the gap rather than treating Project ownership as the replacement design.
+
+## 12. Snapshot and Duplication
+
+Action Unit assignments must be preserved through:
+
+```text
+Flow save
+Flow load
+Version Snapshot
+Flow duplication
+JSON export
+AI DSL export
+```
+
+Flow duplication retains global Manufacturer Vehicle Type IDs and remaps assignment records to duplicated Action Unit IDs.
+
+## 13. Completion Condition
+
+The APIs support the global Manufacturer > AGF / AGV > Command hierarchy, Project-level Location and Equipment remain separate, and one Flow Action Unit can assign multiple Manufacturer Vehicle Types that control the Node Command selection scope.
