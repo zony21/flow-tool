@@ -1,94 +1,253 @@
-# 03_15_AGF_AGVコマンド管理画面
+# 03_15 AGF / AGV Command Master Management Screen
 
-## 1. 本書の目的
+## 1. Purpose
 
-本書は、AGF/AGVコマンド管理画面の仕様を定義する。
+This document defines the global AGF / AGV Command Master Management screen.
 
-Transport Flowでは、メーカー固有コマンドをNodeの動作として選択し、搬送表の動作欄および処理区分判定に利用する。
+The screen manages the command APIs supported by each manufacturer and vehicle type.
 
-## 2. 画面の役割
-
-本画面の役割は以下である。
-
-- メーカー別コマンド一覧表示
-- コマンド追加
-- コマンド編集
-- コマンド削除
-- 処理区分の紐付け
-
-## 3. 表示項目
-
-| 項目 | 説明 |
-| --- | --- |
-| メーカー | 対象メーカー |
-| コマンド名 | TravelToPosture、Loading、Unloadingなど |
-| 処理区分 | 移動、荷上げ、荷下ろしなど |
-| 説明 | 任意補足 |
-| 更新日時 | 最終更新日時 |
-
-## 4. 処理区分
-
-初期候補は以下とする。
-
-- 移動
-- 荷上げ
-- 荷下ろし
-- 待機
-- 充電
-- PLC書込み
-- PLC読込み
-- テーブル更新
-- テーブル確認
-- その他
-
-処理区分はユーザー追加可能とする。
-
-## 5. 操作
-
-### 5.1 追加
-
-メーカーを選択し、コマンド名と処理区分を登録する。
-
-コマンド名、処理区分は必須とする。
-
-### 5.2 編集
-
-既存コマンドの名称、処理区分、説明を変更する。
-
-既にNodeで利用中のコマンドは削除不可とするが、説明や処理区分の編集は可能とする。
-
-### 5.3 削除
-
-未使用コマンドのみ削除可能とする。
-
-## 6. 画面遷移
+The authoritative hierarchy is:
 
 ```text
-AGF/AGVメーカー管理
-  ↓
-AGF/AGVコマンド管理
+Manufacturer
+├── AGF
+│    └── Commands
+└── AGV
+     └── Commands
 ```
 
-## 7. API
+A Manufacturer may support AGF, AGV, or both.
 
-利用APIはTransport Command APIとする。
+Vehicle models, physical vehicles, quantities, serial numbers, and Project ownership are not managed by this screen.
 
-- GET /api/projects/{projectId}/transport/manufacturers/{manufacturerId}/commands
-- POST /api/projects/{projectId}/transport/manufacturers/{manufacturerId}/commands
-- PUT /api/projects/{projectId}/transport/commands/{commandId}
-- DELETE /api/projects/{projectId}/transport/commands/{commandId}
+## 2. Ownership
 
-## 8. DB
+Manufacturer, Manufacturer Vehicle Type, and Command are global Transport master data reusable across Projects.
 
-主にTRANSPORT_COMMANDを利用する。
+```text
+Global Transport Master
+└── Manufacturer
+     └── Manufacturer Vehicle Type
+          └── Command
+```
 
-## 9. テスト観点
+Location and facility Equipment remain Project-level master data and are outside this screen.
 
-- メーカー別にコマンドを登録できること
-- コマンドに処理区分を紐付けできること
-- Transport Nodeで利用中のコマンドを削除できないこと
-- 処理区分変更後、搬送表出力の処理区分に反映されること
+## 3. Screen Responsibilities
 
-## 10. 完了条件
+The screen provides:
 
-AGF/AGVメーカー固有コマンドを構造化して管理し、Transport FlowのNode詳細および搬送表生成に利用できる状態であること。
+- Manufacturer list and selection;
+- AGF / AGV type management for the selected Manufacturer;
+- Command list for the selected Manufacturer Vehicle Type;
+- Manufacturer creation, editing, activation, deactivation, and deletion;
+- AGF / AGV type creation, activation, deactivation, and deletion;
+- Command creation, editing, activation, deactivation, and deletion;
+- Process Type assignment to each Command.
+
+## 4. Recommended Layout
+
+Use a three-level master-detail layout.
+
+```text
+Left panel
+  Manufacturer list
+
+Center panel
+  Vehicle Types for the selected Manufacturer
+  - AGF
+  - AGV
+
+Right panel
+  Commands for the selected Manufacturer Vehicle Type
+```
+
+A tree or equivalent three-column layout may be used when it preserves the same hierarchy.
+
+## 5. Manufacturer Fields
+
+| Field | Required | Description |
+| --- | ---: | --- |
+| Name | Yes | Manufacturer name |
+| Description | No | Additional notes |
+| Sort Order | No | Display order |
+| Active | Yes | Whether the Manufacturer can be newly selected |
+
+A Manufacturer does not contain one fixed Vehicle Type.
+
+## 6. Manufacturer Vehicle Type Fields
+
+| Field | Required | Description |
+| --- | ---: | --- |
+| Vehicle Type | Yes | `AGF` or `AGV` |
+| Description | No | Additional notes for the Manufacturer and type combination |
+| Sort Order | No | Display order |
+| Active | Yes | Whether the combination can be newly assigned |
+
+The same Manufacturer may contain both AGF and AGV.
+
+The same active Vehicle Type must not be registered twice under one Manufacturer.
+
+## 7. Command Fields
+
+| Field | Required | Description |
+| --- | ---: | --- |
+| Command Code | Yes | API or manufacturer command identifier |
+| Command Name | Yes | Human-readable command name |
+| Process Type | Yes | Transport process classification |
+| Description | No | Parameters, response notes, or other details |
+| Sort Order | No | Display order |
+| Active | Yes | Whether the Command can be newly selected |
+
+Example Command Codes:
+
+```text
+TravelToPosture
+Loading
+Unloading
+Pause
+Resume
+Cancel
+GetStatus
+```
+
+Command Code must be unique within one Manufacturer Vehicle Type among non-deleted records.
+
+## 8. Process Type
+
+Initial Process Type values may include:
+
+```text
+MOVE
+LOADING
+UNLOADING
+WAIT
+CHARGE
+STATUS
+TASK_CONTROL
+OTHER
+```
+
+Command-specific required-field validation is outside this screen implementation cycle.
+
+## 9. Operations
+
+### 9.1 Manufacturer
+
+Support:
+
+```text
+Create
+Edit
+Activate
+Deactivate
+Delete
+```
+
+A Manufacturer cannot be deleted while Vehicle Types, Commands, or Flow assignments reference it.
+
+### 9.2 Manufacturer Vehicle Type
+
+Support:
+
+```text
+Add AGF
+Add AGV
+Edit description
+Activate
+Deactivate
+Delete
+```
+
+A Manufacturer Vehicle Type cannot be deleted while Commands or Flow assignments reference it.
+
+### 9.3 Command
+
+Support:
+
+```text
+Create
+Edit
+Activate
+Deactivate
+Delete
+```
+
+A Command referenced by a Node cannot be deleted.
+
+All deletion is soft deletion.
+
+Deactivation must preserve existing references and display them with an inactive indication.
+
+## 10. Flow Editor Relationship
+
+The left-side unit currently displayed as `動作` may assign multiple Manufacturer Vehicle Types.
+
+Example:
+
+```text
+Product Transport Action
+├── Manufacturer A / AGF
+├── Manufacturer B / AGF
+└── Manufacturer C / AGV
+```
+
+The actual structured entity corresponding to the current `動作` UI must be confirmed from the implementation before adding the assignment table.
+
+Node Command options are filtered by the Manufacturer Vehicle Types assigned to the Node's Action Unit.
+
+Recommended Command option display:
+
+```text
+Manufacturer A / AGF / TravelToPosture
+Manufacturer B / AGV / MoveTask
+```
+
+## 11. API
+
+Use global Transport master APIs.
+
+### Manufacturer
+
+```http
+GET    /api/transport/manufacturers
+POST   /api/transport/manufacturers
+PUT    /api/transport/manufacturers/{manufacturerId}
+DELETE /api/transport/manufacturers/{manufacturerId}
+```
+
+### Manufacturer Vehicle Type
+
+```http
+GET    /api/transport/manufacturers/{manufacturerId}/vehicle-types
+POST   /api/transport/manufacturers/{manufacturerId}/vehicle-types
+PUT    /api/transport/manufacturers/{manufacturerId}/vehicle-types/{manufacturerVehicleTypeId}
+DELETE /api/transport/manufacturers/{manufacturerId}/vehicle-types/{manufacturerVehicleTypeId}
+```
+
+### Command
+
+```http
+GET    /api/transport/manufacturer-vehicle-types/{manufacturerVehicleTypeId}/commands
+POST   /api/transport/manufacturer-vehicle-types/{manufacturerVehicleTypeId}/commands
+PUT    /api/transport/manufacturer-vehicle-types/{manufacturerVehicleTypeId}/commands/{commandId}
+DELETE /api/transport/manufacturer-vehicle-types/{manufacturerVehicleTypeId}/commands/{commandId}
+```
+
+## 12. Test Conditions
+
+Confirm that:
+
+- one Manufacturer can register AGF and AGV;
+- duplicate AGF or AGV under the same Manufacturer is rejected;
+- Commands are registered under Manufacturer plus Vehicle Type;
+- the same Command Code may exist under different Manufacturer Vehicle Types;
+- duplicate Command Code under the same Manufacturer Vehicle Type is rejected;
+- referenced Commands cannot be deleted;
+- inactive existing references remain visible;
+- the Flow Action Unit may assign multiple Manufacturer Vehicle Types;
+- Node Command options contain only Commands belonging to assigned Manufacturer Vehicle Types.
+
+## 13. Completion Condition
+
+Manufacturer, AGF / AGV type, and Command API definitions are globally managed in the confirmed hierarchy and can later be assigned to Flow Action Units without Project-owned duplication.
