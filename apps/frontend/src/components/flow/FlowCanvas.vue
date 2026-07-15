@@ -1,17 +1,8 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import {
-  MarkerType,
-  VueFlow,
-  type Connection,
-  type Edge,
-  type EdgeMouseEvent,
-  type Node,
-  type NodeDragEvent,
-  type NodeMouseEvent,
-} from '@vue-flow/core'
+import { MarkerType, VueFlow, type Connection, type Edge, type EdgeMouseEvent, type Node, type NodeDragEvent, type NodeMouseEvent } from '@vue-flow/core'
 import FlowShapeNode from './FlowShapeNode.vue'
-import type { FlowDetail, FlowNode } from '../../types/flow'
+import type { FlowDetail, FlowNode, Stage } from '../../types/flow'
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 
@@ -28,6 +19,8 @@ const emit = defineEmits<{
   (event: 'node-moved', payload: { nodeId: string; x: number; y: number; stageId?: string; laneId?: string }): void
   (event: 'node-selected', payload: { nodeId: string }): void
   (event: 'link-selected', payload: { linkId: string }): void
+  (event: 'stage-selected', payload: Stage): void
+  (event: 'add-stage'): void
   (event: 'canvas-cleared'): void
 }>()
 
@@ -45,16 +38,8 @@ const minBodyHeight = 1200
 const snapGuideThreshold = 12
 const fixedViewport = { x: 0, y: 0, zoom: 1 }
 
-type RowLayout = {
-  laneId: string
-  top: number
-  height: number
-}
-
-type NodePosition = {
-  x: number
-  y: number
-}
+type RowLayout = { laneId: string; top: number; height: number }
+type NodePosition = { x: number; y: number }
 
 const stages = computed(() => props.flow.stages.slice().sort((a, b) => a.sortOrder - b.sortOrder))
 const lanes = computed(() => props.flow.lanes.slice().sort((a, b) => a.sortOrder - b.sortOrder))
@@ -68,22 +53,15 @@ const scrollTop = ref(0)
 const horizontalGuideY = ref<number | null>(null)
 const headerStorageKey = computed(() => `flow-canvas-header:${props.flow.flowId}`)
 
-watch(
-  () => props.flow.flowId,
-  () => loadHeaderLabels(),
-  { immediate: true },
-)
+watch(() => props.flow.flowId, loadHeaderLabels, { immediate: true })
 
-const equipmentWidth = computed(() => Math.max(stages.value.length * stageWidth, stageWidth))
+const equipmentWidth = computed(() => Math.max((stages.value.length + 1) * stageWidth, stageWidth))
+const stageBodyWidth = computed(() => Math.max(stages.value.length * stageWidth, stageWidth))
 const rowLayouts = computed<RowLayout[]>(() => {
   let top = 0
-
   return lanes.value.map((lane) => {
     const laneNodes = props.flow.nodes.filter((node) => node.laneId === lane.laneId)
-    const maxNodeBottom = Math.max(
-      0,
-      ...laneNodes.map((node) => (Number.isFinite(node.y) ? node.y : nodeY) + nodeVisualHeight),
-    )
+    const maxNodeBottom = Math.max(0, ...laneNodes.map((node) => (Number.isFinite(node.y) ? node.y : nodeY) + nodeVisualHeight))
     const height = Math.max(minRowHeight, maxNodeBottom + rowPaddingBottom)
     const layout = { laneId: lane.laneId, top, height }
     top += height
@@ -93,51 +71,37 @@ const rowLayouts = computed<RowLayout[]>(() => {
 const bodyHeight = computed(() => Math.max(rowLayouts.value.reduce((sum, row) => sum + row.height, 0), minBodyHeight))
 const tableWidth = computed(() => categoryWidth + equipmentWidth.value)
 
-const nodes = computed<Node[]>(() =>
-  props.flow.nodes.map((flowNode) => {
-    const position = getNodePosition(flowNode)
+const nodes = computed<Node[]>(() => props.flow.nodes.map((flowNode) => ({
+  id: flowNode.nodeId,
+  type: 'flowShape',
+  position: getNodePosition(flowNode),
+  data: flowNode,
+  draggable: !props.readonly,
+  connectable: !props.readonly,
+  class: flowNode.nodeId === props.selectedNodeId ? 'selected-flow-node' : undefined,
+})))
 
-    return {
-      id: flowNode.nodeId,
-      type: 'flowShape',
-      position,
-      data: flowNode,
-      draggable: !props.readonly,
-      connectable: !props.readonly,
-      class: flowNode.nodeId === props.selectedNodeId ? 'selected-flow-node' : undefined,
-    }
-  }),
-)
-
-const edges = computed<Edge[]>(() =>
-  props.flow.links.map((link) => {
-    const sourceNode = props.flow.nodes.find((node) => node.nodeId === link.sourceNodeId)
-    const targetNode = props.flow.nodes.find((node) => node.nodeId === link.targetNodeId)
-    const handles = sourceNode && targetNode ? getEdgeHandles(sourceNode, targetNode) : null
-
-    return {
-      id: link.linkId,
-      source: link.sourceNodeId,
-      target: link.targetNodeId,
-      sourceHandle: handles?.sourceHandle,
-      targetHandle: handles?.targetHandle,
-      label: link.condition || link.label || undefined,
-      type: 'step',
-      markerEnd: MarkerType.ArrowClosed,
-      class: link.linkId === props.selectedLinkId ? 'selected-flow-link' : undefined,
-    }
-  }),
-)
+const edges = computed<Edge[]>(() => props.flow.links.map((link) => {
+  const sourceNode = props.flow.nodes.find((node) => node.nodeId === link.sourceNodeId)
+  const targetNode = props.flow.nodes.find((node) => node.nodeId === link.targetNodeId)
+  const handles = sourceNode && targetNode ? getEdgeHandles(sourceNode, targetNode) : null
+  return {
+    id: link.linkId,
+    source: link.sourceNodeId,
+    target: link.targetNodeId,
+    sourceHandle: handles?.sourceHandle,
+    targetHandle: handles?.targetHandle,
+    label: link.condition || link.label || undefined,
+    type: 'step',
+    markerEnd: MarkerType.ArrowClosed,
+    class: link.linkId === props.selectedLinkId ? 'selected-flow-link' : undefined,
+  }
+}))
 
 function loadHeaderLabels(): void {
   try {
     const raw = window.localStorage.getItem(headerStorageKey.value)
-    if (!raw) {
-      columnHeaderLabel.value = '機器'
-      rowHeaderLabel.value = '動作'
-      return
-    }
-
+    if (!raw) return
     const value = JSON.parse(raw) as { column?: string; row?: string }
     columnHeaderLabel.value = value.column?.trim() || '機器'
     rowHeaderLabel.value = value.row?.trim() || '動作'
@@ -147,24 +111,13 @@ function loadHeaderLabels(): void {
   }
 }
 
-function saveHeaderLabels(): void {
-  window.localStorage.setItem(
-    headerStorageKey.value,
-    JSON.stringify({ column: columnHeaderLabel.value, row: rowHeaderLabel.value }),
-  )
-}
-
 function commitHeaderLabel(kind: 'column' | 'row', event: Event): void {
   const element = event.target as HTMLElement
   const value = element.innerText.trim()
-  if (kind === 'column') {
-    columnHeaderLabel.value = value || '機器'
-    element.innerText = columnHeaderLabel.value
-  } else {
-    rowHeaderLabel.value = value || '動作'
-    element.innerText = rowHeaderLabel.value
-  }
-  saveHeaderLabels()
+  if (kind === 'column') columnHeaderLabel.value = value || '機器'
+  else rowHeaderLabel.value = value || '動作'
+  element.innerText = kind === 'column' ? columnHeaderLabel.value : rowHeaderLabel.value
+  window.localStorage.setItem(headerStorageKey.value, JSON.stringify({ column: columnHeaderLabel.value, row: rowHeaderLabel.value }))
 }
 
 function stopHeaderEdit(event: KeyboardEvent): void {
@@ -177,73 +130,35 @@ function clamp(index: number, max: number): number {
   if (max <= 0) return 0
   return Math.max(0, Math.min(index, max - 1))
 }
-
-function snapY(value: number): number {
-  return Math.max(nodeY, Math.round(value / ySnap) * ySnap)
-}
-
-function stageIndexFromNodeX(x: number): number {
-  return clamp(Math.round((x - nodeX) / stageWidth), stages.value.length)
-}
-
-function nodeXFromStageIndex(stageIndex: number): number {
-  return stageIndex * stageWidth + nodeX
-}
-
+function snapY(value: number): number { return Math.max(nodeY, Math.round(value / ySnap) * ySnap) }
+function stageIndexFromNodeX(x: number): number { return clamp(Math.round((x - nodeX) / stageWidth), stages.value.length) }
+function nodeXFromStageIndex(stageIndex: number): number { return stageIndex * stageWidth + nodeX }
 function rowIndexFromAbsoluteY(y: number): number {
   if (rowLayouts.value.length === 0) return 0
   const index = rowLayouts.value.findIndex((row) => y >= row.top && y < row.top + row.height)
   return index >= 0 ? index : rowLayouts.value.length - 1
 }
-
-function relativeYFromAbsoluteY(rowIndex: number, y: number): number {
-  const row = rowLayouts.value[rowIndex]
-  return snapY(y - (row?.top ?? 0))
-}
+function relativeYFromAbsoluteY(rowIndex: number, y: number): number { return snapY(y - (rowLayouts.value[rowIndex]?.top ?? 0)) }
 
 function getNodePosition(flowNode: FlowNode): NodePosition {
-  const stageIndexFromStage = stages.value.findIndex((stage) => stage.stageId === flowNode.stageId)
-  const stageIndexFromX = Number.isFinite(flowNode.x) ? stageIndexFromNodeX(flowNode.x) : 0
-  const stageIndex = stageIndexFromStage >= 0 ? stageIndexFromStage : stageIndexFromX
-  const laneIndex = lanes.value.findIndex((lane) => lane.laneId === flowNode.laneId)
-  const laneId = laneIndex >= 0 ? lanes.value[laneIndex]?.laneId : null
-  const row = laneId ? rowLayouts.value.find((layout) => layout.laneId === laneId) : null
-  const laneRelativeY = Number.isFinite(flowNode.y) ? flowNode.y : nodeY
-
-  return {
-    x: Number.isFinite(flowNode.x) ? flowNode.x : nodeXFromStageIndex(stageIndex),
-    y: (row?.top ?? 0) + laneRelativeY,
-  }
+  const byStage = stages.value.findIndex((stage) => stage.stageId === flowNode.stageId)
+  const byX = Number.isFinite(flowNode.x) ? stageIndexFromNodeX(flowNode.x) : 0
+  const stageIndex = byStage >= 0 ? byStage : byX
+  const row = rowLayouts.value.find((layout) => layout.laneId === flowNode.laneId)
+  return { x: Number.isFinite(flowNode.x) ? flowNode.x : nodeXFromStageIndex(stageIndex), y: (row?.top ?? 0) + (Number.isFinite(flowNode.y) ? flowNode.y : nodeY) }
 }
-
-function getNodeCenterY(flowNode: FlowNode): number {
-  return getNodePosition(flowNode).y + nodeSnapCenterOffsetY
-}
-
+function getNodeCenterY(flowNode: FlowNode): number { return getNodePosition(flowNode).y + nodeSnapCenterOffsetY }
 function getEdgeHandles(sourceNode: FlowNode, targetNode: FlowNode): { sourceHandle: string; targetHandle: string } {
   const source = getNodePosition(sourceNode)
   const target = getNodePosition(targetNode)
   const dx = target.x - source.x
   const dy = target.y - source.y
-
-  if (Math.abs(dx) > Math.abs(dy)) {
-    return dx >= 0
-      ? { sourceHandle: 'source-right', targetHandle: 'target-left' }
-      : { sourceHandle: 'source-left', targetHandle: 'target-right' }
-  }
-
-  return dy >= 0
-    ? { sourceHandle: 'source-bottom', targetHandle: 'target-top' }
-    : { sourceHandle: 'source-top', targetHandle: 'target-bottom' }
+  if (Math.abs(dx) > Math.abs(dy)) return dx >= 0 ? { sourceHandle: 'source-right', targetHandle: 'target-left' } : { sourceHandle: 'source-left', targetHandle: 'target-right' }
+  return dy >= 0 ? { sourceHandle: 'source-bottom', targetHandle: 'target-top' } : { sourceHandle: 'source-top', targetHandle: 'target-bottom' }
 }
-
 function getSnappedAbsoluteY(nodeId: string, desiredY: number): number {
   const desiredCenterY = desiredY + nodeSnapCenterOffsetY
-  const targetCenterY = props.flow.nodes
-    .filter((node) => node.nodeId !== nodeId)
-    .map((node) => getNodeCenterY(node))
-    .find((centerY) => Math.abs(centerY - desiredCenterY) <= snapGuideThreshold)
-
+  const targetCenterY = props.flow.nodes.filter((node) => node.nodeId !== nodeId).map(getNodeCenterY).find((centerY) => Math.abs(centerY - desiredCenterY) <= snapGuideThreshold)
   horizontalGuideY.value = targetCenterY ?? null
   return targetCenterY === undefined ? desiredY : targetCenterY - nodeSnapCenterOffsetY
 }
@@ -252,409 +167,89 @@ function getPoint(event: DragEvent): { stageIndex: number; laneIndex: number; y:
   const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
   const x = event.clientX - rect.left + scrollLeft.value - categoryWidth
   const absoluteY = event.clientY - rect.top + scrollTop.value - headerHeight
-  if (x < 0 || absoluteY < 0 || x >= equipmentWidth.value || stages.value.length === 0) return null
+  if (x < 0 || absoluteY < 0 || x >= stageBodyWidth.value || stages.value.length === 0) return null
   const laneIndex = rowIndexFromAbsoluteY(absoluteY)
-  return {
-    stageIndex: clamp(Math.floor(x / stageWidth), stages.value.length),
-    laneIndex,
-    y: relativeYFromAbsoluteY(laneIndex, absoluteY),
-  }
+  return { stageIndex: clamp(Math.floor(x / stageWidth), stages.value.length), laneIndex, y: relativeYFromAbsoluteY(laneIndex, absoluteY) }
 }
-
-function onScroll(event: Event): void {
-  const element = event.currentTarget as HTMLElement
-  scrollLeft.value = element.scrollLeft
-  scrollTop.value = element.scrollTop
-}
-
+function onScroll(event: Event): void { const element = event.currentTarget as HTMLElement; scrollLeft.value = element.scrollLeft; scrollTop.value = element.scrollTop }
 function onDragOver(event: DragEvent): void {
   if (props.readonly || !event.dataTransfer) return
   const point = getPoint(event)
   activeStageId.value = point ? stages.value[point.stageIndex]?.stageId ?? null : null
   activeLaneId.value = point ? lanes.value[point.laneIndex]?.laneId ?? null : null
   if (!point) return
-  event.preventDefault()
-  event.dataTransfer.dropEffect = 'copy'
+  event.preventDefault(); event.dataTransfer.dropEffect = 'copy'
 }
-
 function onDrop(event: DragEvent): void {
   if (props.readonly || !event.dataTransfer) return
   const nodeType = event.dataTransfer.getData('application/x-flow-node-type') || event.dataTransfer.getData('text/plain')
   const point = getPoint(event)
-  activeStageId.value = null
-  activeLaneId.value = null
+  activeStageId.value = null; activeLaneId.value = null
   if (!nodeType || !point) return
   event.preventDefault()
-  emit('add-node', {
-    nodeType,
-    stageId: stages.value[point.stageIndex]?.stageId,
-    laneId: lanes.value[point.laneIndex]?.laneId,
-    x: nodeXFromStageIndex(point.stageIndex),
-    y: point.y,
-  })
+  emit('add-node', { nodeType, stageId: stages.value[point.stageIndex]?.stageId, laneId: lanes.value[point.laneIndex]?.laneId, x: nodeXFromStageIndex(point.stageIndex), y: point.y })
 }
-
 function onDragLeave(event: DragEvent): void {
   const current = event.currentTarget as HTMLElement
   const next = event.relatedTarget as globalThis.Node | null
-  if (!next || !current.contains(next)) {
-    activeStageId.value = null
-    activeLaneId.value = null
-  }
+  if (!next || !current.contains(next)) { activeStageId.value = null; activeLaneId.value = null }
 }
-
 function onNodeDrag(event: NodeDragEvent): void {
   if (props.readonly) return
   const stageIndex = stageIndexFromNodeX(event.node.position.x)
   event.node.position.x = nodeXFromStageIndex(stageIndex)
   event.node.position.y = getSnappedAbsoluteY(event.node.id, event.node.position.y)
 }
-
 function onNodeDragStop(event: NodeDragEvent): void {
   if (props.readonly) return
   const stageIndex = stageIndexFromNodeX(event.node.position.x)
   const snappedY = getSnappedAbsoluteY(event.node.id, event.node.position.y)
   const laneIndex = rowIndexFromAbsoluteY(snappedY)
-
-  emit('node-moved', {
-    nodeId: event.node.id,
-    x: nodeXFromStageIndex(stageIndex),
-    y: relativeYFromAbsoluteY(laneIndex, snappedY),
-    stageId: stages.value[stageIndex]?.stageId,
-    laneId: lanes.value[laneIndex]?.laneId,
-  })
-
+  emit('node-moved', { nodeId: event.node.id, x: nodeXFromStageIndex(stageIndex), y: relativeYFromAbsoluteY(laneIndex, snappedY), stageId: stages.value[stageIndex]?.stageId, laneId: lanes.value[laneIndex]?.laneId })
   horizontalGuideY.value = null
 }
-
 function onConnect(connection: Connection): void {
   if (props.readonly || !connection.source || !connection.target || connection.source === connection.target) return
-  emit('add-link', {
-    sourceNodeId: connection.source,
-    targetNodeId: connection.target,
-  })
+  emit('add-link', { sourceNodeId: connection.source, targetNodeId: connection.target })
 }
-
-function onNodeClick(event: NodeMouseEvent): void {
-  emit('node-selected', { nodeId: event.node.id })
-}
-
-function onEdgeClick(event: EdgeMouseEvent): void {
-  emit('link-selected', { linkId: event.edge.id })
-}
+function onNodeClick(event: NodeMouseEvent): void { emit('node-selected', { nodeId: event.node.id }) }
+function onEdgeClick(event: EdgeMouseEvent): void { emit('link-selected', { linkId: event.edge.id }) }
+function selectStage(stage: Stage): void { if (!props.readonly) emit('stage-selected', stage) }
 </script>
 
 <template>
   <div class="flow-canvas" @scroll="onScroll" @dragover="onDragOver" @drop="onDrop" @dragleave="onDragLeave">
-    <div v-if="!hasEquipment" class="canvas-guidance">
-      <h2>列が未設定です</h2>
-      <p>設備/分類設定から列を追加してください。</p>
-    </div>
-
+    <div v-if="!hasEquipment" class="canvas-guidance"><h2>列が未設定です</h2><p>「＋ 機器を追加」から列を追加してください。</p></div>
     <div class="flow-table" :style="{ width: `max(100%, ${tableWidth}px)`, minWidth: `${tableWidth}px`, minHeight: `${headerHeight + bodyHeight}px` }">
       <div class="category-header" :style="{ width: `${categoryWidth}px`, height: `${headerHeight}px`, transform: `translate(${scrollLeft}px, ${scrollTop}px)` }">
         <span class="diagonal-line" />
-        <span
-          class="corner-label column-label"
-          contenteditable="true"
-          spellcheck="false"
-          title="クリックして列側の名称を変更"
-          @blur="commitHeaderLabel('column', $event)"
-          @keydown="stopHeaderEdit"
-        >{{ columnHeaderLabel }}</span>
-        <span
-          class="corner-label row-label"
-          contenteditable="true"
-          spellcheck="false"
-          title="クリックして行側の名称を変更"
-          @blur="commitHeaderLabel('row', $event)"
-          @keydown="stopHeaderEdit"
-        >{{ rowHeaderLabel }}</span>
+        <span class="corner-label column-label" contenteditable="true" spellcheck="false" @blur="commitHeaderLabel('column', $event)" @keydown="stopHeaderEdit">{{ columnHeaderLabel }}</span>
+        <span class="corner-label row-label" contenteditable="true" spellcheck="false" @blur="commitHeaderLabel('row', $event)" @keydown="stopHeaderEdit">{{ rowHeaderLabel }}</span>
       </div>
       <div class="equipment-header" :style="{ left: `${categoryWidth}px`, width: `${equipmentWidth}px`, height: `${headerHeight}px`, transform: `translateY(${scrollTop}px)` }">
-        <div v-for="stage in stages" :key="stage.stageId" class="equipment-cell" :style="{ width: `${stageWidth}px` }">
+        <button v-for="stage in stages" :key="stage.stageId" type="button" class="equipment-cell" :disabled="readonly" :style="{ width: `${stageWidth}px` }" @click="selectStage(stage)">
           <div class="equipment-icon">{{ stage.name.slice(0, 1) }}</div>
           <strong>{{ stage.name }}</strong>
-        </div>
+          <small>{{ stage.category }}</small>
+        </button>
+        <button type="button" class="equipment-cell add-equipment-cell" :disabled="readonly" :style="{ width: `${stageWidth}px` }" @click="emit('add-stage')">＋ 機器を追加</button>
       </div>
-
       <div class="category-column" :style="{ top: `${headerHeight}px`, width: `${categoryWidth}px`, minHeight: `${bodyHeight}px`, transform: `translateX(${scrollLeft}px)` }">
-        <div v-for="row in rowLayouts" :key="row.laneId" class="category-cell" :class="{ active: activeLaneId === row.laneId }" :style="{ height: `${row.height}px` }">
-          {{ lanes.find((lane) => lane.laneId === row.laneId)?.name }}
-        </div>
+        <div v-for="row in rowLayouts" :key="row.laneId" class="category-cell" :class="{ active: activeLaneId === row.laneId }" :style="{ height: `${row.height}px` }">{{ lanes.find((lane) => lane.laneId === row.laneId)?.name }}</div>
       </div>
-
-      <div class="grid-layer" :style="{ top: `${headerHeight}px`, left: `${categoryWidth}px`, width: `${equipmentWidth}px`, minHeight: `${bodyHeight}px` }">
+      <div class="grid-layer" :style="{ top: `${headerHeight}px`, left: `${categoryWidth}px`, width: `${stageBodyWidth}px`, minHeight: `${bodyHeight}px` }">
         <div v-for="stage in stages" :key="stage.stageId" class="equipment-lane" :class="{ active: activeStageId === stage.stageId }" :style="{ width: `${stageWidth}px` }">
           <div v-for="row in rowLayouts" :key="`${stage.stageId}-${row.laneId}`" class="category-band" :class="{ active: activeLaneId === row.laneId && activeStageId === stage.stageId }" :style="{ height: `${row.height}px` }" />
         </div>
       </div>
-
-      <div v-if="horizontalGuideY !== null" class="snap-guide-horizontal" :style="{ top: `${headerHeight + horizontalGuideY}px`, left: `${categoryWidth}px`, width: `${equipmentWidth}px` }" />
-
-      <VueFlow
-        class="vue-flow"
-        :style="{ width: `${equipmentWidth}px`, height: `${bodyHeight}px` }"
-        :nodes="nodes"
-        :edges="edges"
-        :fit-view-on-init="false"
-        :default-viewport="fixedViewport"
-        :viewport="fixedViewport"
-        :min-zoom="1"
-        :max-zoom="1"
-        :zoom-on-scroll="false"
-        :zoom-on-pinch="false"
-        :zoom-on-double-click="false"
-        :pan-on-drag="false"
-        :pan-on-scroll="false"
-        :prevent-scrolling="false"
-        @connect="onConnect"
-        @node-drag="onNodeDrag"
-        @node-drag-stop="onNodeDragStop"
-        @node-click="onNodeClick"
-        @edge-click="onEdgeClick"
-        @pane-click="emit('canvas-cleared')"
-      >
-        <template #node-flowShape="{ data }">
-          <FlowShapeNode :node="data" />
-        </template>
+      <div v-if="horizontalGuideY !== null" class="snap-guide-horizontal" :style="{ top: `${headerHeight + horizontalGuideY}px`, left: `${categoryWidth}px`, width: `${stageBodyWidth}px` }" />
+      <VueFlow class="vue-flow" :style="{ width: `${stageBodyWidth}px`, height: `${bodyHeight}px` }" :nodes="nodes" :edges="edges" :fit-view-on-init="false" :default-viewport="fixedViewport" :viewport="fixedViewport" :min-zoom="1" :max-zoom="1" :zoom-on-scroll="false" :zoom-on-pinch="false" :zoom-on-double-click="false" :pan-on-drag="false" :pan-on-scroll="false" :prevent-scrolling="false" @connect="onConnect" @node-drag="onNodeDrag" @node-drag-stop="onNodeDragStop" @node-click="onNodeClick" @edge-click="onEdgeClick" @pane-click="emit('canvas-cleared')">
+        <template #node-flowShape="{ data }"><FlowShapeNode :node="data" /></template>
       </VueFlow>
     </div>
   </div>
 </template>
 
 <style scoped>
-.flow-canvas {
-  position: relative;
-  width: 100%;
-  height: calc(100vh - 160px);
-  min-height: 620px;
-  overflow: auto;
-  background: #f8fafc;
-  border: 1px solid #dbe3ef;
-  border-radius: 8px;
-}
-
-.flow-table {
-  position: relative;
-  background: #fff;
-}
-
-.category-header,
-.equipment-header,
-.category-column,
-.grid-layer,
-.snap-guide-horizontal,
-.vue-flow {
-  position: absolute;
-}
-
-.category-header,
-.equipment-header {
-  top: 0;
-  background: #f1f5f9;
-  border-bottom: 1px solid #cbd5e1;
-}
-
-.category-header {
-  left: 0;
-  z-index: 30;
-  overflow: hidden;
-  color: #0f172a;
-  border-right: 1px solid #cbd5e1;
-  font-size: 0.9rem;
-  font-weight: 800;
-  will-change: transform;
-}
-
-.diagonal-line {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(to top right, transparent calc(50% - 0.75px), #334155 50%, transparent calc(50% + 0.75px));
-  pointer-events: none;
-}
-
-.corner-label {
-  position: absolute;
-  z-index: 1;
-  min-width: 38px;
-  max-width: 72px;
-  padding: 2px 4px;
-  outline: none;
-  border-radius: 4px;
-  line-height: 1.2;
-  cursor: text;
-}
-
-.corner-label:focus {
-  background: #ffffff;
-  box-shadow: 0 0 0 2px rgb(37 99 235 / 22%);
-}
-
-.column-label {
-  top: 14px;
-  right: 10px;
-  text-align: right;
-}
-
-.row-label {
-  bottom: 12px;
-  left: 10px;
-}
-
-.equipment-header {
-  z-index: 20;
-  display: flex;
-  will-change: transform;
-}
-
-.equipment-cell {
-  display: grid;
-  grid-template-rows: 30px auto;
-  place-items: center;
-  gap: 4px;
-  box-sizing: border-box;
-  padding: 10px 12px;
-  color: #1e293b;
-  background: #eef2ff;
-  border-right: 1px solid #cbd5e1;
-}
-
-.equipment-icon {
-  display: grid;
-  width: 26px;
-  height: 26px;
-  place-items: center;
-  color: #ffffff;
-  background: #2563eb;
-  border-radius: 6px;
-  font-size: 0.78rem;
-  font-weight: 800;
-}
-
-.equipment-cell strong {
-  max-width: 100%;
-  overflow: hidden;
-  font-size: 0.92rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.category-column {
-  left: 0;
-  z-index: 15;
-  background: #f8fafc;
-  border-right: 1px solid #cbd5e1;
-  will-change: transform;
-}
-
-.category-cell {
-  display: flex;
-  align-items: flex-start;
-  box-sizing: border-box;
-  padding: 18px 14px;
-  color: #334155;
-  border-bottom: 1px solid #dbe3ef;
-  font-size: 0.86rem;
-  font-weight: 800;
-}
-
-.category-cell.active {
-  background: #dbeafe;
-  color: #1d4ed8;
-}
-
-.grid-layer {
-  z-index: 1;
-  display: flex;
-  pointer-events: none;
-}
-
-.equipment-lane {
-  box-sizing: border-box;
-  min-height: 100%;
-  border-right: 1px solid #dbe3ef;
-}
-
-.equipment-lane:nth-child(even) {
-  background: #f8fafc;
-}
-
-.equipment-lane.active {
-  box-shadow: inset 0 0 0 2px rgb(37 99 235 / 30%);
-}
-
-.category-band {
-  box-sizing: border-box;
-  border-bottom: 1px solid #dbe3ef;
-  background: rgb(255 255 255 / 64%);
-}
-
-.equipment-lane:nth-child(even) .category-band {
-  background: rgb(248 250 252 / 80%);
-}
-
-.category-band.active {
-  background: rgb(96 165 250 / 18%);
-}
-
-.snap-guide-horizontal {
-  z-index: 4;
-  height: 0;
-  border-top: 2px dashed #2563eb;
-  pointer-events: none;
-}
-
-.vue-flow {
-  top: 92px;
-  left: 156px;
-  z-index: 2;
-  background: transparent;
-  overflow: hidden;
-}
-
-.vue-flow :deep(.vue-flow__pane) {
-  background: transparent;
-}
-
-:deep(.flow-node-shell) {
-  border: 0;
-  background: transparent;
-  box-shadow: none;
-}
-
-:deep(.selected-flow-node .flow-shape-node) {
-  outline: 3px solid #2563eb;
-}
-
-:deep(.selected-flow-link path) {
-  stroke: #dc2626;
-  stroke-width: 3;
-}
-
-:deep(.vue-flow__edge-path) {
-  stroke: #334155;
-  stroke-width: 2;
-}
-
-.canvas-guidance {
-  position: absolute;
-  top: 128px;
-  left: 50%;
-  z-index: 8;
-  width: min(520px, calc(100% - 48px));
-  padding: 20px;
-  color: #334155;
-  background: #fff;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  box-shadow: 0 12px 32px rgb(15 23 42 / 14%);
-  transform: translateX(-50%);
-}
-
-.canvas-guidance h2 {
-  margin: 0 0 8px;
-  color: #0f172a;
-  font-size: 1rem;
-}
+.flow-canvas{position:relative;width:100%;height:calc(100vh - 160px);min-height:620px;overflow:auto;background:#f8fafc;border:1px solid #dbe3ef;border-radius:8px}.flow-table{position:relative;background:#fff}.category-header,.equipment-header,.category-column,.grid-layer,.snap-guide-horizontal,.vue-flow{position:absolute}.category-header,.equipment-header{top:0;background:#f1f5f9;border-bottom:1px solid #cbd5e1}.category-header{left:0;z-index:30;overflow:hidden;color:#0f172a;border-right:1px solid #cbd5e1;font-size:.9rem;font-weight:800;will-change:transform}.diagonal-line{position:absolute;inset:0;background:linear-gradient(to top right,transparent calc(50% - .75px),#334155 50%,transparent calc(50% + .75px));pointer-events:none}.corner-label{position:absolute;z-index:1;min-width:38px;max-width:72px;padding:2px 4px;outline:none;border-radius:4px;line-height:1.2;cursor:text}.column-label{top:14px;right:10px;text-align:right}.row-label{bottom:12px;left:10px}.equipment-header{z-index:20;display:flex;will-change:transform}.equipment-cell{display:grid;grid-template-rows:26px auto auto;place-items:center;gap:3px;box-sizing:border-box;padding:8px 12px;color:#1e293b;background:#eef2ff;border:0;border-right:1px solid #cbd5e1;cursor:pointer}.equipment-cell:disabled{cursor:default}.equipment-cell small{font-size:.7rem;color:#64748b}.add-equipment-cell{display:flex;justify-content:center;background:#f8fafc;color:#2563eb;font-weight:800}.equipment-icon{display:grid;width:26px;height:26px;place-items:center;color:#fff;background:#2563eb;border-radius:6px;font-size:.78rem;font-weight:800}.equipment-cell strong{max-width:100%;overflow:hidden;font-size:.92rem;text-overflow:ellipsis;white-space:nowrap}.category-column{left:0;z-index:15;background:#f8fafc;border-right:1px solid #cbd5e1;will-change:transform}.category-cell{display:flex;align-items:flex-start;box-sizing:border-box;padding:18px 14px;color:#334155;border-bottom:1px solid #dbe3ef;font-size:.86rem;font-weight:800}.category-cell.active{background:#dbeafe;color:#1d4ed8}.grid-layer{z-index:1;display:flex;pointer-events:none}.equipment-lane{box-sizing:border-box;min-height:100%;border-right:1px solid #dbe3ef}.equipment-lane:nth-child(even){background:#f8fafc}.equipment-lane.active{box-shadow:inset 0 0 0 2px rgb(37 99 235 / 30%)}.category-band{box-sizing:border-box;border-bottom:1px solid #dbe3ef;background:rgb(255 255 255 / 64%)}.equipment-lane:nth-child(even) .category-band{background:rgb(248 250 252 / 80%)}.category-band.active{background:rgb(96 165 250 / 18%)}.snap-guide-horizontal{z-index:4;height:0;border-top:2px dashed #2563eb;pointer-events:none}.vue-flow{top:92px;left:156px;z-index:2;background:transparent;overflow:hidden}.vue-flow :deep(.vue-flow__pane){background:transparent}:deep(.flow-node-shell){border:0;background:transparent;box-shadow:none}:deep(.selected-flow-node .flow-shape-node){outline:3px solid #2563eb}:deep(.selected-flow-link path){stroke:#dc2626;stroke-width:3}:deep(.vue-flow__edge-path){stroke:#334155;stroke-width:2}.canvas-guidance{position:absolute;top:128px;left:50%;z-index:8;width:min(520px,calc(100% - 48px));padding:20px;color:#334155;background:#fff;border:1px solid #cbd5e1;border-radius:8px;box-shadow:0 12px 32px rgb(15 23 42 / 14%);transform:translateX(-50%)}.canvas-guidance h2{margin:0 0 8px;color:#0f172a;font-size:1rem}
 </style>
