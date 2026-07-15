@@ -38,7 +38,7 @@ const processTypeFilter = ref('ALL')
 const statusFilter = ref<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL')
 const form = reactive({ commandCode: '', commandName: '', processType: 'MOVE', description: '', sortOrder: null as number | null, isActive: true })
 const processTypeOptions = [
-  { value: 'ALL', label: 'すべて' },
+  { value: 'ALL', label: 'すべての処理種別' },
   { value: 'MOVE', label: '移動' },
   { value: 'LOADING', label: '荷積み' },
   { value: 'UNLOADING', label: '荷下ろし' },
@@ -118,90 +118,88 @@ onMounted(load)
 
 <template>
   <MainLayout>
-    <section class="page transport-master-page">
+    <section class="transport-master-page commands-page">
       <nav class="transport-breadcrumbs" aria-label="パンくず">
-        <RouterLink :to="{ name: 'transport-manufacturers' }">AGF・AGVマスタ</RouterLink><span>›</span>
-        <RouterLink :to="{ name: 'transport-vehicle-types', params: { manufacturerId } }">{{ manufacturer?.name ?? 'メーカー' }}</RouterLink><span>›</span>
+        <RouterLink :to="{ name: 'transport-manufacturers' }">AGF・AGVマスタ</RouterLink>
+        <i class="pi pi-angle-right" />
+        <RouterLink :to="{ name: 'transport-vehicle-types', params: { manufacturerId } }">{{ manufacturer?.name ?? 'メーカー' }}</RouterLink>
+        <i class="pi pi-angle-right" />
         <strong>{{ vehicleType?.vehicleType ?? '種別' }} コマンド</strong>
       </nav>
 
-      <div class="card transport-page-header">
-        <div>
-          <h1>{{ manufacturer?.name ?? 'メーカー' }} / {{ vehicleType?.vehicleType ?? '-' }} コマンド一覧</h1>
-          <p>このメーカー・種別で使用できるAPIコマンドを管理します。</p>
+      <section class="transport-hero">
+        <div class="transport-hero__icon transport-hero__icon--command"><i class="pi pi-code" /></div>
+        <div class="transport-hero__body">
+          <span class="transport-eyebrow">COMMAND API</span>
+          <h1>{{ manufacturer?.name ?? 'メーカー' }} / {{ vehicleType?.vehicleType ?? '-' }}</h1>
+          <p>このメーカー・種別で使用できるAPIコマンドと処理種別を管理します。</p>
         </div>
-        <div class="transport-header-actions">
-          <Button label="AGF・AGV一覧へ戻る" severity="secondary" @click="backToTypes" />
+        <div class="transport-hero__actions">
+          <Button label="AGF・AGV一覧" icon="pi pi-arrow-left" severity="secondary" outlined @click="backToTypes" />
           <Button label="コマンドを追加" icon="pi pi-plus" @click="open()" />
         </div>
+      </section>
+
+      <div class="transport-stepper" aria-label="設定手順">
+        <div class="transport-step is-complete"><span><i class="pi pi-check" /></span><strong>メーカー</strong></div>
+        <i class="pi pi-angle-right" />
+        <div class="transport-step is-complete"><span><i class="pi pi-check" /></span><strong>AGF・AGV</strong></div>
+        <i class="pi pi-angle-right" />
+        <div class="transport-step is-active"><span>3</span><strong>コマンド</strong></div>
       </div>
 
-      <p v-if="pageError" class="transport-message--error" role="alert">{{ pageError }}</p>
+      <p v-if="pageError" class="transport-message transport-message--error" role="alert">
+        <i class="pi pi-exclamation-circle" />{{ pageError }}
+      </p>
 
-      <div class="card">
-        <div class="transport-section-header">
-          <h2>登録コマンド</h2>
-          <div class="transport-section-actions"><span>{{ filteredItems.length }}件</span></div>
+      <section class="transport-panel">
+        <div class="transport-toolbar transport-toolbar--commands">
+          <div class="transport-search"><i class="pi pi-search" /><InputText v-model="keyword" placeholder="コード・名称・説明で検索" /></div>
+          <Select v-model="processTypeFilter" :options="processTypeOptions" option-label="label" option-value="value" class="transport-filter transport-filter--wide" />
+          <Select v-model="statusFilter" :options="statusOptions" option-label="label" option-value="value" class="transport-filter" />
+          <span class="transport-count">{{ filteredItems.length }} / {{ items.length }}件</span>
         </div>
 
-        <div class="transport-toolbar">
-          <label class="transport-toolbar-field is-search">
-            <span>コード・名称・説明で検索</span>
-            <InputText v-model="keyword" placeholder="コード、名称、説明で検索" />
-          </label>
-          <label class="transport-toolbar-field">
-            <span>処理種別</span>
-            <Select v-model="processTypeFilter" :options="processTypeOptions" option-label="label" option-value="value" />
-          </label>
-          <label class="transport-toolbar-field">
-            <span>状態</span>
-            <Select v-model="statusFilter" :options="statusOptions" option-label="label" option-value="value" />
-          </label>
+        <div class="transport-table transport-table--commands">
+          <div class="transport-table__head">
+            <span>コード</span><span>コマンド</span><span>処理種別</span><span>状態</span><span>操作</span>
+          </div>
+          <div v-if="loading" class="transport-empty"><i class="pi pi-spin pi-spinner" /><strong>コマンドを読み込んでいます</strong></div>
+          <div v-else-if="!filteredItems.length" class="transport-empty">
+            <i class="pi pi-code" />
+            <strong>{{ items.length ? '条件に一致するコマンドがありません' : 'コマンドが登録されていません' }}</strong>
+            <p>{{ items.length ? '検索条件を変更してください。' : 'この種別で使用する最初のAPIコマンドを追加してください。' }}</p>
+            <Button v-if="!items.length" label="コマンドを追加" icon="pi pi-plus" outlined @click="open()" />
+          </div>
+          <article v-for="item in filteredItems" v-else :key="item.commandId" class="transport-table__row">
+            <code class="command-code">{{ item.commandCode }}</code>
+            <div class="command-name-cell"><strong>{{ item.commandName }}</strong><small>{{ item.description || '説明は登録されていません。' }}</small></div>
+            <span class="process-type-tag"><small>{{ item.processType }}</small><strong>{{ processTypeLabel(item.processType) }}</strong></span>
+            <span class="transport-status" :class="{ 'is-inactive': !item.isActive }">
+              <i :class="item.isActive ? 'pi pi-check-circle' : 'pi pi-pause-circle'" />{{ item.isActive ? '有効' : '無効' }}
+            </span>
+            <div class="transport-actions">
+              <Button label="編集" icon="pi pi-pencil" severity="secondary" size="small" @click="open(item)" />
+              <Button label="削除" icon="pi pi-trash" severity="danger" size="small" @click="remove(item)" />
+            </div>
+          </article>
         </div>
-
-        <p v-if="loading" class="transport-loading">読み込み中...</p>
-        <p v-else-if="!filteredItems.length" class="transport-empty">
-          {{ items.length ? '条件に一致するコマンドがありません。' : 'コマンドはまだありません。' }}
-        </p>
-        <div v-else class="transport-table-wrap">
-          <table class="transport-table">
-            <thead><tr><th>コード</th><th>コマンド名</th><th>処理種別</th><th>説明</th><th>状態</th><th>操作</th></tr></thead>
-            <tbody>
-              <tr v-for="item in filteredItems" :key="item.commandId">
-                <td><code>{{ item.commandCode }}</code></td>
-                <td>{{ item.commandName }}</td>
-                <td><span class="transport-process-badge">{{ processTypeLabel(item.processType) }}</span></td>
-                <td class="transport-description">{{ item.description || '説明なし' }}</td>
-                <td><span class="transport-status" :class="{ 'is-inactive': !item.isActive }">{{ item.isActive ? '有効' : '無効' }}</span></td>
-                <td>
-                  <div class="transport-row-actions">
-                    <Button label="編集" size="small" severity="secondary" @click="open(item)" />
-                    <Button label="削除" size="small" severity="danger" @click="remove(item)" />
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
+      </section>
 
       <Dialog v-model:visible="dialogVisible" modal :header="editingId ? 'コマンドを編集' : 'コマンドを追加'" :style="{ width: 'min(600px, 94vw)' }" :closable="!saving">
-        <p class="transport-context">登録先：{{ manufacturer?.name ?? 'メーカー' }} / {{ vehicleType?.vehicleType ?? '種別' }}</p>
+        <div class="transport-context-banner"><i class="pi pi-code" /><span><small>登録先</small><strong>{{ manufacturer?.name ?? 'メーカー' }} / {{ vehicleType?.vehicleType ?? '種別' }}</strong></span></div>
         <div class="transport-form transport-form--grid">
-          <label><span>コマンドコード <b>必須</b></span><InputText v-model="form.commandCode" autofocus /></label>
-          <label><span>コマンド名 <b>必須</b></span><InputText v-model="form.commandName" /></label>
+          <label><span>コマンドコード <b>必須</b></span><InputText v-model="form.commandCode" autofocus placeholder="例：TravelToPosture" /></label>
+          <label><span>コマンド名 <b>必須</b></span><InputText v-model="form.commandName" placeholder="例：移動指示" /></label>
           <label class="transport-form__wide"><span>処理種別 <b>必須</b></span><Select v-model="form.processType" :options="commandProcessTypeOptions" option-label="label" option-value="value" /></label>
-          <label class="transport-form__wide"><span>説明</span><Textarea v-model="form.description" rows="4" auto-resize /></label>
-          <label><span>表示順</span><InputNumber v-model="form.sortOrder" :min="0" /></label>
-          <label class="transport-toggle-field">
-            <span><strong>有効状態</strong><small>無効にすると新しいNode設定では選択できなくなります。</small></span>
-            <ToggleSwitch v-model="form.isActive" />
-          </label>
-          <p v-if="formError" class="transport-message--error transport-form__wide" role="alert">{{ formError }}</p>
+          <label class="transport-form__wide"><span>説明</span><Textarea v-model="form.description" rows="4" auto-resize placeholder="APIの用途や補足情報" /></label>
+          <label><span>表示順</span><InputNumber v-model="form.sortOrder" :min="0" placeholder="未指定" /></label>
+          <label class="transport-toggle-field"><span><strong>有効状態</strong><small>無効にすると新しいNode設定では選択できなくなります。</small></span><ToggleSwitch v-model="form.isActive" /></label>
+          <p v-if="formError" class="transport-message transport-message--error transport-form__wide" role="alert"><i class="pi pi-exclamation-circle" />{{ formError }}</p>
         </div>
         <template #footer>
-          <Button label="キャンセル" severity="secondary" :disabled="saving" @click="closeDialog" />
-          <Button :label="editingId ? '更新' : '登録'" :loading="saving" @click="save" />
+          <Button label="キャンセル" severity="secondary" text :disabled="saving" @click="closeDialog" />
+          <Button :label="editingId ? '更新' : '登録'" icon="pi pi-check" :loading="saving" @click="save" />
         </template>
       </Dialog>
     </section>
