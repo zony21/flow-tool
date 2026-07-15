@@ -1,6 +1,5 @@
 export type FlowType = 'NORMAL' | 'TRANSPORT'
 export type StageType = 'AUTO' | 'MANUAL'
-export type StageCategory = 'PERSON' | 'SERVER' | 'PLC' | 'WCS' | 'RCS' | 'AGF' | 'AGV' | 'EQUIPMENT' | 'OTHER'
 export type TransportRwType = 'NONE' | 'READ' | 'WRITE'
 
 export type FlowSummary = {
@@ -35,7 +34,6 @@ export type Stage = {
   stageId: string
   flowId: string
   name: string
-  category: StageCategory
   stageType?: StageType
   sortOrder: number
 }
@@ -93,7 +91,6 @@ export type SaveLaneRequest = {
 export type SaveStageRequest = {
   stageId: string
   name: string
-  category: StageCategory
   stageType?: StageType | null
   sortOrder: number
 }
