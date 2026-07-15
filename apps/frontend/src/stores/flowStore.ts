@@ -17,6 +17,7 @@ export function enrichFlowStructureRequest(
       const currentStage = currentFlow?.stages.find((item) => item.stageId === stage.stageId)
       return {
         ...stage,
+        category: stage.category ?? currentStage?.category ?? 'EQUIPMENT',
         stageType: stage.stageType ?? currentStage?.stageType ?? 'AUTO',
       }
     }),
@@ -26,7 +27,7 @@ export function enrichFlowStructureRequest(
         ...node,
         commandId: isTransportFlow ? node.commandId ?? currentNode?.commandId ?? null : null,
         locationId: isTransportFlow ? node.locationId ?? currentNode?.locationId ?? null : null,
-        equipmentId: isTransportFlow ? node.equipmentId ?? currentNode?.equipmentId ?? null : null,
+        equipmentId: null,
         manufacturerVehicleTypeId: isTransportFlow ? node.manufacturerVehicleTypeId ?? currentNode?.manufacturerVehicleTypeId ?? null : null,
         rwType: isTransportFlow ? node.rwType ?? currentNode?.rwType ?? 'NONE' : 'NONE',
       }
