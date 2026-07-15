@@ -156,7 +156,8 @@
   text-align: center;
 }
 
-.transport-message--error {
+.transport-message--error,
+.transport-message.transport-message--error {
   padding: 12px 14px;
   color: #991b1b;
   background: #fee2e2;
@@ -241,16 +242,370 @@
   border-color: #059669;
 }
 
-.transport-master-page .p-button.p-button-outlined:not(.p-button-danger) {
+.transport-master-page .p-button.p-button-outlined:not(.p-button-danger):not(.p-button-secondary) {
   color: #047857;
   background: #fff;
   border-color: #6ee7b7;
 }
 
-.transport-master-page .p-button.p-button-outlined:not(.p-button-danger):hover {
+.transport-master-page .p-button.p-button-outlined:not(.p-button-danger):not(.p-button-secondary):hover {
   color: #065f46;
   background: #ecfdf5;
   border-color: #34d399;
+}
+
+/* AGF・AGV一覧以降は、ひとつ前の階層型レイアウトを使用する。 */
+.vehicle-types-page,
+.commands-page {
+  width: min(1180px, calc(100% - 48px));
+  margin: 0 auto;
+  padding: 28px 0 48px;
+  gap: 18px;
+}
+
+.transport-hero {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 18px;
+  padding: 24px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: 0 8px 24px rgb(15 23 42 / 5%);
+}
+
+.transport-hero__icon {
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  color: #047857;
+  background: #d1fae5;
+  border-radius: 16px;
+  font-size: 24px;
+}
+
+.transport-hero__body {
+  min-width: 0;
+}
+
+.transport-hero h1 {
+  margin: 0;
+  color: var(--text-main);
+  font-size: clamp(24px, 3vw, 32px);
+}
+
+.transport-hero p {
+  margin: 7px 0 0;
+  color: var(--text-sub);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.transport-eyebrow {
+  display: block;
+  margin-bottom: 5px;
+  color: #047857;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .12em;
+}
+
+.transport-hero__actions,
+.transport-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.transport-stepper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 13px;
+  padding: 13px 18px;
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.transport-stepper > .pi {
+  color: #cbd5e1;
+  font-size: 12px;
+}
+
+.transport-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.transport-step span {
+  display: grid;
+  place-items: center;
+  width: 25px;
+  height: 25px;
+  background: #e2e8f0;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.transport-step.is-active {
+  color: #047857;
+}
+
+.transport-step.is-active span {
+  color: #fff;
+  background: #10b981;
+  box-shadow: 0 0 0 4px rgb(16 185 129 / 12%);
+}
+
+.transport-step.is-complete {
+  color: #166534;
+}
+
+.transport-step.is-complete span {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.transport-panel {
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: 0 8px 24px rgb(15 23 42 / 4%);
+}
+
+.transport-panel .transport-section-header,
+.transport-panel .transport-toolbar {
+  padding: 18px 20px;
+  margin: 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.vehicle-type-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  padding: 20px;
+}
+
+.vehicle-type-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 250px;
+  padding: 20px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: 0 8px 22px rgb(15 23 42 / 5%);
+}
+
+.vehicle-type-card.is-inactive {
+  background: #f8fafc;
+}
+
+.vehicle-type-card__top,
+.vehicle-type-card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.vehicle-type-badge {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  color: #047857;
+  background: #d1fae5;
+  border-radius: 16px;
+  font-size: 17px;
+  font-weight: 900;
+}
+
+.vehicle-type-card__body {
+  flex: 1;
+  padding: 22px 0;
+}
+
+.vehicle-type-card__body h3 {
+  margin: 0;
+  font-size: 27px;
+}
+
+.vehicle-type-card__body p {
+  margin: 8px 0 0;
+  color: var(--text-sub);
+  line-height: 1.6;
+}
+
+.vehicle-type-card--add {
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #047857;
+  border: 1px dashed #6ee7b7;
+  cursor: pointer;
+}
+
+.vehicle-type-card--add:hover {
+  background: #ecfdf5;
+}
+
+.vehicle-type-card--add > span {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  background: #d1fae5;
+  border-radius: 999px;
+  font-size: 20px;
+}
+
+.transport-search {
+  position: relative;
+  flex: 1 1 320px;
+  max-width: 480px;
+}
+
+.transport-search > .pi {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  left: 13px;
+  color: #94a3b8;
+  transform: translateY(-50%);
+}
+
+.transport-search .p-inputtext {
+  width: 100%;
+  padding-left: 38px;
+}
+
+.transport-filter {
+  width: 132px;
+}
+
+.transport-filter--wide {
+  width: 190px;
+}
+
+.commands-page .transport-table {
+  width: 100%;
+  border-collapse: initial;
+}
+
+.commands-page .transport-table__head,
+.commands-page .transport-table__row {
+  display: grid;
+  grid-template-columns: minmax(130px, .8fr) minmax(250px, 1.7fr) 150px 100px minmax(180px, auto);
+  align-items: center;
+  column-gap: 18px;
+}
+
+.commands-page .transport-table__head {
+  min-height: 42px;
+  padding: 0 20px;
+  color: var(--text-sub);
+  background: #f8fafc;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.commands-page .transport-table__row {
+  min-height: 82px;
+  padding: 13px 20px;
+  border-bottom: 1px solid #eef2f7;
+}
+
+.commands-page .transport-table__row:last-child {
+  border-bottom: 0;
+}
+
+.command-code {
+  color: #047857;
+  font-weight: 700;
+}
+
+.command-name-cell,
+.process-type-tag,
+.transport-context-banner {
+  display: flex;
+}
+
+.command-name-cell,
+.process-type-tag {
+  flex-direction: column;
+  gap: 4px;
+}
+
+.command-name-cell small,
+.process-type-tag small {
+  color: var(--text-sub);
+  font-size: 11px;
+}
+
+.process-type-tag strong {
+  font-size: 13px;
+}
+
+.transport-context-banner {
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  color: #065f46;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  border-radius: 8px;
+}
+
+.transport-context-banner span {
+  display: flex;
+  flex-direction: column;
+}
+
+.transport-context-banner small {
+  color: #047857;
+}
+
+@media (max-width: 900px) {
+  .transport-hero {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .transport-hero__actions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+
+  .commands-page .transport-table__head {
+    display: none;
+  }
+
+  .commands-page .transport-table__row {
+    grid-template-columns: 1fr auto;
+    row-gap: 12px;
+  }
+
+  .commands-page .transport-table__row > :nth-child(2),
+  .commands-page .transport-actions {
+    grid-column: 1 / -1;
+  }
+
+  .commands-page .transport-actions {
+    justify-content: flex-start;
+  }
 }
 
 @media (max-width: 800px) {
@@ -272,12 +627,51 @@
     overflow-x: auto;
   }
 
-  .transport-table {
+  table.transport-table {
     min-width: 760px;
   }
 }
 
 @media (max-width: 640px) {
+  .vehicle-types-page,
+  .commands-page {
+    width: min(100% - 20px, 1180px);
+    padding: 12px 0 28px;
+  }
+
+  .transport-hero {
+    grid-template-columns: 1fr;
+    padding: 18px;
+  }
+
+  .transport-hero__actions {
+    align-items: stretch;
+    flex-direction: column-reverse;
+  }
+
+  .transport-hero__actions .p-button {
+    width: 100%;
+  }
+
+  .transport-stepper {
+    justify-content: flex-start;
+    overflow-x: auto;
+  }
+
+  .vehicle-type-grid {
+    grid-template-columns: 1fr;
+    padding: 13px;
+  }
+
+  .commands-page .transport-table__row {
+    grid-template-columns: 1fr;
+    padding: 15px;
+  }
+
+  .commands-page .transport-table__row > * {
+    grid-column: 1 !important;
+  }
+
   .transport-form--grid {
     grid-template-columns: 1fr;
   }
